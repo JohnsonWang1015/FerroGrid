@@ -22,9 +22,21 @@ ENV PYTHONUNBUFFERED=1 \
 COPY docker/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
-# The metric helper the controller parses (FERRO_METRIC lines).
+# Mojo/MAX, off by default: it adds a few GB, and every training script falls
+# back to the PyTorch op without it.
+#   docker build -f docker/Dockerfile.train --build-arg WITH_MOJO=1 -t ferrogrid/train:mojo .
+# MAX needs glibc >= 2.34, so the base image must be Ubuntu 22.04 or newer.
+ARG WITH_MOJO=0
+RUN if [ "$WITH_MOJO" = "1" ]; then \
+        pip install --no-cache-dir "modular>=26.5" && \
+        python -c "import max, mojo; print('MAX + Mojo installed')"; \
+    fi
+
+# The Mojo kernel sources and the loader/fallback shim.
 COPY python/ferro_mojo.py /opt/ferrogrid/python/
-ENV PYTHONPATH=/opt/ferrogrid/python:${PYTHONPATH}
+COPY mojo /opt/ferrogrid/mojo
+ENV PYTHONPATH=/opt/ferrogrid/python:${PYTHONPATH} \
+    FERRO_MOJO_KERNEL_DIR=/opt/ferrogrid/mojo/kernels
 
 # Sanity-check the image at build time rather than on the cluster.
 RUN python -c "import torch; from torch.distributed.fsdp import fully_shard, MixedPrecisionPolicy; print('torch', torch.__version__, 'FSDP2 ok')"

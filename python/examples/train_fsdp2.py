@@ -23,8 +23,14 @@ import json
 import os
 import sys
 import time
+from pathlib import Path
 
 import torch
+
+# The training container has no FerroGrid package installed, so make the
+# sibling modules importable from the checkout itself.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import ferro_mojo  # noqa: E402
 import torch.distributed as dist
 import torch.nn as nn
 from torch.distributed.fsdp import MixedPrecisionPolicy, fully_shard
@@ -39,17 +45,28 @@ def metric(**kw) -> None:
     print("FERRO_METRIC " + json.dumps(kw), flush=True)
 
 
+class MojoGELU(nn.Module):
+    """GELU backed by the Mojo custom kernel, falling back to PyTorch.
+
+    The fallback lives in ferro_mojo, so this module behaves identically on a
+    node without a Mojo toolchain -- just without the custom kernel.
+    """
+
+    def forward(self, x):
+        return ferro_mojo.gelu(x)
+
+
 class Block(nn.Module):
     """One pre-norm transformer block -- the unit we shard on."""
 
-    def __init__(self, d_model: int, n_heads: int):
+    def __init__(self, d_model: int, n_heads: int, activation: str = "torch"):
         super().__init__()
         self.norm1 = nn.LayerNorm(d_model)
         self.attn = nn.MultiheadAttention(d_model, n_heads, batch_first=True)
         self.norm2 = nn.LayerNorm(d_model)
         self.mlp = nn.Sequential(
             nn.Linear(d_model, 4 * d_model),
-            nn.GELU(),
+            MojoGELU() if activation == "mojo" else nn.GELU(approximate="tanh"),
             nn.Linear(4 * d_model, d_model),
         )
 
@@ -60,11 +77,21 @@ class Block(nn.Module):
 
 
 class TinyLM(nn.Module):
-    def __init__(self, vocab: int, d_model: int, n_layers: int, n_heads: int, seq_len: int):
+    def __init__(
+        self,
+        vocab: int,
+        d_model: int,
+        n_layers: int,
+        n_heads: int,
+        seq_len: int,
+        activation: str = "torch",
+    ):
         super().__init__()
         self.tok = nn.Embedding(vocab, d_model)
         self.pos = nn.Embedding(seq_len, d_model)
-        self.blocks = nn.ModuleList(Block(d_model, n_heads) for _ in range(n_layers))
+        self.blocks = nn.ModuleList(
+            Block(d_model, n_heads, activation) for _ in range(n_layers)
+        )
         self.norm = nn.LayerNorm(d_model)
         self.head = nn.Linear(d_model, vocab, bias=False)
         # Causal mask, registered so `.to(device)` moves it with the model.
@@ -97,6 +124,13 @@ def parse_args():
     p.add_argument("--warmup-steps", type=int, default=3,
                    help="steps excluded from the throughput average")
     p.add_argument("--no-fsdp", action="store_true", help="debug: skip sharding")
+    p.add_argument(
+        "--activation",
+        choices=("torch", "mojo"),
+        default="torch",
+        help="MLP activation. 'mojo' uses the Mojo custom GELU kernel when "
+             "MAX is installed, and silently falls back to PyTorch when not.",
+    )
     p.add_argument(
         "--param-dtype",
         choices=("bf16", "fp32"),
@@ -140,7 +174,14 @@ def main():
     )
 
     torch.manual_seed(1234)
-    model = TinyLM(args.vocab, args.d_model, args.layers, args.heads, args.seq_len).to(device)
+    if is_master and args.activation == "mojo":
+        info = ferro_mojo.describe()
+        log(f"Mojo kernels: {'available' if info['available'] else 'UNAVAILABLE'} "
+            f"-- {info['reason']}")
+
+    model = TinyLM(
+        args.vocab, args.d_model, args.layers, args.heads, args.seq_len, args.activation
+    ).to(device)
 
     if not args.no_fsdp:
         # Sharded params are all-gathered in param_dtype and gradients are

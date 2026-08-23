@@ -26,6 +26,28 @@ and collecting logs, GPU telemetry, throughput and NCCL errors in one place.
               rank 0..n    rank n..m
 ```
 
+## Quick start
+
+```bash
+git clone <this repo> && cd FerroGrid
+uv run --all-extras ferro-setup
+```
+
+That single command creates the virtualenv, installs PyTorch and Mojo/MAX,
+builds the Rust binaries, and links `ferro` / `ferro-agent` /
+`ferro-controller` into `~/.local/bin`. Re-run it any time; it is idempotent.
+
+Lighter variants:
+
+```bash
+uv run ferro-setup                    # control plane only, no torch/Mojo
+uv sync --extra mojo                  # Python side only, with Mojo/MAX
+uv run --all-extras ferro-setup --portable   # binaries for older servers
+```
+
+Requires [uv](https://docs.astral.sh/uv/) and a Rust toolchain
+(`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`).
+
 ## Components
 
 | Path | What it is |
@@ -36,8 +58,9 @@ and collecting logs, GPU telemetry, throughput and NCCL errors in one place.
 | `crates/ferro-controller` | Registry, GPU scheduler, job orchestration, log/metric collection |
 | `crates/ferro-cli` | The `ferro` command |
 | `python/examples/train_fsdp2.py` | FSDP2 reference model (synthetic data) |
-| `python/ferro_mojo.py` | Mojo kernel loader with a PyTorch fallback |
-| `mojo/` | Phase-2 custom-kernel interface and benchmark harness (no kernels yet) |
+| `python/ferro_mojo.py` | Mojo kernel loader, autograd wrapper, PyTorch fallback |
+| `python/examples/bench_mojo.py` | Mojo-vs-PyTorch correctness check and benchmark |
+| `mojo/kernels/` | Mojo custom kernels (`ferro_gelu`), compiled via MAX |
 | `docker/Dockerfile.train` | Optional custom training image |
 | `scripts/` | Build, deploy, sync, prepare, benchmark |
 
@@ -306,7 +329,8 @@ Reproduce with:
 ## Testing
 
 ```bash
-cargo test --workspace          # scheduler + metric-parser unit tests
+cargo test --workspace                     # scheduler + metric-parser unit tests
+uv run --all-extras pytest -q              # Mojo fallback + gradient correctness
 ```
 
 End-to-end, after deploying two agents:
@@ -372,22 +396,37 @@ on 1 GbE this is expected, not a bug.
 
 ---
 
-## Mojo (phase 2)
+## Mojo / MAX
 
-The interface is defined, no kernels are written yet, and nothing on the
-training path depends on Mojo:
-
-- `mojo/kernels/kernel_api.mojo` — the contract every kernel implements
-- `mojo/kernels/benchmark.mojo` — harness that emits `FERRO_METRIC` lines, so
-  kernel benchmarks show up in `ferro job` like any training run
-- `python/ferro_mojo.py` — loader that returns `None` when no Mojo toolchain or
-  compiled kernel is present, so callers fall back to the PyTorch op
+Mojo and MAX are supported and working: `mojo/kernels/gelu.mojo` compiles to a
+MAX custom op that PyTorch calls on CPU and GPU, with gradients verified by
+`torch.autograd.gradcheck`.
 
 ```bash
-python python/ferro_mojo.py     # report toolchain and available kernels
+uv sync --all-extras
+uv run ferro-mojo-info                              # what loaded, and why
+uv run --all-extras python python/examples/bench_mojo.py
+ferro train --nodes 1 --gpus-per-node 1 -f python/examples/train_fsdp2.py \
+    --activation mojo
 ```
 
-See `mojo/README.md` for how to add a kernel.
+Kernels are always optional. `ferro_mojo.gelu()` falls back to
+`torch.nn.functional.gelu` when MAX is absent, the kernel fails to compile, or
+the input is unsupported, so the same script runs unchanged on a node with no
+Mojo toolchain. Pass `strict=True` when you need it to fail loudly instead.
+
+### The honest performance picture
+
+On an RTX 3090 the Mojo custom op is currently **slower** than PyTorch's fused
+GELU — 6.6× slower at 33M elements, and 43× slower at 4K where a fixed ~180 µs
+bridge cost dominates. End to end: 100,175 tok/s with PyTorch vs 85,008 tok/s
+with Mojo. `--activation torch` is therefore the default.
+
+This is a statement about *replacing one already-optimal PyTorch op*, not
+about Mojo. Custom kernels pay off when they fuse several ops into one bridge
+crossing, or implement something PyTorch has no fused kernel for. See
+`mojo/README.md` for the full measurement table, the Mojo 1.0 syntax notes,
+and how to add a kernel.
 
 ## Scope and limitations
 

@@ -3,3 +3,5 @@
 __pycache__/
 *.pyc
 /mojo/build
+/.venv
+/tests/__pycache__
