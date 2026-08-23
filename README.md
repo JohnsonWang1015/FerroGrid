@@ -213,6 +213,36 @@ show how stale the numbers are — an `AGE` column in `ferro nodes`, a
 than as an idle GPU. Start the controller with `--heartbeat-secs 1` if you
 want the dashboard to genuinely track second by second.
 
+### Running your own project
+
+Agents resolve a relative script path against **their own** workspace root
+(`~/ferrogrid`), so the code has to be on the nodes before a job can run.
+`--sync` does that in the same command:
+
+```bash
+cd ~/my-experiment
+ferro train --nodes 1 --gpus-per-node 2 --sync -f my_train.py
+```
+
+That rsyncs the current directory to every target node's workspace, then
+launches `my_train.py` from there. Sync separately when you would rather not
+re-copy on every run:
+
+```bash
+ferro sync                      # current directory -> every healthy node
+ferro sync --node gpu-a         # just one node
+ferro sync --delete             # also remove files deleted locally
+ferro sync --dry-run            # show the rsync commands only
+```
+
+`ferro sync` needs no host list: the nodes report their own login user and
+workspace root when they register, which is also why nodes with different
+home directories need no special handling.
+
+Build artefacts, virtualenvs, caches and common weight/volume file types are
+excluded automatically — **your dataset should not be synced**, put it on
+shared storage and `--mount` it instead.
+
 ### `ferro train`
 
 ```bash
@@ -529,6 +559,28 @@ Build the image with the medical-imaging dependencies uncommented in
 ```bash
 docker build -f docker/Dockerfile.train -t ferrogrid/train:mri .
 ```
+
+#### Watch the data path, not just the GPUs
+
+For imaging the bottleneck usually moves off the GPU. From the numbers above,
+a 128³ float32 volume is 8.4 MB and a step takes 257 ms at batch 2 — about
+**65 MB/s per GPU**. Two GPUs already want ~130 MB/s, which exceeds what a
+1 GbE link to an NFS server can deliver (~125 MB/s), and it gets worse with
+every GPU you add.
+
+So a job can be perfectly sized for the GPUs and still crawl, with `ferro
+watch` showing utilisation flat at 20% while the cards sit waiting on the
+network. Check there first when throughput disappoints.
+
+Fixes, most effective first:
+
+- **Preprocess once, cache on each node's local NVMe.** Resample and convert
+  the raw DICOM/NIfTI to `.npy`/`.pt` ahead of time; the result is far smaller
+  than the originals and reads at NVMe speed instead of network speed.
+- **Cache in RAM** with MONAI's `CacheDataset` — these machines have 60 GB+,
+  so after the first epoch the network is out of the loop entirely.
+- **Store volumes as float16.** Halves the bytes on the wire, and the data is
+  cast to bf16 for the forward pass anyway.
 
 Cross-validation as parallel jobs rather than one distributed job:
 

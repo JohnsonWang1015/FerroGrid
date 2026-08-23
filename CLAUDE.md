@@ -44,6 +44,9 @@ See README.md for architecture, deployment and measured results.
 - Training scripts report metrics by printing `FERRO_METRIC {json}` on stdout.
 - Agents resolve relative script paths against their own `--workspace`
   (default `~/ferrogrid`), because lab nodes have different home directories.
+  Code must therefore reach the nodes first: `ferro sync`, or `ferro train
+  --sync`. Nodes advertise their login user and workspace at registration, so
+  neither needs a host list.
 - Never reimplement FSDP/NCCL/torchrun; the platform only wraps them.
 - Only the agent workspace is mounted by default; datasets need `--mount`.
   Bind mounts are filesystem-agnostic, so NFS and Samba/CIFS need no code --

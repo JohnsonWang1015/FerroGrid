@@ -119,6 +119,8 @@ impl AgentState {
             memory_total_b: read_mem_total_bytes(),
             gpus: self.gpu_snapshot().await,
             gpu_error: self.monitor.init_error().unwrap_or_default().to_string(),
+            workspace: self.workspace.clone(),
+            user: std::env::var("USER").unwrap_or_default(),
         }
     }
 

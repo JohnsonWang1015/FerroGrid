@@ -3,6 +3,10 @@
 #
 #   ./scripts/sync_workspace.sh <ssh-host> [more hosts...]
 #
+# Prefer `ferro sync`, which discovers the nodes, their login users and their
+# workspace roots from the controller instead of taking a host list. This
+# script remains useful for bootstrapping a node before its agent registers.
+#
 # Agents resolve relative script paths against their own workspace root
 # (~/ferrogrid by default), so every node ends up with the same *relative*
 # layout even though their home directories differ.

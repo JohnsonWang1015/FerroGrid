@@ -35,6 +35,10 @@ message NodeInfo {
   repeated Gpu gpus     = 10;
   // Set when NVML could not be initialised; gpus will be empty.
   string gpu_error      = 11;
+  // Workspace root on this node; relative script paths resolve against it.
+  string workspace      = 12;
+  // OS user the agent runs as, used as the rsync/ssh login.
+  string user           = 13;
 }
 
 // ---------------------------------------------------------------------------

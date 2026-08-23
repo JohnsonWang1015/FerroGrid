@@ -48,6 +48,8 @@ enum Cmd {
         #[command(flatten)]
         watch: WatchArgs,
     },
+    /// Copy the current project to every node's workspace over rsync/SSH.
+    Sync(SyncArgs),
     /// Live dashboard: nodes, GPUs and running jobs on one screen.
     Watch {
         /// Seconds between redraws.
@@ -78,6 +80,25 @@ enum Cmd {
     },
     /// Cancel a running job.
     Cancel { job_id: String },
+}
+
+#[derive(clap::Args, Debug, Clone)]
+struct SyncArgs {
+    /// Directory to copy. Defaults to the current directory.
+    #[arg(default_value = ".")]
+    path: String,
+
+    /// Only sync these node ids, repeatable. Default: every healthy node.
+    #[arg(long = "node")]
+    node_filter: Vec<String>,
+
+    /// Delete files on the node that no longer exist locally.
+    #[arg(long)]
+    delete: bool,
+
+    /// Print the rsync commands without running them.
+    #[arg(long)]
+    dry_run: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -128,6 +149,10 @@ struct TrainArgs {
     /// Stream logs after submitting.
     #[arg(short, long)]
     follow: bool,
+
+    /// rsync the current directory to every target node before launching.
+    #[arg(long)]
+    sync: bool,
 }
 
 fn parse_kv(s: &str) -> Result<(String, String), String> {
@@ -205,8 +230,99 @@ async fn main() -> Result<()> {
                 .into_inner();
             println!("{}", r.message);
         }
+        Cmd::Sync(args) => {
+            let nodes = client.list_nodes(ListNodesRequest {}).await?.into_inner().nodes;
+            sync_project(&nodes, &args)?;
+        }
         Cmd::Train(args) => {
+            if args.sync {
+                let nodes = client.list_nodes(ListNodesRequest {}).await?.into_inner().nodes;
+                sync_project(
+                    &nodes,
+                    &SyncArgs {
+                        path: ".".into(),
+                        node_filter: args.node_filter.clone(),
+                        delete: false,
+                        dry_run: false,
+                    },
+                )?;
+            }
             train(&mut client, args, cli.json).await?;
+        }
+    }
+    Ok(())
+}
+
+/// Everything that should never be shipped to a training node: build output,
+/// virtualenvs, caches, and the dataset if it happens to live in the project.
+const SYNC_EXCLUDES: &[&str] = &[
+    ".git", "target", ".venv", "venv", "__pycache__", "*.pyc", ".mypy_cache",
+    ".pytest_cache", ".ruff_cache", "node_modules", ".cargo-container-registry",
+    "*.nii", "*.nii.gz", "*.dcm", "*.pt", "*.pth", "*.ckpt", "*.safetensors",
+];
+
+/// rsync the project to each node's workspace.
+///
+/// The nodes tell us their own user and workspace root in their registration,
+/// so this needs no host list and copes with the nodes having different home
+/// directories -- which they generally do.
+fn sync_project(nodes: &[NodeState], args: &SyncArgs) -> Result<()> {
+    let src = std::path::Path::new(&args.path)
+        .canonicalize()
+        .with_context(|| format!("cannot resolve {}", args.path))?;
+
+    let targets: Vec<&NodeState> = nodes
+        .iter()
+        .filter(|n| n.healthy)
+        .filter(|n| {
+            args.node_filter.is_empty()
+                || n.info
+                    .as_ref()
+                    .map(|i| args.node_filter.contains(&i.node_id))
+                    .unwrap_or(false)
+        })
+        .collect();
+
+    if targets.is_empty() {
+        anyhow::bail!("no healthy nodes to sync to");
+    }
+
+    for n in targets {
+        let Some(i) = n.info.as_ref() else { continue };
+        let host = i.address.rsplit_once(':').map(|(h, _)| h).unwrap_or(&i.address);
+        if i.workspace.is_empty() || i.user.is_empty() {
+            eprintln!(
+                "  {} is running an agent too old to report its workspace; \
+                 redeploy it or use scripts/sync_workspace.sh",
+                i.node_id
+            );
+            continue;
+        }
+        // Trailing slash on the source: copy the *contents* into the
+        // workspace, not the directory itself.
+        let dest = format!("{}@{}:{}/", i.user, host, i.workspace.trim_end_matches('/'));
+
+        let mut cmd = std::process::Command::new("rsync");
+        cmd.arg("-az").arg("--mkpath");
+        if args.delete {
+            cmd.arg("--delete");
+        }
+        for e in SYNC_EXCLUDES {
+            cmd.arg("--exclude").arg(e);
+        }
+        cmd.arg(format!("{}/", src.display())).arg(&dest);
+
+        if args.dry_run {
+            println!("rsync {:?}", cmd.get_args().collect::<Vec<_>>());
+            continue;
+        }
+
+        println!("  {} <- {}", dest, src.display());
+        let status = cmd
+            .status()
+            .context("failed to run rsync (is it installed locally and on the node?)")?;
+        if !status.success() {
+            anyhow::bail!("rsync to {} failed with {status}", i.node_id);
         }
     }
     Ok(())
