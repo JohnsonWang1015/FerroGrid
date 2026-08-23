@@ -33,7 +33,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import ferro_mojo  # noqa: E402
 import torch.distributed as dist
 import torch.nn as nn
-from torch.distributed.fsdp import MixedPrecisionPolicy, fully_shard
+from torch.distributed.fsdp import (
+    CPUOffloadPolicy,
+    MixedPrecisionPolicy,
+    fully_shard,
+)
 
 
 def log(msg: str) -> None:
@@ -125,6 +129,12 @@ def parse_args():
                    help="steps excluded from the throughput average")
     p.add_argument("--no-fsdp", action="store_true", help="debug: skip sharding")
     p.add_argument(
+        "--offload",
+        action="store_true",
+        help="keep sharded params and optimizer state in host RAM. Trades a "
+             "lot of speed for fitting a model the GPUs cannot otherwise hold.",
+    )
+    p.add_argument(
         "--activation",
         choices=("torch", "mojo"),
         default="torch",
@@ -192,14 +202,22 @@ def main():
             param_dtype=torch.bfloat16 if args.param_dtype == "bf16" else torch.float32,
             reduce_dtype=torch.float32,
         )
+        # CPU offload moves the *sharded* params, grads and optimizer state to
+        # host RAM, leaving only the transient all-gathered block on the GPU.
+        # It is the difference between "does not fit" and "fits but is slow".
+        offload = CPUOffloadPolicy() if args.offload else None
+        shard_kw = {"mp_policy": mp}
+        if offload is not None:
+            shard_kw["offload_policy"] = offload
         # Shard each block, then the root. Sharding the blocks first is what
         # lets FSDP2 overlap the all-gather of block N+1 with block N.
         for block in model.blocks:
-            fully_shard(block, mp_policy=mp)
-        fully_shard(model, mp_policy=mp)
+            fully_shard(block, **shard_kw)
+        fully_shard(model, **shard_kw)
         if is_master:
             log(f"FSDP2 fully_shard applied to all blocks + root "
-                f"(param_dtype={args.param_dtype}, reduce_dtype=fp32)")
+                f"(param_dtype={args.param_dtype}, reduce_dtype=fp32"
+                f"{', cpu_offload' if args.offload else ''})")
 
     params = sum(p.numel() for p in model.parameters())
     if is_master:

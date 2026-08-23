@@ -414,6 +414,54 @@ ferro train --nodes 1 --gpus-per-node 1 -f your_train.py --max-steps 5
 ferro job <id>        # look at PEAK VRAM GB against the card's capacity
 ```
 
+### Worked example: how big an LLM actually fits
+
+Yes, FSDP2 shards one model across GPUs and FerroGrid drives it. What that
+buys you on this hardware is worth knowing before you plan a run. All measured
+on one node with 2x RTX 4090 (24 GiB each, **no NVLink**), batch 1, seq 512,
+AdamW, bf16 all-gather with fp32 reduction:
+
+| Params | Setup | Peak VRAM/rank | tokens/s |
+|---|---|---|---|
+| 1.34B | 1 GPU | 20.64 GiB | **3,316** |
+| 1.34B | 2 GPU, FSDP2 | 10.66 GiB | 1,013 |
+| 2.68B | 1 GPU | **OOM** | — |
+| 2.68B | 2 GPU, FSDP2 | **OOM** | — |
+| 2.68B | 2 GPU, FSDP2 + `--offload` | 2.63 GiB | 188 |
+
+Three things fall out of this:
+
+**Sharding halves memory and costs 3.3x throughput.** FSDP2 did exactly what
+it promises — 20.64 → 10.66 GiB — but consumer RTX 4090s have no NVLink and
+NVIDIA disables peer-to-peer over PCIe, so every all-gather round-trips
+through host memory. Sharding a model that already fits is a bad trade; use
+the second GPU for a bigger batch, or for a second experiment.
+
+**The full-finetune ceiling on 2x24 GiB is roughly 1.5B parameters.** AdamW
+needs about 16 bytes per parameter (fp32 weights, gradients, and two moments)
+and sharding divides that but does not remove it. 2.68B needs ~43 GiB of
+optimiser state alone, which is why it OOMs even sharded across 48 GiB.
+
+**CPU offload changes what is possible, not what is fast.** `--offload` keeps
+the sharded state in host RAM and pulls in one block at a time: 2.68B drops to
+2.63 GiB per rank and trains, at 188 tokens/s. That is a checkpoint-recovery
+or a proof-of-concept, not a training run.
+
+To train larger models here, in order of how much they buy:
+
+- **LoRA / QLoRA** — trains adapters instead of weights, removing almost all
+  of the optimiser state. This is the realistic path to 7B+ on these cards.
+- **8-bit optimiser** (`bitsandbytes`) — cuts the two moments from 8 bytes per
+  parameter to 2, roughly doubling the ceiling for a small quality cost.
+- **Activation checkpointing** — helps activations, not optimiser state, so it
+  raises the batch size you can use rather than the model size you can hold.
+- **More GPUs** — 4 GPUs is 96 GiB and ~4B parameters, but only within one
+  node. Across nodes at 1 GbE the throughput loss (see *Measured results*)
+  makes it impractical for anything but a correctness check.
+
+Sharded checkpoints need `torch.distributed.checkpoint`; a plain
+`torch.save` of a sharded model saves one rank's shard, not the model.
+
 ### Worked example: 3D MRI (CNN + Video-Swin)
 
 `python/examples/train_mri_3d.py` is a template for volumetric classification:
