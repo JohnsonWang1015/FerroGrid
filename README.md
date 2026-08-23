@@ -132,11 +132,49 @@ Useful flags: `--master-port` (rendezvous port, default 29500),
 
 For a permanent setup, run it under systemd the same way the agents do.
 
-### 4. Deploy the agents
+### 4. Register the agents
+
+```bash
+./scripts/register_node.sh gpu-a 10.0.0.1:7070
+./scripts/register_node.sh gpu-b 10.0.0.1:7070
+```
+
+One command per node: it checks prerequisites, pre-pulls the training image,
+installs the agent as a `systemd --user` service, and then waits for the node
+to actually appear in `ferro nodes` rather than just reporting that a process
+started.
+
+**Password-only SSH is fine.** Pass `user@host` directly — no entry in
+`~/.ssh/config` and no key required:
+
+```bash
+./scripts/register_node.sh johnson@10.0.0.12 10.0.0.1:7070 rtx5090
+```
+
+You are prompted for the password **once**. The script opens a single
+authenticated SSH connection and multiplexes every later `scp`/`ssh` over it
+through a control socket, which is closed when the run finishes. The password
+is typed into `ssh` itself: nothing is stored, and nothing is placed on a
+command line or in an environment variable where `ps` could read it. That is
+deliberately not `sshpass`.
+
+To stop typing it altogether, install your key on the first run:
+
+```bash
+./scripts/register_node.sh --copy-id johnson@10.0.0.12 10.0.0.1:7070 rtx5090
+```
+
+After that, redeploys and `ferro sync` need no password at all.
+
+Other options: `--no-image` skips the image pull; a third positional argument
+sets the node id, which is worth doing when a machine's hostname is unhelpful
+(`user`, `gpu`) — it is what `ferro nodes` shows and what `--node` matches.
+
+`scripts/deploy_agent.sh` is the lower-level version if you only want to push
+a new binary to a node that is already registered:
 
 ```bash
 ./scripts/deploy_agent.sh gpu-a 10.0.0.1:7070
-./scripts/deploy_agent.sh gpu-b 10.0.0.1:7070
 ```
 
 Each agent is installed to `~/.local/bin/ferro-agent` and enabled as a user

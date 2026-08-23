@@ -22,6 +22,10 @@ See README.md for architecture, deployment and measured results.
   it binds a docker bridge and fails between nodes. The agent auto-detects it.
 - `systemctl --user enable --now` does not restart a running unit; redeploys
   need `restart`.
+- Node registration supports password-only SSH via an SSH ControlMaster socket
+  (one prompt, multiplexed thereafter) rather than sshpass, which would expose
+  the password through `ps`. `%C` in a ControlPath is an ssh token, so build
+  the path by hand -- mktemp rejects it.
 - Do not match a bare `ProcessGroupNCCL` when classifying NCCL errors — torch
   logs routine warnings with that string.
 - `uv run` does not source your shell profile, so `~/.cargo/bin` is usually
