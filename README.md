@@ -568,3 +568,12 @@ Phase 1 is deliberately small. Known gaps, in rough priority order:
 - No multi-tenant fair sharing, quotas or preemption.
 - Elastic/fault-tolerant training is not wired up; a rank failure fails the job.
 - `--gpus-per-node` is uniform across nodes, as torchrun expects.
+
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE).
+
+Copyright 2026 Wang Chia Wei.
+
+FerroGrid orchestrates PyTorch, NCCL and Mojo/MAX rather than vendoring them;
+those remain under their own licences and are not redistributed here.
