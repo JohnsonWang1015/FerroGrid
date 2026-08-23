@@ -67,7 +67,11 @@ Requires [uv](https://docs.astral.sh/uv/) and a Rust toolchain
 ## Requirements
 
 **Controller host** (can be any machine, including one of the GPU servers):
-Rust 1.80+, `protobuf-compiler`, Docker (only for `build.sh portable`).
+
+- [uv](https://docs.astral.sh/uv/) and a Rust toolchain — `ferro-setup` uses both
+- `protobuf-compiler` (for the gRPC codegen)
+- `rsync` and an SSH client (for registering nodes and `ferro sync`)
+- Docker — only if you build portable binaries for older servers
 
 **Each GPU server** (Ubuntu 20.04 / 22.04 / 24.04):
 
@@ -81,22 +85,13 @@ Rust 1.80+, `protobuf-compiler`, Docker (only for `build.sh portable`).
 
 ## Deploying on two Ubuntu servers
 
-The example below uses two servers, `gpu-a` and `gpu-b`, with the controller on
-a third machine at `10.0.0.1`. Put `gpu-a` / `gpu-b` in your `~/.ssh/config`.
+Two GPU servers, `gpu-a` and `gpu-b`, with the controller on a third machine
+at `10.0.0.1`. The controller can equally run on one of the GPU servers.
 
-### 1. Check the servers
+You need SSH access to each server and nothing else — no root, no
+`~/.ssh/config` entry, not even an SSH key (see *Password-only SSH* below).
 
-```bash
-./scripts/prepare_node.sh gpu-a
-./scripts/prepare_node.sh gpu-b
-```
-
-This verifies `nvidia-smi`, Docker, the NVIDIA runtime and docker-group
-membership, pre-pulls the training image, and confirms that CUDA and FSDP2
-work **inside a container** — the failure mode you want to find now, not
-during your first job.
-
-### 2. Build and install
+### 1. Build and install
 
 ```bash
 uv run --all-extras ferro-setup
@@ -104,12 +99,12 @@ uv run --all-extras ferro-setup
 
 This builds the binaries and links them into `~/.local/bin` (see *Quick
 start*). If `ferro --version` then prints `command not found`, `~/.local/bin`
-is not on your `PATH` -- add `export PATH="$HOME/.local/bin:$PATH"` to your
+is not on your `PATH` — add `export PATH="$HOME/.local/bin:$PATH"` to your
 shell rc file.
 
-**Deploying to servers older than the controller host** needs the portable
-build instead, which compiles inside a glibc-2.31 container so one binary runs
-on Ubuntu 20.04 and newer:
+**If the GPU servers are older than the controller host**, build portable
+binaries instead, inside a glibc-2.31 container, so one binary runs on Ubuntu
+20.04 and newer:
 
 ```bash
 uv run --all-extras ferro-setup --portable   # or: ./scripts/build.sh portable
@@ -120,32 +115,45 @@ uv run --all-extras ferro-setup --portable   # or: ./scripts/build.sh portable
 > but reports **zero GPUs**. The agent must be dynamically linked, so it is
 > built against the oldest glibc in the fleet instead.
 
-### 3. Start the controller
+### 2. Start the controller
 
 ```bash
-./target/portable/release/ferro-controller --bind 0.0.0.0:7070
+ferro-controller --bind 0.0.0.0:7070
 ```
 
 Useful flags: `--master-port` (rendezvous port, default 29500),
-`--min-free-vram-gib` (default 8, see *Scheduling* below),
-`--default-image`.
+`--min-free-vram-gib` (default 8, see *Scheduling* below), `--default-image`,
+and `--heartbeat-secs` (default 3; lower it for a snappier `ferro watch`).
 
-For a permanent setup, run it under systemd the same way the agents do.
+Start it before registering nodes — registration confirms itself by waiting
+for the node to appear in the controller's registry. For a permanent setup,
+run it under systemd the same way the agents do.
 
-### 4. Register the agents
+### 3. Register the nodes
+
+One command per server:
 
 ```bash
 ./scripts/register_node.sh gpu-a 10.0.0.1:7070
 ./scripts/register_node.sh gpu-b 10.0.0.1:7070
 ```
 
-One command per node: it checks prerequisites, pre-pulls the training image,
-installs the agent as a `systemd --user` service, and then waits for the node
-to actually appear in `ferro nodes` rather than just reporting that a process
-started.
+Each run:
 
-**Password-only SSH is fine.** Pass `user@host` directly — no entry in
-`~/.ssh/config` and no key required:
+1. checks `nvidia-smi`, Docker, the NVIDIA container runtime and docker-group
+   membership — the failure modes you want to find now, not during your first
+   training job;
+2. pre-pulls the training image (`--no-image` to skip);
+3. installs the agent to `~/.local/bin/ferro-agent` and enables it as a
+   `systemd --user` service with `Restart=always` and lingering on, so it
+   survives logout and reboot;
+4. **waits for the node to appear in `ferro nodes`** and prints the table —
+   so a green result means it really registered, not merely that a process
+   started.
+
+#### Password-only SSH
+
+Pass `user@host` directly. No `~/.ssh/config` entry and no key needed:
 
 ```bash
 ./scripts/register_node.sh user@10.0.0.12 10.0.0.1:7070 rtx5090
@@ -153,58 +161,69 @@ started.
 
 You are prompted for the password **once**. The script opens a single
 authenticated SSH connection and multiplexes every later `scp`/`ssh` over it
-through a control socket, which is closed when the run finishes. The password
-is typed into `ssh` itself: nothing is stored, and nothing is placed on a
-command line or in an environment variable where `ps` could read it. That is
-deliberately not `sshpass`.
+through a control socket, closed when the run finishes. The password goes into
+`ssh` itself: nothing is stored, and nothing lands on a command line or in an
+environment variable where `ps` could read it. That is deliberately not
+`sshpass`.
 
-To stop typing it altogether, install your key on the first run:
+To stop typing it, install your key on the first run:
 
 ```bash
 ./scripts/register_node.sh --copy-id user@10.0.0.12 10.0.0.1:7070 rtx5090
 ```
 
-After that, redeploys and `ferro sync` need no password at all.
+After that, re-registration and `ferro sync` need no password at all — worth
+doing, because `ferro sync` uses SSH on every launch.
 
-Other options: `--no-image` skips the image pull; a third positional argument
-sets the node id, which is worth doing when a machine's hostname is unhelpful
-(`user`, `gpu`) — it is what `ferro nodes` shows and what `--node` matches.
+#### Naming a node
 
-`scripts/deploy_agent.sh` is the lower-level version if you only want to push
-a new binary to a node that is already registered:
+The third argument sets the node id, which is what `ferro nodes` shows and
+what `--node` matches. It defaults to the machine's hostname, so set it
+explicitly when that is unhelpful (`user`, `gpu`, `localhost`):
 
 ```bash
-./scripts/deploy_agent.sh gpu-a 10.0.0.1:7070
+./scripts/register_node.sh user@10.0.0.12 10.0.0.1:7070 rtx5090
 ```
 
-Each agent is installed to `~/.local/bin/ferro-agent` and enabled as a user
-service with `Restart=always` and lingering turned on, so it survives logout
-and reboots. Optional 3rd/4th arguments override the NCCL IP and the node id:
+#### Re-running it
+
+`register_node.sh` is idempotent — re-run it to upgrade a node after
+`ferro-setup`, and it will restart the service and re-verify. Two narrower
+scripts exist for when that is more than you want:
+
+| Script | Use when |
+|---|---|
+| `deploy_agent.sh <host> <controller>` | pushing a new binary to a node that is already registered |
+| `prepare_node.sh <host>` | checking a machine's prerequisites before you are ready to register it |
+
+Both take an SSH alias or `user@host`, and `deploy_agent.sh` takes optional
+NCCL-IP and node-id arguments for multi-homed machines:
 
 ```bash
 ./scripts/deploy_agent.sh gpu-a 10.0.0.1:7070 192.168.50.11 gpu-a
 ```
 
-Set the node id when a machine has an unhelpful hostname — it is what
-`ferro nodes` shows and what `--node` filters match.
-
-### 5. Ship the training code
-
-```bash
-./scripts/sync_workspace.sh gpu-a gpu-b
-```
-
-Agents resolve **relative** script paths against their own workspace root
-(`~/ferrogrid`, override with `--workspace`), so the nodes do not need
-identical home directories. Absolute paths are passed through untouched for
-shared-NFS setups.
-
-### 6. Verify
+### 4. Ship the training code
 
 ```bash
 export FERRO_CONTROLLER=http://10.0.0.1:7070
+ferro sync
+```
+
+`ferro sync` copies the current directory to every registered node, using the
+login user and workspace root each node reported at registration — so no host
+list, and nodes with different home directories need no special handling. See
+*Running your own project*.
+
+### 5. Verify
+
+```bash
 ferro nodes
 ferro gpu
+ferro watch     # live dashboard
+
+# end to end, on two nodes
+ferro train --nodes 2 --gpus-per-node 1 -f python/examples/train_fsdp2.py --steps 10
 ```
 
 ---

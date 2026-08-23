@@ -19,14 +19,6 @@ struct Args {
     #[arg(long, env = "FERRO_CONTROLLER_BIND", default_value = "0.0.0.0:7070")]
     bind: SocketAddr,
 
-    /// Docker image used when a job does not specify one.
-    #[arg(
-        long,
-        env = "FERRO_DEFAULT_IMAGE",
-        default_value = "pytorch/pytorch:2.9.1-cuda12.6-cudnn9-runtime"
-    )]
-    default_image: String,
-
     /// Port used for the torch.distributed rendezvous on the rank-0 node.
     #[arg(long, env = "FERRO_MASTER_PORT", default_value_t = 29500)]
     master_port: u32,
@@ -54,7 +46,6 @@ async fn main() -> Result<()> {
 
     let svc = service::ControllerService {
         registry: registry.clone(),
-        default_image: args.default_image.clone(),
         master_port: args.master_port,
         heartbeat_interval_s: args.heartbeat_secs,
         min_free_vram_b: args.min_free_vram_gib << 30,
@@ -62,7 +53,6 @@ async fn main() -> Result<()> {
 
     tracing::info!(
         bind = %args.bind,
-        image = %args.default_image,
         master_port = args.master_port,
         min_free_vram_gib = args.min_free_vram_gib,
         "ferro-controller listening"

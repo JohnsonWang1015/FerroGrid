@@ -12,6 +12,9 @@ HOST="${1:?usage: deploy_agent.sh <ssh-host> <controller-ip:port> [nccl-ip] [nod
 CONTROLLER="${2:?missing controller address, e.g. 10.0.0.1:7070}"
 NCCL_IP="${3:-}"
 NODE_ID="${4:-}"
+# Per-node training image. A node whose GPUs are newer than the default image
+# supports (Blackwell needs CUDA >= 12.8) must override this.
+IMAGE="${FERRO_DEFAULT_IMAGE:-pytorch/pytorch:2.9.1-cuda12.6-cudnn9-runtime}"
 
 BIN="target/portable/release/ferro-agent"
 [[ -f "$BIN" ]] || { echo "missing $BIN -- run ./scripts/build.sh portable first"; exit 1; }
@@ -40,6 +43,7 @@ Type=simple
 Environment=FERRO_CONTROLLER=http://$CONTROLLER
 Environment=FERRO_AGENT_BIND=0.0.0.0:7071
 Environment=RUST_LOG=info
+Environment=FERRO_DEFAULT_IMAGE=$IMAGE
 $EXTRA
 ExecStart=%h/.local/bin/ferro-agent
 Restart=always

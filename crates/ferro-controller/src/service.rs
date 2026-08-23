@@ -14,7 +14,6 @@ use tonic::{Request, Response, Status};
 
 pub struct ControllerService {
     pub registry: Arc<Registry>,
-    pub default_image: String,
     pub master_port: u32,
     pub heartbeat_interval_s: u32,
     pub min_free_vram_b: u64,
@@ -133,7 +132,11 @@ impl Controller for ControllerService {
             })
             .await;
 
-        let image = if req.image.is_empty() { self.default_image.clone() } else { req.image.clone() };
+        // Pass the image through verbatim, empty included. An empty value
+        // means "whatever this node's agent is configured to use", which is
+        // what lets a cluster with mixed GPU architectures work: a Blackwell
+        // node needs a CUDA 12.8 image where an Ampere node is happy on 12.6.
+        let image = req.image.clone();
 
         // Launch rank 0 first: it hosts the rendezvous, and starting the other
         // ranks against a master that is not up yet just burns retry timeout.

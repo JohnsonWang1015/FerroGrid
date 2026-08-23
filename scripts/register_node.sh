@@ -17,6 +17,10 @@
 #   --copy-id     install your public key on the target first, so future
 #                 deploys and `ferro sync` need no password at all
 #   --no-image    skip pre-pulling the training image
+#
+# Set FERRO_DEFAULT_IMAGE to pin this node's training image. Required when the
+# node's GPUs are newer than the default image supports -- Blackwell (sm_120)
+# needs a CUDA 12.8 build, where Ampere and Ada are fine on 12.6.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -94,6 +98,7 @@ Type=simple
 Environment=FERRO_CONTROLLER=http://$CONTROLLER
 Environment=FERRO_AGENT_BIND=0.0.0.0:7071
 Environment=RUST_LOG=info
+Environment=FERRO_DEFAULT_IMAGE=$IMAGE
 $EXTRA
 ExecStart=%h/.local/bin/ferro-agent
 Restart=always

@@ -303,7 +303,11 @@ fn sync_project(nodes: &[NodeState], args: &SyncArgs) -> Result<()> {
         let dest = format!("{}@{}:{}/", i.user, host, i.workspace.trim_end_matches('/'));
 
         let mut cmd = std::process::Command::new("rsync");
-        cmd.arg("-az").arg("--mkpath");
+        cmd.arg("-az");
+        // --mkpath needs rsync >= 3.2.3 and Ubuntu 20.04 ships 3.1.3, so
+        // create the workspace through the remote shell instead.
+        cmd.arg("--rsync-path")
+            .arg(format!("mkdir -p '{}' && rsync", i.workspace.trim_end_matches('/')));
         if args.delete {
             cmd.arg("--delete");
         }
