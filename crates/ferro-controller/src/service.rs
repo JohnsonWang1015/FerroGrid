@@ -136,6 +136,7 @@ impl Controller for ControllerService {
             .insert_job(Job {
                 job_id: job_id.clone(),
                 name,
+                submitted_by: req.submitted_by.clone(),
                 plan: plan.clone(),
                 per_node: Default::default(),
                 submitted: now_s(),
@@ -288,6 +289,14 @@ impl Controller for ControllerService {
                     started_unix_s: st.map(|s| s.started_unix_s).unwrap_or(0),
                     world_size: job.plan.world_size,
                     image: String::new(),
+                    user: job.submitted_by.clone(),
+                    // The container runs as the agent's own account, which is
+                    // not necessarily whoever submitted the job.
+                    runs_as: g
+                        .nodes
+                        .get(&p.node_id)
+                        .map(|n| n.info.user.clone())
+                        .unwrap_or_default(),
                     metrics: Some(job.to_summary().metrics.unwrap_or_default()),
                     gpu_util_pct: held.iter().map(|g| g.utilization_pct as f64).sum::<f64>() / n,
                     vram_used_gb: held
@@ -434,7 +443,46 @@ impl Controller for ControllerService {
             return Err(Status::invalid_argument("missing status"));
         };
         let job_id = status.job_id.clone();
+        let failed_node = status.node_id.clone();
+        let rank_failed = status.phase() == JobPhase::Failed;
         self.registry.update_job_status(status).await;
+
+        // A distributed job is dead once any rank dies, but the survivors do
+        // not know that: they sit in a collective waiting for a peer that
+        // will never answer, holding their GPUs indefinitely. Tear them down
+        // so the cards go back to the pool.
+        if rank_failed {
+            let survivors: Vec<(String, String)> = {
+                let g = self.registry.inner.lock().await;
+                match g.jobs.get(&job_id) {
+                    Some(job) => job
+                        .plan
+                        .placements
+                        .iter()
+                        .filter(|p| p.node_id != failed_node)
+                        .filter(|p| {
+                            job.per_node
+                                .get(&p.node_id)
+                                .map(|s| !s.phase().is_terminal())
+                                .unwrap_or(true)
+                        })
+                        .map(|p| (p.node_id.clone(), p.address.clone()))
+                        .collect(),
+                    None => Vec::new(),
+                }
+            };
+            for (node_id, addr) in survivors {
+                tracing::info!(
+                    job = %job_id,
+                    node = %node_id,
+                    "rank on {failed_node} failed; stopping surviving rank"
+                );
+                if let Err(e) = stop_on(&addr, &job_id).await {
+                    tracing::warn!(job = %job_id, node = %node_id, "could not stop: {e}");
+                }
+            }
+        }
+
         self.registry.release_if_done(&job_id).await;
         Ok(Response::new(ReportJobStatusResponse {}))
     }

@@ -60,6 +60,8 @@ Requires [uv](https://docs.astral.sh/uv/) and a Rust toolchain
 | `python/examples/train_fsdp2.py` | FSDP2 reference model (synthetic data) |
 | `python/ferro_mojo.py` | Mojo kernel loader, autograd wrapper, PyTorch fallback |
 | `python/examples/bench_mojo.py` | Mojo-vs-PyTorch correctness check and benchmark |
+| `python/examples/train_pp.py` | Pipeline-parallel example (works intra-node, see below) |
+| `python/examples/p2p_probe.py` | Checks which NCCL primitives your fabric supports |
 | `mojo/kernels/` | Mojo custom kernels (`ferro_gelu`), compiled via MAX |
 | `docker/Dockerfile.train` | Optional custom training image |
 | `scripts/` | Build, deploy, sync, prepare, benchmark |
@@ -583,6 +585,49 @@ The A6000 has twice the VRAM of a 4090 and roughly a third of the throughput —
 exactly the kind of thing that makes "most free VRAM" the wrong ranking on its
 own. Scores are cached per node and survive restarts; a GPU busy with someone
 else's work is skipped rather than measured wrongly.
+
+### Pipeline parallelism: promising in theory, blocked in practice
+
+Pipeline parallelism should be the answer to a slow interconnect. FSDP
+all-gathers every parameter each step; PP only ships the activations crossing a
+stage boundary — for the model below, ~1.3 GB versus ~8 MB. Two orders of
+magnitude, exactly where 1 GbE hurts.
+
+`python/examples/train_pp.py` implements it with
+`torch.distributed.pipelining`. It works, but the measurements do not support
+using it here:
+
+| Shape | Strategy | tokens/s |
+|---|---|---|
+| 1 node × 2 GPU | FSDP2 | **63,789** |
+| 1 node × 2 GPU | Pipeline (1F1B, 8 microbatches) | 46,632 |
+| 2 nodes × 1 GPU | FSDP2 | 1,582 |
+| 2 nodes × 1 GPU | Pipeline | **hangs** |
+
+Two separate results:
+
+**Intra-node, PP loses to FSDP** — 46.6k vs 63.8k tokens/s. That is the
+expected outcome: inside one box bandwidth is plentiful, so PP's smaller
+transfers buy nothing while its pipeline bubble and sequential stage
+dependency cost real time.
+
+**Cross-node, PP hangs** — and the network is not at fault. A probe
+(`python/examples/p2p_probe.py`) confirms every primitive works between these
+nodes: `all_reduce` 90 ms, `send`/`recv` 52 ms, and `batch_isend_irecv` — the
+one pipelining actually uses — 65 ms. The hang is inside
+`torch.distributed.pipelining` at the first `schedule.step()`, with both GPUs
+spinning at 100%.
+
+One real bug was found and fixed along the way: passing `input_args` alone
+opts into deprecated init-time shape inference, whose metadata exchange breaks
+over NCCL's socket transport (`message truncated: receiving 8 bytes instead of
+4`). Passing `output_args` too removes that exchange entirely. It only
+reproduces between nodes, which is why the intra-node run looked fine.
+
+So PP stays in the tree as a working intra-node example and a starting point,
+but **FSDP2 remains the recommendation on this cluster**. If you want to pick
+this up: try a newer torch, `ScheduleGPipe` with a single microbatch to
+minimise the schedule's own logic, or `gloo` for the stage boundaries.
 
 ### Worked example: how big an LLM actually fits
 

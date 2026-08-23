@@ -99,6 +99,9 @@ message SubmitJobRequest {
   repeated string node_filter = 9;
   // Let the scheduler choose the shape: nodes and gpus_per_node are ignored.
   bool auto_place           = 11;
+  // Login name of whoever submitted this, so a shared cluster can tell whose
+  // job is occupying a GPU. Set by the CLI.
+  string submitted_by       = 12;
   // Extra bind mounts, "HOST[:CONTAINER][:ro]". Datasets normally live on
   // shared storage outside the workspace, so they need mounting explicitly.
   repeated string mounts = 10;
@@ -151,6 +154,7 @@ message JobStatus {
 message JobSummary {
   string job_id        = 1;
   string name          = 2;
+  string submitted_by  = 9;
   JobPhase phase       = 3;
   JobPlan plan         = 4;
   repeated JobStatus per_node = 5;
@@ -197,6 +201,10 @@ message ProcessEntry {
   uint32 world_size    = 8;
   string image         = 9;
   TrainingMetrics metrics = 10;
+  // Who submitted the job.
+  string user          = 13;
+  // OS account the container runs as on this node (the agent's account).
+  string runs_as       = 14;
   // Live utilisation of just this rank's GPUs, averaged.
   double gpu_util_pct  = 11;
   double vram_used_gb  = 12;

@@ -512,6 +512,8 @@ pub fn processes(procs: &[ProcessEntry], json: bool) {
                 let m = p.metrics.clone().unwrap_or_default();
                 serde_json::json!({
                     "job_id": p.job_id,
+                    "user": p.user,
+                    "runs_as": p.runs_as,
                     "name": p.name,
                     "node_id": p.node_id,
                     "node_rank": p.node_rank,
@@ -534,12 +536,22 @@ pub fn processes(procs: &[ProcessEntry], json: bool) {
         return;
     }
 
-    let mut t = table(&["JOB", "NAME", "NODE", "RANK", "GPUS", "PHASE", "UPTIME", "UTIL", "VRAM", "STEP", "TOKENS/S"]);
+    let mut t = table(&["JOB", "USER", "NAME", "NODE", "RANK", "GPUS", "PHASE", "UPTIME", "UTIL", "VRAM", "STEP", "TOKENS/S"]);
     for p in procs {
         let m = p.metrics.clone().unwrap_or_default();
         let util = p.gpu_util_pct.round() as u32;
+        // Submitter, plus the node account the container runs as when they
+        // differ -- on a shared cluster "whose job" and "which uid wrote this
+        // checkpoint" are different questions.
+        let who = match (p.user.as_str(), p.runs_as.as_str()) {
+            ("", "") => "-".to_string(),
+            ("", r) => r.to_string(),
+            (u, r) if u == r || r.is_empty() => u.to_string(),
+            (u, r) => format!("{u}→{r}"),
+        };
         t.add_row(vec![
             Cell::new(&p.job_id),
+            Cell::new(who).fg(Color::Blue),
             Cell::new(&p.name),
             Cell::new(&p.node_id),
             Cell::new(format!("{}/{}", p.node_rank, p.world_size.max(1))),

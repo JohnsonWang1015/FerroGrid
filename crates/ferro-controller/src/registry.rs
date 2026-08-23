@@ -51,6 +51,7 @@ impl Node {
 pub struct Job {
     pub job_id: String,
     pub name: String,
+    pub submitted_by: String,
     pub plan: JobPlan,
     pub per_node: HashMap<String, JobStatus>,
     pub submitted: i64,
@@ -95,6 +96,7 @@ impl Job {
         JobSummary {
             job_id: self.job_id.clone(),
             name: self.name.clone(),
+            submitted_by: self.submitted_by.clone(),
             phase: self.phase() as i32,
             plan: Some(self.plan.clone()),
             per_node,

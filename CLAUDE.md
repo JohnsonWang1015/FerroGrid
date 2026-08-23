@@ -39,6 +39,13 @@ See README.md for architecture, deployment and measured results.
 - Mojo 1.0 removed `fn` (use `def`) and deprecated `alias` (use `comptime`).
   Kernel API is in `extensibility`; stdlib imports are `std.`-prefixed.
 
+- A failed rank must tear down its peers: survivors sit in a collective
+  forever holding GPUs. The controller does this in `report_job_status`.
+- `torch.distributed.pipelining` hangs cross-node here even though every NCCL
+  primitive works (`p2p_probe.py` proves it). Pass both `input_args` and
+  `output_args` to `PipelineStage` regardless -- `input_args` alone uses a
+  deprecated shape-inference path that corrupts metadata over sockets.
+
 ## Conventions
 
 - Live views (`ferro watch`, `-w` on the read-only commands) redraw faster than

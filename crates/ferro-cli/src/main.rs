@@ -423,6 +423,10 @@ async fn train(client: &mut ControllerClient<Channel>, args: TrainArgs, json: bo
         name: args.name.unwrap_or_default(),
         node_filter: args.node_filter,
         mounts: args.mounts,
+        // Whose job this is, for `ferro ps` on a shared cluster.
+        submitted_by: std::env::var("USER")
+            .or_else(|_| std::env::var("LOGNAME"))
+            .unwrap_or_default(),
     };
 
     let resp = client.submit_job(req).await?.into_inner();
