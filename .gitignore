@@ -1,0 +1,5 @@
+/target
+/.cargo-container-registry
+__pycache__/
+*.pyc
+/mojo/build

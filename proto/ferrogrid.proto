@@ -1,0 +1,238 @@
+syntax = "proto3";
+package ferrogrid.v1;
+
+// ---------------------------------------------------------------------------
+// Common resource types
+// ---------------------------------------------------------------------------
+
+// A single physical GPU as reported by NVML.
+message Gpu {
+  uint32 index          = 1;   // NVML device index on its node
+  string uuid           = 2;   // stable GPU UUID, used for scheduling
+  string name           = 3;   // e.g. "NVIDIA GeForce RTX 4090"
+  uint64 memory_total_b = 4;
+  uint64 memory_used_b  = 5;
+  uint32 utilization_pct = 6;  // SM utilization 0-100
+  uint32 memory_util_pct = 7;
+  uint32 temperature_c   = 8;
+  uint32 power_usage_mw  = 9;
+  uint32 power_limit_mw  = 10;
+  string cuda_capability = 11; // e.g. "8.9"
+  // Job currently holding this GPU according to the agent, empty if free.
+  string allocated_job_id = 12;
+}
+
+message NodeInfo {
+  string node_id        = 1;   // stable id, defaults to hostname
+  string hostname       = 2;
+  string address        = 3;   // IP:port the agent's gRPC server listens on
+  string nccl_address   = 4;   // IP used for NCCL/MASTER_ADDR (may differ from mgmt IP)
+  string driver_version = 5;
+  string cuda_version   = 6;
+  string agent_version  = 7;
+  uint32 cpu_count      = 8;
+  uint64 memory_total_b = 9;
+  repeated Gpu gpus     = 10;
+  // Set when NVML could not be initialised; gpus will be empty.
+  string gpu_error      = 11;
+}
+
+// ---------------------------------------------------------------------------
+// Controller service: agents register here, CLI queries here.
+// ---------------------------------------------------------------------------
+
+message RegisterRequest { NodeInfo node = 1; }
+message RegisterResponse {
+  bool accepted             = 1;
+  string message            = 2;
+  uint32 heartbeat_interval_s = 3;
+}
+
+message HeartbeatRequest {
+  string node_id        = 1;
+  repeated Gpu gpus     = 2;
+  repeated JobStatus jobs = 3;
+}
+message HeartbeatResponse { bool known = 1; }
+
+message ListNodesRequest {}
+message ListNodesResponse { repeated NodeState nodes = 1; }
+
+message NodeState {
+  NodeInfo info          = 1;
+  bool healthy           = 2;
+  int64 last_seen_unix_s = 3;
+  uint32 free_gpus       = 4;
+}
+
+message ListGpusRequest {}
+message GpuEntry {
+  string node_id = 1;
+  Gpu gpu        = 2;
+  bool healthy   = 3;
+}
+message ListGpusResponse { repeated GpuEntry gpus = 1; }
+
+// ---------------------------------------------------------------------------
+// Training job submission
+// ---------------------------------------------------------------------------
+
+message SubmitJobRequest {
+  string script             = 1;  // path to the python entrypoint (in-container)
+  repeated string script_args = 2;
+  uint32 nodes              = 3;
+  uint32 gpus_per_node      = 4;
+  string image              = 5;  // docker image; empty => controller default
+  string workdir            = 6;  // host dir bind-mounted into the container
+  map<string, string> env   = 7;
+  string name               = 8;
+  // Restrict placement to these node ids. Empty => scheduler picks freely.
+  repeated string node_filter = 9;
+}
+
+message SubmitJobResponse {
+  string job_id  = 1;
+  bool accepted  = 2;
+  string message = 3;
+  JobPlan plan   = 4;
+}
+
+// The concrete placement decision the scheduler made.
+message JobPlan {
+  string master_addr = 1;
+  uint32 master_port = 2;
+  uint32 world_size  = 3;
+  repeated JobPlacement placements = 4;
+}
+
+message JobPlacement {
+  string node_id             = 1;
+  string address             = 2;
+  uint32 node_rank           = 3;
+  repeated uint32 gpu_indices = 4;
+  repeated string gpu_uuids   = 5;
+}
+
+enum JobPhase {
+  JOB_PHASE_UNSPECIFIED = 0;
+  JOB_PHASE_PENDING     = 1;
+  JOB_PHASE_LAUNCHING   = 2;
+  JOB_PHASE_RUNNING     = 3;
+  JOB_PHASE_SUCCEEDED   = 4;
+  JOB_PHASE_FAILED      = 5;
+  JOB_PHASE_CANCELLED   = 6;
+}
+
+message JobStatus {
+  string job_id       = 1;
+  string node_id      = 2;
+  uint32 node_rank    = 3;
+  JobPhase phase      = 4;
+  int32 exit_code     = 5;
+  string message      = 6;
+  int64 started_unix_s = 7;
+  int64 ended_unix_s   = 8;
+}
+
+message JobSummary {
+  string job_id        = 1;
+  string name          = 2;
+  JobPhase phase       = 3;
+  JobPlan plan         = 4;
+  repeated JobStatus per_node = 5;
+  int64 submitted_unix_s = 6;
+  // Aggregated NCCL / distributed error lines detected in the logs.
+  repeated string nccl_errors = 7;
+  TrainingMetrics metrics = 8;
+}
+
+message TrainingMetrics {
+  uint64 step               = 1;
+  double loss               = 2;
+  double samples_per_s      = 3;
+  double tokens_per_s       = 4;
+  double step_time_ms       = 5;
+  double peak_vram_gb       = 6;
+  int64 updated_unix_s      = 7;
+  // Rolling average GPU utilisation across all GPUs in the job.
+  double avg_gpu_util_pct   = 8;
+}
+
+message GetJobRequest { string job_id = 1; }
+message ListJobsRequest { uint32 limit = 1; }
+message ListJobsResponse { repeated JobSummary jobs = 1; }
+message CancelJobRequest { string job_id = 1; }
+message CancelJobResponse { bool cancelled = 1; string message = 2; }
+
+message LogRequest { string job_id = 1; bool follow = 2; }
+
+message LogLine {
+  string job_id   = 1;
+  string node_id  = 2;
+  uint32 node_rank = 3;
+  string stream   = 4; // "stdout" | "stderr" | "system"
+  string line     = 5;
+  int64 unix_ms   = 6;
+}
+
+// Agents push logs and metrics up to the controller.
+message ReportLogsRequest { repeated LogLine lines = 1; }
+message ReportLogsResponse {}
+
+message ReportJobStatusRequest { JobStatus status = 1; }
+message ReportJobStatusResponse {}
+
+service Controller {
+  rpc RegisterNode(RegisterRequest) returns (RegisterResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+
+  rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
+  rpc ListGpus(ListGpusRequest) returns (ListGpusResponse);
+
+  rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
+  rpc GetJob(GetJobRequest) returns (JobSummary);
+  rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
+  rpc CancelJob(CancelJobRequest) returns (CancelJobResponse);
+  rpc StreamLogs(LogRequest) returns (stream LogLine);
+
+  // Agent -> controller streaming of job output and status.
+  rpc ReportLogs(ReportLogsRequest) returns (ReportLogsResponse);
+  rpc ReportJobStatus(ReportJobStatusRequest) returns (ReportJobStatusResponse);
+}
+
+// ---------------------------------------------------------------------------
+// Agent service: controller calls into each node.
+// ---------------------------------------------------------------------------
+
+message LaunchJobRequest {
+  string job_id             = 1;
+  uint32 node_rank          = 2;
+  uint32 nnodes             = 3;
+  uint32 nproc_per_node     = 4;
+  string master_addr        = 5;
+  uint32 master_port        = 6;
+  repeated uint32 gpu_indices = 7;
+  string image              = 8;
+  string workdir            = 9;
+  string script             = 10;
+  repeated string script_args = 11;
+  map<string, string> env   = 12;
+  // Extra torchrun args passed verbatim.
+  repeated string torchrun_args = 13;
+}
+
+message LaunchJobResponse { bool launched = 1; string message = 2; }
+
+message StopJobRequest { string job_id = 1; }
+message StopJobResponse { bool stopped = 1; string message = 2; }
+
+message GetNodeInfoRequest {}
+message PingRequest {}
+message PingResponse { string agent_version = 1; }
+
+service NodeAgent {
+  rpc GetNodeInfo(GetNodeInfoRequest) returns (NodeInfo);
+  rpc LaunchJob(LaunchJobRequest) returns (LaunchJobResponse);
+  rpc StopJob(StopJobRequest) returns (StopJobResponse);
+  rpc Ping(PingRequest) returns (PingResponse);
+}

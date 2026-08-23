@@ -1,0 +1,228 @@
+//! `ferro` — operator CLI for the FerroGrid control plane.
+
+mod render;
+
+use anyhow::{Context, Result};
+use clap::{Parser, Subcommand};
+use ferro_proto::controller_client::ControllerClient;
+use ferro_proto::*;
+use std::collections::HashMap;
+use tonic::transport::Channel;
+
+#[derive(Parser, Debug)]
+#[command(name = "ferro", version, about = "FerroGrid multi-server GPU training CLI")]
+struct Cli {
+    /// Controller endpoint.
+    #[arg(long, global = true, env = "FERRO_CONTROLLER", default_value = "http://127.0.0.1:7070")]
+    controller: String,
+
+    /// Emit JSON instead of tables.
+    #[arg(long, global = true)]
+    json: bool,
+
+    #[command(subcommand)]
+    cmd: Cmd,
+}
+
+#[derive(Subcommand, Debug)]
+enum Cmd {
+    /// List registered servers.
+    Nodes,
+    /// List every GPU across the cluster.
+    Gpu,
+    /// Launch a distributed training job.
+    Train(TrainArgs),
+    /// List recent jobs.
+    Jobs {
+        #[arg(long, default_value_t = 20)]
+        limit: u32,
+    },
+    /// Show one job in detail.
+    Job { job_id: String },
+    /// Stream a job's logs.
+    Logs {
+        job_id: String,
+        /// Keep following until the job ends.
+        #[arg(short, long)]
+        follow: bool,
+    },
+    /// Cancel a running job.
+    Cancel { job_id: String },
+}
+
+#[derive(clap::Args, Debug)]
+struct TrainArgs {
+    /// Python entrypoint, as seen inside the container.
+    script: String,
+
+    /// Arguments forwarded to the script. Everything after the script path is
+    /// passed through verbatim, so `ferro` flags must come before it.
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+    script_args: Vec<String>,
+
+    /// Number of servers to use.
+    #[arg(long, default_value_t = 1)]
+    nodes: u32,
+
+    /// GPUs per server (becomes torchrun --nproc_per_node).
+    #[arg(long, default_value_t = 1)]
+    gpus_per_node: u32,
+
+    /// Docker image override.
+    #[arg(long)]
+    image: Option<String>,
+
+    /// Directory bind-mounted into the container and used as the working
+    /// directory. Relative to the agent's workspace root; defaults to it.
+    #[arg(long)]
+    workdir: Option<String>,
+
+    /// Extra environment, repeatable: --env NCCL_DEBUG=INFO
+    #[arg(long = "env", value_parser = parse_kv)]
+    envs: Vec<(String, String)>,
+
+    /// Restrict placement to these node ids, repeatable.
+    #[arg(long = "node")]
+    node_filter: Vec<String>,
+
+    /// Job name shown in `ferro jobs`.
+    #[arg(long)]
+    name: Option<String>,
+
+    /// Stream logs after submitting.
+    #[arg(short, long)]
+    follow: bool,
+}
+
+fn parse_kv(s: &str) -> Result<(String, String), String> {
+    s.split_once('=')
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .ok_or_else(|| format!("expected KEY=VALUE, got `{s}`"))
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let cli = Cli::parse();
+    let mut client = ControllerClient::connect(cli.controller.clone())
+        .await
+        .with_context(|| format!("cannot reach controller at {}", cli.controller))?;
+
+    match cli.cmd {
+        Cmd::Nodes => {
+            let r = client.list_nodes(ListNodesRequest {}).await?.into_inner();
+            render::nodes(&r.nodes, cli.json);
+        }
+        Cmd::Gpu => {
+            let r = client.list_gpus(ListGpusRequest {}).await?.into_inner();
+            render::gpus(&r.gpus, cli.json);
+        }
+        Cmd::Jobs { limit } => {
+            let r = client.list_jobs(ListJobsRequest { limit }).await?.into_inner();
+            render::jobs(&r.jobs, cli.json);
+        }
+        Cmd::Job { job_id } => {
+            let r = client.get_job(GetJobRequest { job_id }).await?.into_inner();
+            render::job_detail(&r, cli.json);
+        }
+        Cmd::Logs { job_id, follow } => {
+            stream_logs(&mut client, &job_id, follow).await?;
+        }
+        Cmd::Cancel { job_id } => {
+            let r = client
+                .cancel_job(CancelJobRequest { job_id })
+                .await?
+                .into_inner();
+            println!("{}", r.message);
+        }
+        Cmd::Train(args) => {
+            train(&mut client, args, cli.json).await?;
+        }
+    }
+    Ok(())
+}
+
+async fn train(client: &mut ControllerClient<Channel>, args: TrainArgs, json: bool) -> Result<()> {
+    // A relative script path is resolved by each agent against its own
+    // workspace root (`--workspace`, default ~/ferrogrid), because lab nodes
+    // rarely share a home directory. An absolute path is passed through for
+    // shared-NFS setups.
+    let env: HashMap<String, String> = args.envs.into_iter().collect();
+    let workdir = args.workdir.clone().unwrap_or_default();
+    let req = SubmitJobRequest {
+        script: args.script.clone(),
+        script_args: args.script_args,
+        nodes: args.nodes,
+        gpus_per_node: args.gpus_per_node,
+        image: args.image.unwrap_or_default(),
+        workdir,
+        env,
+        name: args.name.unwrap_or_default(),
+        node_filter: args.node_filter,
+    };
+
+    let resp = client.submit_job(req).await?.into_inner();
+    render::submit(&resp, json);
+
+    if !resp.accepted {
+        std::process::exit(1);
+    }
+    if args.follow {
+        stream_logs(client, &resp.job_id, true).await?;
+        let final_job = client
+            .get_job(GetJobRequest { job_id: resp.job_id.clone() })
+            .await?
+            .into_inner();
+        println!();
+        render::job_detail(&final_job, json);
+        if final_job.phase() != JobPhase::Succeeded {
+            std::process::exit(1);
+        }
+    }
+    Ok(())
+}
+
+async fn stream_logs(
+    client: &mut ControllerClient<Channel>,
+    job_id: &str,
+    follow: bool,
+) -> Result<()> {
+    let mut stream = client
+        .stream_logs(LogRequest { job_id: job_id.to_string(), follow })
+        .await?
+        .into_inner();
+
+    // When following, stop once every rank has reported a terminal phase;
+    // otherwise the stream would hang open after training finishes.
+    let mut poll = tokio::time::interval(std::time::Duration::from_secs(2));
+    poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut done_since: Option<std::time::Instant> = None;
+    let mut poller = client.clone();
+
+    loop {
+        tokio::select! {
+            msg = stream.message() => {
+                match msg? {
+                    Some(l) => render::log_line(&l),
+                    None => break,
+                }
+            }
+            _ = poll.tick(), if follow => {
+                let s = poller
+                    .get_job(GetJobRequest { job_id: job_id.to_string() })
+                    .await?
+                    .into_inner();
+                if s.phase().is_terminal() {
+                    // Give the agents a moment to flush their last log batch.
+                    match done_since {
+                        Some(t) if t.elapsed() > std::time::Duration::from_secs(3) => break,
+                        Some(_) => {}
+                        None => done_since = Some(std::time::Instant::now()),
+                    }
+                } else {
+                    done_since = None;
+                }
+            }
+        }
+    }
+    Ok(())
+}

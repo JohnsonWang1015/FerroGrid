@@ -1,0 +1,4 @@
+# Extra dependencies for FerroGrid training jobs.
+# torch/torchvision come from the base image -- do not pin them here, or pip
+# will pull a different CUDA build and NCCL will mismatch across ranks.
+numpy

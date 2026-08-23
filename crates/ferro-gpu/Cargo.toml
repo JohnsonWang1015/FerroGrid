@@ -1,0 +1,11 @@
+[package]
+name = "ferro-gpu"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ferro-proto.workspace = true
+nvml-wrapper.workspace = true
+anyhow.workspace = true
+tracing.workspace = true

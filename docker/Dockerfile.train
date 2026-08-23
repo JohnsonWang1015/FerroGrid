@@ -1,0 +1,32 @@
+# Optional custom training image for FerroGrid.
+#
+# The platform runs stock `pytorch/pytorch:*` images out of the box -- build
+# this only when your jobs need extra Python dependencies. Keep the torch and
+# CUDA versions identical on every node: NCCL requires matching torch builds
+# across ranks.
+#
+#   docker build -f docker/Dockerfile.train -t ferrogrid/train:latest .
+#   ferro train --image ferrogrid/train:latest ...
+#
+# Pick the base to match the oldest driver in your cluster (CUDA 12.x needs
+# driver >= 525) and the newest GPU architecture (Blackwell/sm_120 needs 12.8).
+ARG BASE=pytorch/pytorch:2.9.1-cuda12.6-cudnn9-runtime
+FROM ${BASE}
+
+# Jobs run as the invoking host user (the agent passes --user uid:gid), so
+# everything installed here must be readable world-wide, and nothing may
+# depend on writing to /root at runtime.
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+COPY docker/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
+
+# The metric helper the controller parses (FERRO_METRIC lines).
+COPY python/ferro_mojo.py /opt/ferrogrid/python/
+ENV PYTHONPATH=/opt/ferrogrid/python:${PYTHONPATH}
+
+# Sanity-check the image at build time rather than on the cluster.
+RUN python -c "import torch; from torch.distributed.fsdp import fully_shard, MixedPrecisionPolicy; print('torch', torch.__version__, 'FSDP2 ok')"
+
+WORKDIR /workspace
