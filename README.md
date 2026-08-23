@@ -88,7 +88,22 @@ servers run the same distro.
 > but reports **zero GPUs**. The agent must be dynamically linked, so it is
 > built against the oldest glibc in the fleet instead.
 
-### 3. Start the controller
+### 3. Put `ferro` on your PATH
+
+`build.sh` leaves the binaries under `target/`; nothing installs them for you.
+Symlink rather than copy, so a later rebuild is picked up automatically:
+
+```bash
+mkdir -p ~/.local/bin
+ln -sf "$PWD/target/release/ferro"            ~/.local/bin/ferro
+ln -sf "$PWD/target/release/ferro-controller" ~/.local/bin/ferro-controller
+ferro --version
+```
+
+If that prints `command not found`, `~/.local/bin` is not on your `PATH` --
+add `export PATH="$HOME/.local/bin:$PATH"` to your shell rc file.
+
+### 4. Start the controller
 
 ```bash
 ./target/portable/release/ferro-controller --bind 0.0.0.0:7070
@@ -100,7 +115,7 @@ Useful flags: `--master-port` (rendezvous port, default 29500),
 
 For a permanent setup, run it under systemd the same way the agents do.
 
-### 4. Deploy the agents
+### 5. Deploy the agents
 
 ```bash
 ./scripts/deploy_agent.sh gpu-a 10.0.0.1:7070
@@ -118,7 +133,7 @@ and reboots. Optional 3rd/4th arguments override the NCCL IP and the node id:
 Set the node id when a machine has an unhelpful hostname — it is what
 `ferro nodes` shows and what `--node` filters match.
 
-### 5. Ship the training code
+### 6. Ship the training code
 
 ```bash
 ./scripts/sync_workspace.sh gpu-a gpu-b
@@ -129,7 +144,7 @@ Agents resolve **relative** script paths against their own workspace root
 identical home directories. Absolute paths are passed through untouched for
 shared-NFS setups.
 
-### 6. Verify
+### 7. Verify
 
 ```bash
 export FERRO_CONTROLLER=http://10.0.0.1:7070
@@ -252,6 +267,7 @@ gradient reduction.
 | 1 node × 1 GPU (RTX 4090) | 1 | **85,065** | 48 ms | 4.69 GiB |
 | 1 node × 2 GPU (RTX 4090, PCIe) | 2 | 63,724 | 129 ms | 3.76 GiB |
 | 2 nodes × 1 GPU (1 GbE) | 2 | 1,522 | 5,384 ms | 3.76 GiB |
+| 2 nodes × 1 GPU (1 GbE, both idle) | 2 | 1,583 | 5,174 ms | 3.76 GiB |
 
 The 4-GPU target configuration (2 servers × 2 GPUs, `world_size=4`,
 heterogeneous RTX 4090 / RTX PRO 5000 Blackwell / A6000) **runs FSDP2 to
@@ -275,7 +291,9 @@ Consequences worth planning around:
   above): FSDP2 pays off when the model does not fit, not when it does.
 - The measured 4-GPU numbers were taken on a node whose GPUs were already
   saturated by other users' jobs, so they reflect contention, not the
-  platform's ceiling.
+  platform's ceiling. The two 2-node rows above were measured on different
+  server pairs, one of them fully idle, and agree within 4% -- the inter-node
+  cost is the fabric, not contention.
 
 Reproduce with:
 
