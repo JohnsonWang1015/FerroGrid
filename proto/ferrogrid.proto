@@ -20,6 +20,11 @@ message Gpu {
   string cuda_capability = 11; // e.g. "8.9"
   // Job currently holding this GPU according to the agent, empty if free.
   string allocated_job_id = 12;
+  // Measured bf16 matmul throughput in TFLOP/s from `ferro bench`, so the
+  // scheduler can rank real hardware instead of guessing from the model name.
+  // Zero means "never benchmarked".
+  double bench_tflops     = 13;
+  int64 bench_unix_s      = 14;
 }
 
 message NodeInfo {
@@ -92,6 +97,8 @@ message SubmitJobRequest {
   string name               = 8;
   // Restrict placement to these node ids. Empty => scheduler picks freely.
   repeated string node_filter = 9;
+  // Let the scheduler choose the shape: nodes and gpus_per_node are ignored.
+  bool auto_place           = 11;
   // Extra bind mounts, "HOST[:CONTAINER][:ro]". Datasets normally live on
   // shared storage outside the workspace, so they need mounting explicitly.
   repeated string mounts = 10;
@@ -165,8 +172,44 @@ message TrainingMetrics {
   double avg_gpu_util_pct   = 8;
 }
 
+message GpuBenchmark {
+  string node_id  = 1;
+  uint32 index    = 2;
+  string uuid     = 3;
+  string name     = 4;
+  double tflops   = 5;
+  string error    = 6;
+}
+
 message GetJobRequest { string job_id = 1; }
 message ListJobsRequest { uint32 limit = 1; }
+
+// `ferro ps`: what is running right now, and on which GPUs.
+message ListProcessesRequest {}
+message ProcessEntry {
+  string job_id        = 1;
+  string name          = 2;
+  string node_id       = 3;
+  uint32 node_rank     = 4;
+  repeated uint32 gpu_indices = 5;
+  JobPhase phase       = 6;
+  int64 started_unix_s = 7;
+  uint32 world_size    = 8;
+  string image         = 9;
+  TrainingMetrics metrics = 10;
+  // Live utilisation of just this rank's GPUs, averaged.
+  double gpu_util_pct  = 11;
+  double vram_used_gb  = 12;
+}
+message ListProcessesResponse { repeated ProcessEntry processes = 1; }
+
+// `ferro bench`: ask agents to measure their GPUs.
+message BenchmarkNodesRequest {
+  repeated string node_filter = 1;
+  // Re-measure even when a cached result exists.
+  bool force = 2;
+}
+message BenchmarkNodesResponse { repeated GpuBenchmark results = 1; }
 message ListJobsResponse { repeated JobSummary jobs = 1; }
 message CancelJobRequest { string job_id = 1; }
 message CancelJobResponse { bool cancelled = 1; string message = 2; }
@@ -199,6 +242,8 @@ service Controller {
   rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
   rpc GetJob(GetJobRequest) returns (JobSummary);
   rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
+  rpc ListProcesses(ListProcessesRequest) returns (ListProcessesResponse);
+  rpc BenchmarkNodes(BenchmarkNodesRequest) returns (BenchmarkNodesResponse);
   rpc CancelJob(CancelJobRequest) returns (CancelJobResponse);
   rpc StreamLogs(LogRequest) returns (stream LogLine);
 
@@ -235,6 +280,11 @@ message LaunchJobResponse { bool launched = 1; string message = 2; }
 message StopJobRequest { string job_id = 1; }
 message StopJobResponse { bool stopped = 1; string message = 2; }
 
+message BenchmarkRequest {
+  bool force = 1;
+}
+message BenchmarkResponse { repeated GpuBenchmark results = 1; }
+
 message GetNodeInfoRequest {}
 message PingRequest {}
 message PingResponse { string agent_version = 1; }
@@ -244,4 +294,5 @@ service NodeAgent {
   rpc LaunchJob(LaunchJobRequest) returns (LaunchJobResponse);
   rpc StopJob(StopJobRequest) returns (StopJobResponse);
   rpc Ping(PingRequest) returns (PingResponse);
+  rpc Benchmark(BenchmarkRequest) returns (BenchmarkResponse);
 }

@@ -91,15 +91,31 @@ impl Controller for ControllerService {
         }
 
         let nodes = self.registry.node_states().await;
-        let plan = scheduler::plan(
-            &nodes,
-            req.nodes,
-            req.gpus_per_node,
-            &req.node_filter,
-            self.master_port,
-            self.min_free_vram_b,
-        )
+        let plan = if req.auto_place {
+            scheduler::plan_auto(
+                &nodes,
+                &req.node_filter,
+                self.master_port,
+                self.min_free_vram_b,
+                // gpus_per_node doubles as a cap in auto mode when set.
+                if req.gpus_per_node > 0 { req.gpus_per_node } else { u32::MAX },
+            )
+        } else {
+            scheduler::plan(
+                &nodes,
+                req.nodes,
+                req.gpus_per_node,
+                &req.node_filter,
+                self.master_port,
+                self.min_free_vram_b,
+            )
+        }
         .map_err(|e| Status::failed_precondition(e.to_string()))?;
+
+        // Auto mode decides the shape, so the launch requests must follow the
+        // plan rather than what the caller asked for.
+        let nnodes = plan.placements.len() as u32;
+        let nproc = plan.placements.first().map(|p| p.gpu_indices.len() as u32).unwrap_or(0);
 
         let job_id = format!("j{}", &uuid::Uuid::new_v4().simple().to_string()[..10]);
         let name = if req.name.is_empty() {
@@ -147,8 +163,8 @@ impl Controller for ControllerService {
             let launch = LaunchJobRequest {
                 job_id: job_id.clone(),
                 node_rank: p.node_rank,
-                nnodes: req.nodes,
-                nproc_per_node: req.gpus_per_node,
+                nnodes,
+                nproc_per_node: nproc,
                 master_addr: plan.master_addr.clone(),
                 master_port: plan.master_port,
                 gpu_indices: p.gpu_indices.clone(),
@@ -231,6 +247,102 @@ impl Controller for ControllerService {
             jobs.truncate(limit as usize);
         }
         Ok(Response::new(ListJobsResponse { jobs }))
+    }
+
+    async fn list_processes(
+        &self,
+        _req: Request<ListProcessesRequest>,
+    ) -> Result<Response<ListProcessesResponse>, Status> {
+        let g = self.registry.inner.lock().await;
+
+        // Live GPU telemetry, keyed by (node, index), so each rank can be
+        // shown with the utilisation of the cards it actually holds.
+        let mut gpu_by_key: std::collections::HashMap<(&str, u32), &Gpu> = Default::default();
+        for node in g.nodes.values() {
+            for gpu in &node.info.gpus {
+                gpu_by_key.insert((node.info.node_id.as_str(), gpu.index), gpu);
+            }
+        }
+
+        let mut processes = Vec::new();
+        for id in g.job_order.iter().rev() {
+            let Some(job) = g.jobs.get(id) else { continue };
+            if job.phase().is_terminal() {
+                continue;
+            }
+            for p in &job.plan.placements {
+                let st = job.per_node.get(&p.node_id);
+                let held: Vec<&Gpu> = p
+                    .gpu_indices
+                    .iter()
+                    .filter_map(|i| gpu_by_key.get(&(p.node_id.as_str(), *i)).copied())
+                    .collect();
+                let n = held.len().max(1) as f64;
+                processes.push(ProcessEntry {
+                    job_id: job.job_id.clone(),
+                    name: job.name.clone(),
+                    node_id: p.node_id.clone(),
+                    node_rank: p.node_rank,
+                    gpu_indices: p.gpu_indices.clone(),
+                    phase: st.map(|s| s.phase).unwrap_or(JobPhase::Pending as i32),
+                    started_unix_s: st.map(|s| s.started_unix_s).unwrap_or(0),
+                    world_size: job.plan.world_size,
+                    image: String::new(),
+                    metrics: Some(job.to_summary().metrics.unwrap_or_default()),
+                    gpu_util_pct: held.iter().map(|g| g.utilization_pct as f64).sum::<f64>() / n,
+                    vram_used_gb: held
+                        .iter()
+                        .map(|g| g.memory_used_b as f64 / (1u64 << 30) as f64)
+                        .sum(),
+                });
+            }
+        }
+        Ok(Response::new(ListProcessesResponse { processes }))
+    }
+
+    async fn benchmark_nodes(
+        &self,
+        req: Request<BenchmarkNodesRequest>,
+    ) -> Result<Response<BenchmarkNodesResponse>, Status> {
+        let req = req.into_inner();
+        let nodes = self.registry.node_states().await;
+
+        let targets: Vec<(String, String)> = nodes
+            .iter()
+            .filter(|n| n.healthy)
+            .filter_map(|n| n.info.as_ref())
+            .filter(|i| req.node_filter.is_empty() || req.node_filter.contains(&i.node_id))
+            .map(|i| (i.node_id.clone(), i.address.clone()))
+            .collect();
+
+        if targets.is_empty() {
+            return Err(Status::failed_precondition("no healthy nodes to benchmark"));
+        }
+
+        // Sequential on purpose: benchmarking several nodes at once is fine,
+        // but each node's GPUs must be measured without contending with the
+        // others, and the agent already serialises within a node.
+        let mut results = Vec::new();
+        for (node_id, addr) in targets {
+            match NodeAgentClient::connect(endpoint(&addr)).await {
+                Ok(mut c) => match c.benchmark(BenchmarkRequest { force: req.force }).await {
+                    Ok(r) => results.extend(r.into_inner().results),
+                    Err(e) => results.push(GpuBenchmark {
+                        node_id,
+                        error: format!("{}", e.message()),
+                        ..Default::default()
+                    }),
+                },
+                Err(e) => results.push(GpuBenchmark {
+                    node_id,
+                    error: format!("connect: {e}"),
+                    ..Default::default()
+                }),
+            }
+        }
+
+        self.registry.record_benchmarks(&results).await;
+        Ok(Response::new(BenchmarkNodesResponse { results }))
     }
 
     async fn cancel_job(

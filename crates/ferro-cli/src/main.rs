@@ -50,6 +50,20 @@ enum Cmd {
     },
     /// Copy the current project to every node's workspace over rsync/SSH.
     Sync(SyncArgs),
+    /// Show what is running right now, per rank, like `docker ps`.
+    Ps {
+        #[command(flatten)]
+        watch: WatchArgs,
+    },
+    /// Measure each GPU's bf16 throughput so the scheduler can rank hardware.
+    Bench {
+        /// Only these node ids, repeatable. Default: every healthy node.
+        #[arg(long = "node")]
+        node_filter: Vec<String>,
+        /// Re-measure even where a cached result exists.
+        #[arg(long)]
+        force: bool,
+    },
     /// Live dashboard: nodes, GPUs and running jobs on one screen.
     Watch {
         /// Seconds between redraws.
@@ -115,9 +129,17 @@ struct TrainArgs {
     #[arg(long, default_value_t = 1)]
     nodes: u32,
 
-    /// GPUs per server (becomes torchrun --nproc_per_node).
+    /// GPUs per server (becomes torchrun --nproc_per_node). In --auto mode
+    /// this caps how many GPUs may be used rather than requesting exactly N.
     #[arg(long, default_value_t = 1)]
     gpus_per_node: u32,
+
+    /// Let the scheduler choose the shape. It keeps the job on one node and
+    /// takes the largest set of identical GPUs there, preferring whichever
+    /// node benchmarks fastest -- because crossing the network or sharding
+    /// unnecessarily both cost far more than they gain here.
+    #[arg(long)]
+    auto: bool,
 
     /// Docker image override.
     #[arg(long)]
@@ -198,6 +220,23 @@ async fn main() -> Result<()> {
                 Ok(())
             })
             .await?;
+        }
+        Cmd::Ps { watch } => {
+            repeat(watch, cli.json, || async {
+                let mut c = client.clone();
+                let r = c.list_processes(ListProcessesRequest {}).await?.into_inner();
+                render::processes(&r.processes, cli.json);
+                Ok(())
+            })
+            .await?;
+        }
+        Cmd::Bench { node_filter, force } => {
+            eprintln!("benchmarking (a few seconds per GPU)...");
+            let r = client
+                .benchmark_nodes(BenchmarkNodesRequest { node_filter, force })
+                .await?
+                .into_inner();
+            render::benchmarks(&r.results, cli.json);
         }
         Cmd::Jobs { limit, watch } => {
             repeat(watch, cli.json, || async {
@@ -374,7 +413,10 @@ async fn train(client: &mut ControllerClient<Channel>, args: TrainArgs, json: bo
         script: args.script.clone(),
         script_args: args.script_args,
         nodes: args.nodes,
-        gpus_per_node: args.gpus_per_node,
+        // In auto mode this is a cap; 1 is the flag default, which would cap
+        // every auto job to a single GPU, so treat "not set" as unlimited.
+        gpus_per_node: if args.auto && args.gpus_per_node == 1 { 0 } else { args.gpus_per_node },
+        auto_place: args.auto,
         image: args.image.unwrap_or_default(),
         workdir,
         env,

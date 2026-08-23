@@ -364,6 +364,7 @@ dependencies = [
  "hostname",
  "prost",
  "regex",
+ "serde_json",
  "tokio",
  "tokio-stream",
  "tonic",

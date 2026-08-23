@@ -6,6 +6,7 @@
 //!   3. serves the `NodeAgent` gRPC service so the controller can launch and
 //!      stop torchrun jobs inside Docker.
 
+mod bench;
 mod launcher;
 mod service;
 mod state;

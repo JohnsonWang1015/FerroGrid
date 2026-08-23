@@ -4,8 +4,8 @@ use crate::launcher;
 use crate::state::SharedState;
 use ferro_proto::node_agent_server::NodeAgent;
 use ferro_proto::{
-    GetNodeInfoRequest, LaunchJobRequest, LaunchJobResponse, NodeInfo, PingRequest, PingResponse,
-    StopJobRequest, StopJobResponse,
+    BenchmarkRequest, BenchmarkResponse, GetNodeInfoRequest, LaunchJobRequest, LaunchJobResponse,
+    NodeInfo, PingRequest, PingResponse, StopJobRequest, StopJobResponse,
 };
 use tonic::{Request, Response, Status};
 
@@ -71,6 +71,17 @@ impl NodeAgent for AgentService {
     ) -> Result<Response<StopJobResponse>, Status> {
         let (stopped, message) = self.state.stop_job(&req.into_inner().job_id).await;
         Ok(Response::new(StopJobResponse { stopped, message }))
+    }
+
+    async fn benchmark(
+        &self,
+        req: Request<BenchmarkRequest>,
+    ) -> Result<Response<BenchmarkResponse>, Status> {
+        let force = req.into_inner().force;
+        match crate::bench::run(self.state.clone(), force).await {
+            Ok(results) => Ok(Response::new(BenchmarkResponse { results })),
+            Err(e) => Err(Status::internal(format!("benchmark failed: {e:#}"))),
+        }
     }
 
     async fn ping(&self, _req: Request<PingRequest>) -> Result<Response<PingResponse>, Status> {

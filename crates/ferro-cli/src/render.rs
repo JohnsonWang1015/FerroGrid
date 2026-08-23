@@ -487,3 +487,126 @@ pub fn dashboard(nodes: &[NodeState], gpus: &[GpuEntry], jobs: &[JobSummary]) {
     }
     println!("{jt}");
 }
+
+fn elapsed(started: i64) -> String {
+    if started <= 0 {
+        return "-".into();
+    }
+    let secs = (now_s() - started).max(0);
+    if secs < 60 {
+        format!("{secs}s")
+    } else if secs < 3600 {
+        format!("{}m{:02}s", secs / 60, secs % 60)
+    } else {
+        format!("{}h{:02}m", secs / 3600, (secs % 3600) / 60)
+    }
+}
+
+/// `ferro ps`: one row per rank, so you can see which node and which cards a
+/// job is actually occupying rather than just that it exists.
+pub fn processes(procs: &[ProcessEntry], json: bool) {
+    if json {
+        let v: Vec<_> = procs
+            .iter()
+            .map(|p| {
+                let m = p.metrics.clone().unwrap_or_default();
+                serde_json::json!({
+                    "job_id": p.job_id,
+                    "name": p.name,
+                    "node_id": p.node_id,
+                    "node_rank": p.node_rank,
+                    "gpu_indices": p.gpu_indices,
+                    "phase": p.phase().label(),
+                    "world_size": p.world_size,
+                    "started_unix_s": p.started_unix_s,
+                    "gpu_util_pct": p.gpu_util_pct,
+                    "vram_used_gb": p.vram_used_gb,
+                    "step": m.step,
+                    "tokens_per_s": m.tokens_per_s,
+                })
+            })
+            .collect();
+        return dump(&v);
+    }
+
+    if procs.is_empty() {
+        println!("Nothing running.");
+        return;
+    }
+
+    let mut t = table(&["JOB", "NAME", "NODE", "RANK", "GPUS", "PHASE", "UPTIME", "UTIL", "VRAM", "STEP", "TOKENS/S"]);
+    for p in procs {
+        let m = p.metrics.clone().unwrap_or_default();
+        let util = p.gpu_util_pct.round() as u32;
+        t.add_row(vec![
+            Cell::new(&p.job_id),
+            Cell::new(&p.name),
+            Cell::new(&p.node_id),
+            Cell::new(format!("{}/{}", p.node_rank, p.world_size.max(1))),
+            Cell::new(p.gpu_indices.iter().map(|g| g.to_string()).collect::<Vec<_>>().join(",")),
+            phase_cell(p.phase()),
+            Cell::new(elapsed(p.started_unix_s)),
+            Cell::new(format!("{util}%")).fg(match util {
+                0..=10 => Color::Red,      // running but idle GPUs means a stall
+                11..=70 => Color::Yellow,
+                _ => Color::Green,
+            }),
+            Cell::new(format!("{:.1}G", p.vram_used_gb)),
+            Cell::new(m.step),
+            Cell::new(num(m.tokens_per_s)),
+        ]);
+    }
+    println!("{t}");
+    println!("{} rank(s) running", procs.len());
+}
+
+/// `ferro bench`: measured throughput per GPU, with a relative column so it is
+/// obvious which cards the scheduler will favour.
+pub fn benchmarks(results: &[GpuBenchmark], json: bool) {
+    if json {
+        let v: Vec<_> = results
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "node_id": r.node_id, "index": r.index, "uuid": r.uuid,
+                    "name": r.name, "tflops": r.tflops, "error": r.error,
+                })
+            })
+            .collect();
+        return dump(&v);
+    }
+
+    if results.is_empty() {
+        println!("No results.");
+        return;
+    }
+
+    let best = results.iter().map(|r| r.tflops).fold(0.0_f64, f64::max);
+    let mut t = table(&["NODE", "IDX", "GPU", "BF16 TFLOP/S", "RELATIVE", "NOTE"]);
+    for r in results {
+        let rel = if best > 0.0 { r.tflops / best } else { 0.0 };
+        t.add_row(vec![
+            Cell::new(&r.node_id),
+            Cell::new(r.index),
+            Cell::new(r.name.replace("NVIDIA ", "").replace("GeForce ", "")),
+            if r.tflops > 0.0 {
+                Cell::new(format!("{:.1}", r.tflops))
+            } else {
+                Cell::new("-").fg(Color::Grey)
+            },
+            if r.tflops > 0.0 {
+                Cell::new(format!("{:.0}%  {}", rel * 100.0, bar((rel * 100.0) as u32, 10)))
+                    .fg(if rel > 0.85 { Color::Green } else { Color::Yellow })
+            } else {
+                Cell::new("-").fg(Color::Grey)
+            },
+            if r.error.is_empty() {
+                Cell::new("")
+            } else {
+                Cell::new(&r.error).fg(Color::Red)
+            },
+        ]);
+    }
+    println!("{t}");
+    println!("Scores are cached on each node and used to rank placements.");
+}

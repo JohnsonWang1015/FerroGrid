@@ -233,7 +233,9 @@ ferro train --nodes 2 --gpus-per-node 1 -f python/examples/train_fsdp2.py --step
 ```bash
 ferro nodes                     # servers, health, driver, free GPU count
 ferro gpu                       # every GPU: VRAM, utilisation, temp, power, owning job
+ferro ps                        # what is running right now, per rank
 ferro watch                     # live dashboard: GPUs + running jobs, one screen
+ferro bench                     # measure each GPU, so the scheduler can rank hardware
 ferro train --nodes 2 --gpus-per-node 2 train.py
 ferro jobs                      # recent jobs
 ferro job <job-id>              # placement, per-rank status, metrics, NCCL errors
@@ -254,7 +256,12 @@ ferro watch            # refresh every 2s
 ferro watch -n 1       # every second
 ```
 
-`nodes`, `gpu`, `jobs` and `job` each take the same `-w/--watch` and
+`ferro ps` is the per-rank view — one row per rank with the node and GPUs it
+holds, uptime, live utilisation, VRAM, step and throughput. A `UTIL` in red
+means a rank is running but its GPUs are idle, which is what a stall or a
+starved dataloader looks like.
+
+`nodes`, `gpu`, `ps`, `jobs` and `job` each take the same `-w/--watch` and
 `-n/--interval` flags if you want just one of those views:
 
 ```bash
@@ -528,6 +535,54 @@ Check before you assume you need sharding:
 ferro train --nodes 1 --gpus-per-node 1 -f your_train.py --max-steps 5
 ferro job <id>        # look at PEAK VRAM GB against the card's capacity
 ```
+
+### Letting the scheduler choose: `--auto`
+
+```bash
+ferro train --auto -f my_train.py
+ferro train --auto --gpus-per-node 2 -f my_train.py    # cap at 2 GPUs
+```
+
+Auto keeps the job on **one node** and takes the largest set of **identical**
+GPUs there, preferring whichever node benchmarks fastest. Both parts follow
+from the measurements above: crossing the network costs ~55x, and a collective
+runs at the pace of its slowest rank, so a 4090 paired with an A6000 wastes
+the 4090.
+
+**What auto cannot know is whether your script shards.** It hands you GPUs; it
+cannot tell FSDP2 (where a second GPU makes a small model *slower*, ~3.3x
+here) from DDP (where it nearly doubles throughput). If your model fits on one
+card and you are sharding it, cap the shape yourself:
+
+```bash
+ferro train --auto --gpus-per-node 1 -f my_train.py
+```
+
+### Ranking hardware: `ferro bench`
+
+The scheduler prefers faster GPUs, but a model name is a poor proxy for speed.
+`ferro bench` measures a bf16 matmul on every free GPU, through that node's own
+training image — which also proves the image can actually drive the card:
+
+```bash
+ferro bench                # every healthy node, cached results reused
+ferro bench --force        # re-measure
+ferro bench --node gpu-a
+```
+
+Measured on this cluster:
+
+| GPU | bf16 TFLOP/s | relative |
+|---|---|---|
+| RTX 5090 | 238.0 | 100% |
+| RTX 4090 | ~162 | 68% |
+| RTX PRO 5000 Blackwell | 105.9 | 44% |
+| RTX A6000 | 58.5 | 25% |
+
+The A6000 has twice the VRAM of a 4090 and roughly a third of the throughput —
+exactly the kind of thing that makes "most free VRAM" the wrong ranking on its
+own. Scores are cached per node and survive restarts; a GPU busy with someone
+else's work is skipped rather than measured wrongly.
 
 ### Worked example: how big an LLM actually fits
 

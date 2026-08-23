@@ -112,6 +112,9 @@ impl Job {
 
 #[derive(Default)]
 pub struct RegistryInner {
+    /// GPU uuid -> measured TFLOP/s. Heartbeats overwrite the GPU list, so the
+    /// scores live here and are re-applied on every update.
+    pub bench: HashMap<String, (f64, i64)>,
     pub nodes: HashMap<String, Node>,
     pub jobs: HashMap<String, Job>,
     /// Submission order, so `ferro jobs` lists newest first.
@@ -135,11 +138,18 @@ impl Registry {
 
     pub async fn heartbeat(&self, node_id: &str, gpus: Vec<Gpu>) -> bool {
         let mut g = self.inner.lock().await;
+        let bench = g.bench.clone();
         let Some(node) = g.nodes.get_mut(node_id) else {
             return false;
         };
         node.last_seen = now_s();
         node.info.gpus = gpus;
+        for gpu in node.info.gpus.iter_mut() {
+            if let Some((tflops, at)) = bench.get(&gpu.uuid) {
+                gpu.bench_tflops = *tflops;
+                gpu.bench_unix_s = *at;
+            }
+        }
 
         // Fold this node's GPU utilisation into the average of every job that
         // currently holds one of its devices.
@@ -158,6 +168,27 @@ impl Registry {
             }
         }
         true
+    }
+
+    /// Remember measured throughput so the scheduler keeps seeing it after the
+    /// next heartbeat replaces the GPU list.
+    pub async fn record_benchmarks(&self, results: &[ferro_proto::GpuBenchmark]) {
+        let mut g = self.inner.lock().await;
+        let now = now_s();
+        for r in results {
+            if r.tflops > 0.0 && !r.uuid.is_empty() {
+                g.bench.insert(r.uuid.clone(), (r.tflops, now));
+            }
+        }
+        let bench = g.bench.clone();
+        for node in g.nodes.values_mut() {
+            for gpu in node.info.gpus.iter_mut() {
+                if let Some((t, at)) = bench.get(&gpu.uuid) {
+                    gpu.bench_tflops = *t;
+                    gpu.bench_unix_s = *at;
+                }
+            }
+        }
     }
 
     pub async fn node_states(&self) -> Vec<NodeState> {
