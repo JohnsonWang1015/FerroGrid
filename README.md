@@ -96,37 +96,31 @@ membership, pre-pulls the training image, and confirms that CUDA and FSDP2
 work **inside a container** — the failure mode you want to find now, not
 during your first job.
 
-### 2. Build
+### 2. Build and install
 
 ```bash
-./scripts/build.sh portable
+uv run --all-extras ferro-setup
 ```
 
-`portable` builds inside a glibc-2.31 container so one binary runs on Ubuntu
-20.04 and newer. Use plain `./scripts/build.sh` if the controller and the GPU
-servers run the same distro.
+This builds the binaries and links them into `~/.local/bin` (see *Quick
+start*). If `ferro --version` then prints `command not found`, `~/.local/bin`
+is not on your `PATH` -- add `export PATH="$HOME/.local/bin:$PATH"` to your
+shell rc file.
+
+**Deploying to servers older than the controller host** needs the portable
+build instead, which compiles inside a glibc-2.31 container so one binary runs
+on Ubuntu 20.04 and newer:
+
+```bash
+uv run --all-extras ferro-setup --portable   # or: ./scripts/build.sh portable
+```
 
 > **Why not a static musl binary?** NVML is `dlopen`ed at runtime, and a
 > statically linked musl binary has no dynamic loader — the agent starts fine
 > but reports **zero GPUs**. The agent must be dynamically linked, so it is
 > built against the oldest glibc in the fleet instead.
 
-### 3. Put `ferro` on your PATH
-
-`build.sh` leaves the binaries under `target/`; nothing installs them for you.
-Symlink rather than copy, so a later rebuild is picked up automatically:
-
-```bash
-mkdir -p ~/.local/bin
-ln -sf "$PWD/target/release/ferro"            ~/.local/bin/ferro
-ln -sf "$PWD/target/release/ferro-controller" ~/.local/bin/ferro-controller
-ferro --version
-```
-
-If that prints `command not found`, `~/.local/bin` is not on your `PATH` --
-add `export PATH="$HOME/.local/bin:$PATH"` to your shell rc file.
-
-### 4. Start the controller
+### 3. Start the controller
 
 ```bash
 ./target/portable/release/ferro-controller --bind 0.0.0.0:7070
@@ -138,7 +132,7 @@ Useful flags: `--master-port` (rendezvous port, default 29500),
 
 For a permanent setup, run it under systemd the same way the agents do.
 
-### 5. Deploy the agents
+### 4. Deploy the agents
 
 ```bash
 ./scripts/deploy_agent.sh gpu-a 10.0.0.1:7070
@@ -156,7 +150,7 @@ and reboots. Optional 3rd/4th arguments override the NCCL IP and the node id:
 Set the node id when a machine has an unhelpful hostname — it is what
 `ferro nodes` shows and what `--node` filters match.
 
-### 6. Ship the training code
+### 5. Ship the training code
 
 ```bash
 ./scripts/sync_workspace.sh gpu-a gpu-b
@@ -167,7 +161,7 @@ Agents resolve **relative** script paths against their own workspace root
 identical home directories. Absolute paths are passed through untouched for
 shared-NFS setups.
 
-### 7. Verify
+### 6. Verify
 
 ```bash
 export FERRO_CONTROLLER=http://10.0.0.1:7070
@@ -216,9 +210,9 @@ The controller computes the placement and prints it before launching:
 
 ```
 Submitted j52c9839cf7
-  MASTER_ADDR=140.123.105.18  MASTER_PORT=29500  WORLD_SIZE=4
-  NODE_RANK=0  node=lab18  gpus=[0,1]
-  NODE_RANK=1  node=ccu2   gpus=[0,1]
+  MASTER_ADDR=10.0.0.11  MASTER_PORT=29500  WORLD_SIZE=4
+  NODE_RANK=0  node=gpu-a  gpus=[0,1]
+  NODE_RANK=1  node=gpu-b  gpus=[0,1]
 ```
 
 ---
