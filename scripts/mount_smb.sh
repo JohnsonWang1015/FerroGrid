@@ -13,7 +13,7 @@
 set -euo pipefail
 
 HOST="${1:?usage: mount_smb.sh <ssh-host> //server/share /mnt/point <smb-user> [port]}"
-SHARE="${2:?missing share, e.g. //140.123.105.254/esl}"
+SHARE="${2:?missing share, e.g. //fileserver/share}"
 POINT="${3:?missing mount point, e.g. /mnt/share}"
 SMBUSER="${4:?missing SMB username}"
 PORT="${5:-445}"

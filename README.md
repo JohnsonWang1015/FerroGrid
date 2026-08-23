@@ -148,7 +148,7 @@ started.
 `~/.ssh/config` and no key required:
 
 ```bash
-./scripts/register_node.sh johnson@10.0.0.12 10.0.0.1:7070 rtx5090
+./scripts/register_node.sh user@10.0.0.12 10.0.0.1:7070 rtx5090
 ```
 
 You are prompted for the password **once**. The script opens a single
@@ -161,7 +161,7 @@ deliberately not `sshpass`.
 To stop typing it altogether, install your key on the first run:
 
 ```bash
-./scripts/register_node.sh --copy-id johnson@10.0.0.12 10.0.0.1:7070 rtx5090
+./scripts/register_node.sh --copy-id user@10.0.0.12 10.0.0.1:7070 rtx5090
 ```
 
 After that, redeploys and `ferro sync` need no password at all.

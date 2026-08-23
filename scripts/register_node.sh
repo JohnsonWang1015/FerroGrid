@@ -3,7 +3,7 @@
 #
 #   ./scripts/register_node.sh <user@host|ssh-alias> <controller-ip:port> [node-id]
 #
-#   ./scripts/register_node.sh johnson@140.123.105.201 140.123.105.200:7070 rtx5090
+#   ./scripts/register_node.sh user@10.0.0.12 10.0.0.1:7070 rtx5090
 #
 # Checks prerequisites, installs the agent as a systemd --user service, and
 # waits for the node to appear in `ferro nodes`. Needs no root on the target.
@@ -34,7 +34,7 @@ done
 set -- "${POSITIONAL[@]}"
 
 TARGET="${1:?usage: register_node.sh <user@host|ssh-alias> <controller-ip:port> [node-id]}"
-CONTROLLER="${2:?missing controller address, e.g. 140.123.105.200:7070}"
+CONTROLLER="${2:?missing controller address, e.g. 10.0.0.1:7070}"
 NODE_ID="${3:-}"
 IMAGE="${FERRO_DEFAULT_IMAGE:-pytorch/pytorch:2.9.1-cuda12.6-cudnn9-runtime}"
 
