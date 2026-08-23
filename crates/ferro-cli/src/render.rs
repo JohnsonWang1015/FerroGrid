@@ -16,6 +16,34 @@ fn dump<T: serde::Serialize>(v: &T) {
     println!("{}", serde_json::to_string_pretty(v).unwrap_or_default());
 }
 
+fn now_s() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+/// Seconds since this node last reported. In a live view the numbers are only
+/// as fresh as the heartbeat, so showing the age stops a frozen agent from
+/// looking like an idle GPU.
+fn age_cell(last_seen: i64) -> Cell {
+    if last_seen <= 0 {
+        return Cell::new("-").fg(Color::Grey);
+    }
+    let age = (now_s() - last_seen).max(0);
+    let c = match age {
+        0..=5 => Color::Green,
+        6..=15 => Color::Yellow,
+        _ => Color::Red,
+    };
+    Cell::new(format!("{age}s")).fg(c)
+}
+
+fn bar(pct: u32, width: usize) -> String {
+    let filled = (pct as usize * width / 100).min(width);
+    format!("{}{}", "\u{2588}".repeat(filled), "\u{2591}".repeat(width - filled))
+}
+
 fn health_cell(healthy: bool) -> Cell {
     if healthy {
         Cell::new("ready").fg(Color::Green)
@@ -53,7 +81,7 @@ pub fn nodes(nodes: &[NodeState], json: bool) {
         return;
     }
 
-    let mut t = table(&["NODE", "ADDRESS", "NCCL IP", "STATUS", "GPUS", "FREE", "DRIVER", "CUDA", "CPU"]);
+    let mut t = table(&["NODE", "ADDRESS", "NCCL IP", "STATUS", "AGE", "GPUS", "FREE", "DRIVER", "CUDA", "CPU"]);
     for n in nodes {
         let i = n.info.clone().unwrap_or_default();
         t.add_row(vec![
@@ -61,6 +89,7 @@ pub fn nodes(nodes: &[NodeState], json: bool) {
             Cell::new(&i.address),
             Cell::new(&i.nccl_address),
             health_cell(n.healthy),
+            age_cell(n.last_seen_unix_s),
             Cell::new(i.gpus.len()),
             Cell::new(n.free_gpus),
             Cell::new(&i.driver_version),
@@ -351,4 +380,110 @@ pub fn log_line(l: &LogLine) {
     } else {
         println!("{tag} {}", l.line);
     }
+}
+
+/// One-screen live view: GPUs with utilisation bars, plus anything running.
+pub fn dashboard(nodes: &[NodeState], gpus: &[GpuEntry], jobs: &[JobSummary]) {
+    let ready = nodes.iter().filter(|n| n.healthy).count();
+    let stale: Vec<&str> = nodes
+        .iter()
+        .filter(|n| !n.healthy)
+        .filter_map(|n| n.info.as_ref().map(|i| i.node_id.as_str()))
+        .collect();
+
+    let free = gpus
+        .iter()
+        .filter(|e| e.gpu.as_ref().map(|g| g.allocated_job_id.is_empty()).unwrap_or(false))
+        .count();
+    let used_b: u64 = gpus.iter().filter_map(|e| e.gpu.as_ref()).map(|g| g.memory_used_b).sum();
+    let total_b: u64 = gpus.iter().filter_map(|e| e.gpu.as_ref()).map(|g| g.memory_total_b).sum();
+
+    // The screen can redraw faster than the agents report, so say how old the
+    // numbers are -- otherwise a wedged agent looks like an idle GPU.
+    let oldest = nodes
+        .iter()
+        .map(|n| (now_s() - n.last_seen_unix_s).max(0))
+        .max()
+        .unwrap_or(0);
+
+    println!(
+        "nodes {ready}/{} ready   GPUs {free}/{} free   VRAM {} / {}   data age <={oldest}s",
+        nodes.len(),
+        gpus.len(),
+        fmt_gib(used_b),
+        fmt_gib(total_b)
+    );
+    if !stale.is_empty() {
+        println!("  ! not reporting: {}", stale.join(", "));
+    }
+    println!();
+
+    let mut t = table(&["NODE", "IDX", "GPU", "UTIL", "", "VRAM", "TEMP", "POWER", "JOB"]);
+    for e in gpus {
+        let g = e.gpu.clone().unwrap_or_default();
+        let util = g.utilization_pct;
+        let util_colour = match util {
+            0..=10 => Color::Grey,
+            11..=70 => Color::Yellow,
+            _ => Color::Green,
+        };
+        let mem_pct = if g.memory_total_b > 0 {
+            (g.memory_used_b * 100 / g.memory_total_b) as u32
+        } else {
+            0
+        };
+        t.add_row(vec![
+            Cell::new(&e.node_id),
+            Cell::new(g.index),
+            // The marketing name is long and identical across rows; the model
+            // suffix is the part that distinguishes cards in a mixed cluster.
+            Cell::new(g.name.replace("NVIDIA ", "").replace("GeForce ", "")),
+            Cell::new(format!("{util:>3}%")).fg(util_colour),
+            Cell::new(bar(util, 12)).fg(util_colour),
+            Cell::new(format!(
+                "{:>5.1}/{:.0}G {}",
+                g.memory_used_b as f64 / (1u64 << 30) as f64,
+                g.memory_total_b as f64 / (1u64 << 30) as f64,
+                bar(mem_pct, 8)
+            )),
+            Cell::new(format!("{}C", g.temperature_c)),
+            Cell::new(format!("{}W", g.power_usage_mw / 1000)),
+            if g.allocated_job_id.is_empty() {
+                Cell::new("-").fg(Color::Grey)
+            } else {
+                Cell::new(&g.allocated_job_id).fg(Color::Magenta)
+            },
+        ]);
+    }
+    println!("{t}");
+
+    let live: Vec<&JobSummary> = jobs.iter().filter(|j| !j.phase().is_terminal()).collect();
+    if live.is_empty() {
+        println!("\nNo running jobs.");
+        return;
+    }
+
+    println!();
+    let mut jt = table(&["JOB", "NAME", "PHASE", "WORLD", "STEP", "LOSS", "TOKENS/S", "STEP MS", "VRAM GB", "NCCL ERR"]);
+    for j in live {
+        let m = j.metrics.clone().unwrap_or_default();
+        let p = j.plan.clone().unwrap_or_default();
+        jt.add_row(vec![
+            Cell::new(&j.job_id),
+            Cell::new(&j.name),
+            phase_cell(j.phase()),
+            Cell::new(p.world_size),
+            Cell::new(m.step),
+            Cell::new(num(m.loss)),
+            Cell::new(num(m.tokens_per_s)),
+            Cell::new(num(m.step_time_ms)),
+            Cell::new(num(m.peak_vram_gb)),
+            if j.nccl_errors.is_empty() {
+                Cell::new("0")
+            } else {
+                Cell::new(j.nccl_errors.len()).fg(Color::Red)
+            },
+        ]);
+    }
+    println!("{jt}");
 }

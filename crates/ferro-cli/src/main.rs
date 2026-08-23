@@ -24,21 +24,51 @@ struct Cli {
     cmd: Cmd,
 }
 
+/// Flags shared by the read-only views, so any of them can be watched live.
+#[derive(clap::Args, Debug, Clone, Copy)]
+struct WatchArgs {
+    /// Redraw continuously, like `watch nvidia-smi`. Ctrl-C to stop.
+    #[arg(short = 'w', long)]
+    watch: bool,
+
+    /// Seconds between redraws.
+    #[arg(short = 'n', long, default_value_t = 2.0, value_name = "SECONDS")]
+    interval: f64,
+}
+
 #[derive(Subcommand, Debug)]
 enum Cmd {
     /// List registered servers.
-    Nodes,
+    Nodes {
+        #[command(flatten)]
+        watch: WatchArgs,
+    },
     /// List every GPU across the cluster.
-    Gpu,
+    Gpu {
+        #[command(flatten)]
+        watch: WatchArgs,
+    },
+    /// Live dashboard: nodes, GPUs and running jobs on one screen.
+    Watch {
+        /// Seconds between redraws.
+        #[arg(short = 'n', long, default_value_t = 2.0, value_name = "SECONDS")]
+        interval: f64,
+    },
     /// Launch a distributed training job.
     Train(TrainArgs),
     /// List recent jobs.
     Jobs {
         #[arg(long, default_value_t = 20)]
         limit: u32,
+        #[command(flatten)]
+        watch: WatchArgs,
     },
     /// Show one job in detail.
-    Job { job_id: String },
+    Job {
+        job_id: String,
+        #[command(flatten)]
+        watch: WatchArgs,
+    },
     /// Stream a job's logs.
     Logs {
         job_id: String,
@@ -114,21 +144,56 @@ async fn main() -> Result<()> {
         .with_context(|| format!("cannot reach controller at {}", cli.controller))?;
 
     match cli.cmd {
-        Cmd::Nodes => {
-            let r = client.list_nodes(ListNodesRequest {}).await?.into_inner();
-            render::nodes(&r.nodes, cli.json);
+        Cmd::Nodes { watch } => {
+            repeat(watch, cli.json, || async {
+                let mut c = client.clone();
+                let r = c.list_nodes(ListNodesRequest {}).await?.into_inner();
+                render::nodes(&r.nodes, cli.json);
+                Ok(())
+            })
+            .await?;
         }
-        Cmd::Gpu => {
-            let r = client.list_gpus(ListGpusRequest {}).await?.into_inner();
-            render::gpus(&r.gpus, cli.json);
+        Cmd::Gpu { watch } => {
+            repeat(watch, cli.json, || async {
+                let mut c = client.clone();
+                let r = c.list_gpus(ListGpusRequest {}).await?.into_inner();
+                render::gpus(&r.gpus, cli.json);
+                Ok(())
+            })
+            .await?;
         }
-        Cmd::Jobs { limit } => {
-            let r = client.list_jobs(ListJobsRequest { limit }).await?.into_inner();
-            render::jobs(&r.jobs, cli.json);
+        Cmd::Watch { interval } => {
+            let w = WatchArgs { watch: true, interval };
+            repeat(w, false, || async {
+                let mut c = client.clone();
+                let nodes = c.list_nodes(ListNodesRequest {}).await?.into_inner();
+                let gpus = c.list_gpus(ListGpusRequest {}).await?.into_inner();
+                let jobs = c.list_jobs(ListJobsRequest { limit: 8 }).await?.into_inner();
+                render::dashboard(&nodes.nodes, &gpus.gpus, &jobs.jobs);
+                Ok(())
+            })
+            .await?;
         }
-        Cmd::Job { job_id } => {
-            let r = client.get_job(GetJobRequest { job_id }).await?.into_inner();
-            render::job_detail(&r, cli.json);
+        Cmd::Jobs { limit, watch } => {
+            repeat(watch, cli.json, || async {
+                let mut c = client.clone();
+                let r = c.list_jobs(ListJobsRequest { limit }).await?.into_inner();
+                render::jobs(&r.jobs, cli.json);
+                Ok(())
+            })
+            .await?;
+        }
+        Cmd::Job { job_id, watch } => {
+            repeat(watch, cli.json, || async {
+                let mut c = client.clone();
+                let r = c
+                    .get_job(GetJobRequest { job_id: job_id.clone() })
+                    .await?
+                    .into_inner();
+                render::job_detail(&r, cli.json);
+                Ok(())
+            })
+            .await?;
         }
         Cmd::Logs { job_id, follow } => {
             stream_logs(&mut client, &job_id, follow).await?;
@@ -145,6 +210,37 @@ async fn main() -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Run `f` once, or repeatedly with a cleared screen when watching.
+///
+/// Note the refresh rate is bounded below by the agents' heartbeat interval
+/// (controller `--heartbeat-secs`, default 3): asking for -n 1 redraws every
+/// second but the underlying GPU counters only move every heartbeat, which is
+/// why the header shows how stale the data is.
+async fn repeat<F, Fut>(w: WatchArgs, json: bool, mut f: F) -> Result<()>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<()>>,
+{
+    if !w.watch {
+        return f().await;
+    }
+    if json {
+        anyhow::bail!("--watch and --json cannot be combined");
+    }
+    let period = std::time::Duration::from_secs_f64(w.interval.max(0.1));
+    loop {
+        // Clear screen + home the cursor, the same trick `watch` uses.
+        print!("\x1b[2J\x1b[H");
+        println!(
+            "FerroGrid  {}   every {:.1}s   (Ctrl-C to exit)\n",
+            chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+            w.interval
+        );
+        f().await?;
+        tokio::time::sleep(period).await;
+    }
 }
 
 async fn train(client: &mut ControllerClient<Channel>, args: TrainArgs, json: bool) -> Result<()> {

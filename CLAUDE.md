@@ -37,6 +37,10 @@ See README.md for architecture, deployment and measured results.
 
 ## Conventions
 
+- Live views (`ferro watch`, `-w` on the read-only commands) redraw faster than
+  agents report. Always surface data age alongside the numbers -- a stale
+  reading looks exactly like an idle GPU otherwise.
+
 - Training scripts report metrics by printing `FERRO_METRIC {json}` on stdout.
 - Agents resolve relative script paths against their own `--workspace`
   (default `~/ferrogrid`), because lab nodes have different home directories.

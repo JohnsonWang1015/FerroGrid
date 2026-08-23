@@ -176,6 +176,7 @@ ferro gpu
 ```bash
 ferro nodes                     # servers, health, driver, free GPU count
 ferro gpu                       # every GPU: VRAM, utilisation, temp, power, owning job
+ferro watch                     # live dashboard: GPUs + running jobs, one screen
 ferro train --nodes 2 --gpus-per-node 2 train.py
 ferro jobs                      # recent jobs
 ferro job <job-id>              # placement, per-rank status, metrics, NCCL errors
@@ -184,6 +185,33 @@ ferro cancel <job-id>           # stop every rank and free the GPUs
 ```
 
 Add `--json` to any command for scripting.
+
+### Live monitoring
+
+`ferro watch` is the cluster-wide equivalent of `watch -n 1 nvidia-smi`: every
+GPU on every node with utilisation and VRAM bars, which job owns each card, and
+a row per running job with its live step, loss, throughput and NCCL error count.
+
+```bash
+ferro watch            # refresh every 2s
+ferro watch -n 1       # every second
+```
+
+`nodes`, `gpu`, `jobs` and `job` each take the same `-w/--watch` and
+`-n/--interval` flags if you want just one of those views:
+
+```bash
+ferro gpu -w -n 1
+ferro job <job-id> -w
+```
+
+**The refresh rate is not the data rate.** GPU counters reach the controller
+on the agents' heartbeat (controller `--heartbeat-secs`, default 3), so
+`-n 1` redraws every second over data that changes every three. Both views
+show how stale the numbers are — an `AGE` column in `ferro nodes`, a
+`data age` figure in `ferro watch` — so a wedged agent reads as stale rather
+than as an idle GPU. Start the controller with `--heartbeat-secs 1` if you
+want the dashboard to genuinely track second by second.
 
 ### `ferro train`
 
