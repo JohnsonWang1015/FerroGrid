@@ -326,6 +326,16 @@ fn resolve_workdir(state: &SharedState, req: &LaunchJobRequest) -> String {
     format!("{}/{}", state.workspace.trim_end_matches('/'), req.workdir)
 }
 
+/// Accepts "HOST", "HOST:CONTAINER" and "HOST:CONTAINER:ro", and expands the
+/// bare form to "HOST:HOST" so docker mounts it at the same path.
+fn normalise_mount(spec: &str) -> String {
+    if spec.contains(':') {
+        spec.to_string()
+    } else {
+        format!("{spec}:{spec}")
+    }
+}
+
 /// Returns (program, argv) for the supervised child.
 fn build_command(
     state: &SharedState,
@@ -385,6 +395,15 @@ fn build_command(
     // HOME must be writable for torch/triton caches when running as --user.
     argv.push("-e".into());
     argv.push(format!("HOME={workdir}"));
+
+    // Datasets and checkpoint dirs live outside the workspace, typically on
+    // shared NFS. Mount them at the same path inside the container unless the
+    // caller asked for a different one, so a path in the job's config file
+    // means the same thing on the host and in the container.
+    for m in &req.mounts {
+        argv.push("-v".into());
+        argv.push(normalise_mount(m));
+    }
 
     for (k, v) in torch_env(state, req) {
         argv.push("-e".into());

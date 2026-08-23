@@ -155,6 +155,7 @@ impl Controller for ControllerService {
                 script_args: req.script_args.clone(),
                 env: req.env.clone(),
                 torchrun_args: Vec::new(),
+                mounts: req.mounts.clone(),
             };
 
             if let Err(e) = dispatch(&p.address, launch).await {

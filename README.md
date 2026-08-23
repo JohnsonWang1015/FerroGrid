@@ -390,6 +390,141 @@ on 1 GbE this is expected, not a bug.
 
 ---
 
+## Choosing a parallelism strategy
+
+More GPUs is not automatically faster here, and on this fabric it is often
+much slower. Pick by asking **why** you need them:
+
+| Situation | Use | Why |
+|---|---|---|
+| Model fits on one GPU | `--nodes 1 --gpus-per-node 1` | No communication at all |
+| Want a bigger batch, model still fits | `--nodes 1 --gpus-per-node 2` | Gradient sync stays on PCIe |
+| Model does not fit on one GPU | `--nodes 1 --gpus-per-node 2` with FSDP2 | Sharding cost stays inside one box |
+| Model does not fit on one *node* | `--nodes 2 ...` | Only now is the network worth paying for |
+| Many independent runs (CV folds, sweeps) | one 1-GPU job per fold | Perfectly parallel, zero communication |
+
+On 1 GbE, sharding one model across two nodes costs ~55× throughput (see
+*Measured results*). The cluster's real value for most lab work is the last
+row: run five folds as five jobs, not one job on five GPUs.
+
+Check before you assume you need sharding:
+
+```bash
+ferro train --nodes 1 --gpus-per-node 1 -f your_train.py --max-steps 5
+ferro job <id>        # look at PEAK VRAM GB against the card's capacity
+```
+
+### Worked example: 3D MRI (CNN + Video-Swin)
+
+`python/examples/train_mri_3d.py` is a template for volumetric classification:
+a strided 3D conv stem, transformer blocks, activation checkpointing, bf16,
+and FSDP2 wrapping applied per block. Swap in your own `build_model` and
+`build_dataset`; everything else is ready.
+
+Measured on one RTX 3090, 95M parameters, activation checkpointing on:
+
+| Volume | Batch/GPU | Peak VRAM | Step time |
+|---|---|---|---|
+| 128³ | 2 | 2.51 GiB | 257 ms |
+| 160×192×160 | 1 | 2.68 GiB | 408 ms |
+
+Under 3 GiB on a 24 GiB card — so this **fits on a single GPU with room for a
+much larger batch**, and multi-node FSDP would be a pure loss. In 3D imaging
+the memory pressure is *activations*, not parameters, which is why the conv
+stem's stride and activation checkpointing matter far more than sharding.
+
+Running it:
+
+```bash
+# 1. Dataset on storage every node can see, at the same path.
+#    Bind-mount it explicitly -- only the workspace is mounted by default.
+ferro train --nodes 1 --gpus-per-node 2 --follow \
+    --mount /mnt/adni_data:/mnt/adni_data:ro \
+    --mount /mnt/adni_work \
+    --image ferrogrid/train:mri \
+    python/examples/train_mri_3d.py \
+        --data-root /mnt/adni_data --out-dir /mnt/adni_work/runs/exp1 \
+        --volume 128 128 128 --batch-size 4 --accum 4
+```
+
+Build the image with the medical-imaging dependencies uncommented in
+`docker/requirements.txt`:
+
+```bash
+docker build -f docker/Dockerfile.train -t ferrogrid/train:mri .
+```
+
+Cross-validation as parallel jobs rather than one distributed job:
+
+```bash
+for fold in 0 1 2 3 4; do
+    ferro train --nodes 1 --gpus-per-node 1 --name "cv-fold$fold" \
+        --mount /mnt/adni_data:/mnt/adni_data:ro --mount /mnt/adni_work \
+        --image ferrogrid/train:mri \
+        python/examples/train_mri_3d.py --data-root /mnt/adni_data --fold $fold
+done
+ferro jobs
+```
+
+The scheduler spreads them over whatever GPUs are free and refuses the ones it
+cannot place, so you can queue more folds than you have cards and re-run the
+rejected ones.
+
+### Mounting data
+
+Only the agent's workspace is mounted into the container by default. Datasets
+and checkpoint directories need `--mount`:
+
+| Form | Result |
+|---|---|
+| `--mount /mnt/data` | mounted at `/mnt/data` inside the container |
+| `--mount /host/path:/container/path` | mounted at a different path |
+| `--mount /mnt/data:/mnt/data:ro` | read-only, which is what you want for a dataset |
+
+Mount at the **same path** wherever you can: then a path in a config file
+means the same thing on the host and inside the container.
+
+Jobs run as **your uid**, not root. A dataset mounted `:ro` is fine either
+way, but an output directory has to be writable by you — a fresh NFS export is
+usually `root:root 755`, which silently is not. Check before a long run:
+
+```bash
+ferro train --nodes 1 --gpus-per-node 1 -f \
+    --mount /mnt/adni_data:/mnt/adni_data:ro --mount /mnt/adni_work \
+    python/examples/check_mounts.py /mnt/adni_data /mnt/adni_work
+```
+
+It reports each path's filesystem type, ownership, and whether your uid can
+write to it.
+
+### Network storage: NFS and Samba/CIFS
+
+FerroGrid needs no special support for either. `--mount` bind-mounts a host
+path, and the container does not care what backs it — ext4, NFS or CIFS all
+behave the same once mounted on the host. Verified end to end with a CIFS
+share bind-mounted into a job container running as a non-root uid.
+
+What does need care is the **host-side mount**, because NFS and CIFS both fix
+ownership at mount time rather than honouring the on-disk owner:
+
+- **CIFS** takes `uid=`/`gid=` as mount options. Set them to the account the
+  agent runs as, or your jobs cannot write to the share at all.
+- **NFS** maps by uid, and a fresh export is typically `root:root 755` — the
+  dataset reads fine, but an `--out-dir` on it will fail. Fix ownership on the
+  server, not the client.
+
+`scripts/mount_smb.sh` sets a Samba share up correctly on a node — installs
+`cifs-utils`, writes a root-owned `0600` credentials file (the password never
+reaches a command line), matches uid/gid to the agent's account, adds an
+`_netdev,nofail` fstab entry so it survives reboot, and write-tests the result:
+
+```bash
+./scripts/mount_smb.sh gpu-a //fileserver/mri /mnt/mri labuser
+ferro train ... --mount /mnt/mri:/mnt/mri:ro ...
+```
+
+It needs sudo on the target and will prompt for it.
+
 ## Mojo / MAX
 
 Mojo and MAX are supported and working: `mojo/kernels/gelu.mojo` compiles to a

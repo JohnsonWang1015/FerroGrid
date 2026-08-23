@@ -88,6 +88,9 @@ message SubmitJobRequest {
   string name               = 8;
   // Restrict placement to these node ids. Empty => scheduler picks freely.
   repeated string node_filter = 9;
+  // Extra bind mounts, "HOST[:CONTAINER][:ro]". Datasets normally live on
+  // shared storage outside the workspace, so they need mounting explicitly.
+  repeated string mounts = 10;
 }
 
 message SubmitJobResponse {
@@ -219,6 +222,8 @@ message LaunchJobRequest {
   map<string, string> env   = 12;
   // Extra torchrun args passed verbatim.
   repeated string torchrun_args = 13;
+  // Extra bind mounts, "HOST[:CONTAINER][:ro]".
+  repeated string mounts = 14;
 }
 
 message LaunchJobResponse { bool launched = 1; string message = 2; }

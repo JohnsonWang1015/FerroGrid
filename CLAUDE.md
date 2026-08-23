@@ -41,6 +41,10 @@ See README.md for architecture, deployment and measured results.
 - Agents resolve relative script paths against their own `--workspace`
   (default `~/ferrogrid`), because lab nodes have different home directories.
 - Never reimplement FSDP/NCCL/torchrun; the platform only wraps them.
+- Only the agent workspace is mounted by default; datasets need `--mount`.
+  Bind mounts are filesystem-agnostic, so NFS and Samba/CIFS need no code --
+  but both fix uid/gid at host mount time, and jobs run as the user's uid, so
+  "cannot write to the output dir" is almost always a host-mount problem.
 - Mojo kernels stay optional and must always have a working PyTorch fallback.
   Measure before adopting one: as of MAX 26.5 the custom-op bridge is slower
   than PyTorch's fused elementwise kernels (see mojo/README.md).

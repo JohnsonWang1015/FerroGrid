@@ -1,4 +1,12 @@
 # Extra dependencies for FerroGrid training jobs.
+#
 # torch/torchvision come from the base image -- do not pin them here, or pip
 # will pull a different CUDA build and NCCL will mismatch across ranks.
 numpy
+
+# --- Medical imaging (uncomment for MRI/CT workloads) -----------------------
+# monai            # transforms, CacheDataset, 3D network zoo
+# nibabel          # NIfTI I/O
+# pydicom          # DICOM I/O
+# SimpleITK        # resampling, registration, N4 bias correction
+# scikit-image

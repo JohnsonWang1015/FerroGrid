@@ -85,6 +85,12 @@ struct TrainArgs {
     #[arg(long = "node")]
     node_filter: Vec<String>,
 
+    /// Extra bind mount, repeatable: --mount /mnt/adni_data
+    /// Accepts HOST, HOST:CONTAINER or HOST:CONTAINER:ro. A bare path is
+    /// mounted at the same path inside the container.
+    #[arg(long = "mount")]
+    mounts: Vec<String>,
+
     /// Job name shown in `ferro jobs`.
     #[arg(long)]
     name: Option<String>,
@@ -158,6 +164,7 @@ async fn train(client: &mut ControllerClient<Channel>, args: TrainArgs, json: bo
         env,
         name: args.name.unwrap_or_default(),
         node_filter: args.node_filter,
+        mounts: args.mounts,
     };
 
     let resp = client.submit_job(req).await?.into_inner();
