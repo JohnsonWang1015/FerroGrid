@@ -830,7 +830,19 @@ validation is 17 CN and 4 AD, so predicting "CN" every time gives 81%. The
 trainer reports balanced accuracy (the mean of per-class recalls) and each
 class's recall alongside it, because always-predicting-the-majority scores
 `1 / n_classes` there however lopsided the split is. A run whose accuracy is
-high while its balanced accuracy sits at chance has learned nothing.
+high while its balanced accuracy sits at chance has learned nothing. Measured
+here, on 97 training scans:
+
+```
+epoch  5/30  train_loss 0.7586  val_loss 0.6227  acc 81.0%  balanced 50.0%  [CN=100%  AD=0%]
+epoch 30/30  train_loss 0.5160  val_loss 0.4793  acc 76.2%  balanced 47.1%  [CN=94%   AD=0%]
+best balanced acc  50.0%  (chance is 50%)
+```
+
+81% accuracy, and AD recall never leaves zero. The pipeline is sound — real
+DICOM through preprocessing, FSDP2 across two GPUs, honest metrics — but 97
+scans (67 CN / 30 AD) cannot train an AD classifier, and the run says so
+plainly instead of reporting a number that flatters it.
 
 **Validation is sharded by hand, not with `DistributedSampler`.**
 `DistributedSampler` pads the set so every rank gets an equal count, which
