@@ -18,6 +18,7 @@ launched by torchrun with the rendezvous FerroGrid computed.
 """
 
 import argparse
+import faulthandler
 import json
 import os
 import sys
@@ -105,6 +106,12 @@ def parse_args():
 
 def main():
     args = parse_args()
+
+    # A hang inside a collective gives no clue on its own. Arm a watchdog that
+    # prints every thread's stack and exits, so the stall shows up in the job
+    # log instead of just sitting at 100% GPU forever.
+    if (secs := os.environ.get("FERRO_STACK_TIMEOUT")):
+        faulthandler.dump_traceback_later(int(secs), exit=True)
 
     rank = int(os.environ.get("RANK", 0))
     local_rank = int(os.environ.get("LOCAL_RANK", 0))

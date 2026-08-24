@@ -52,6 +52,8 @@ pub struct Job {
     pub job_id: String,
     pub name: String,
     pub submitted_by: String,
+    /// Wall-clock limit in seconds; 0 disables it.
+    pub timeout_s: u32,
     pub plan: JobPlan,
     pub per_node: HashMap<String, JobStatus>,
     pub submitted: i64,
@@ -213,6 +215,28 @@ impl Registry {
                     gpu: Some(gpu.clone()),
                     healthy,
                 })
+            })
+            .collect()
+    }
+
+    /// Jobs past their wall-clock limit, as (job_id, agent addresses).
+    ///
+    /// A hung distributed job never reports failure -- every rank sits in a
+    /// collective waiting for a peer -- so nothing else reclaims its GPUs.
+    /// On a shared cluster that is the difference between a wasted afternoon
+    /// and a wasted week.
+    pub async fn expired_jobs(&self) -> Vec<(String, Vec<String>)> {
+        let g = self.inner.lock().await;
+        let now = now_s();
+        g.jobs
+            .values()
+            .filter(|j| j.timeout_s > 0 && !j.phase().is_terminal())
+            .filter(|j| now - j.submitted > j.timeout_s as i64)
+            .map(|j| {
+                (
+                    j.job_id.clone(),
+                    j.plan.placements.iter().map(|p| p.address.clone()).collect(),
+                )
             })
             .collect()
     }

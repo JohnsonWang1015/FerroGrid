@@ -58,6 +58,8 @@ async fn main() -> Result<()> {
         "ferro-controller listening"
     );
 
+    tokio::spawn(service::reap_expired(registry.clone()));
+
     tonic::transport::Server::builder()
         .add_service(ControllerServer::new(svc))
         .serve_with_shutdown(args.bind, async {

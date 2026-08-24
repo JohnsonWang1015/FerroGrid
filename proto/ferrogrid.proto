@@ -102,6 +102,8 @@ message SubmitJobRequest {
   // Login name of whoever submitted this, so a shared cluster can tell whose
   // job is occupying a GPU. Set by the CLI.
   string submitted_by       = 12;
+  // Cancel the job if it is still running after this many seconds. 0 = never.
+  uint32 timeout_s          = 13;
   // Extra bind mounts, "HOST[:CONTAINER][:ro]". Datasets normally live on
   // shared storage outside the workspace, so they need mounting explicitly.
   repeated string mounts = 10;

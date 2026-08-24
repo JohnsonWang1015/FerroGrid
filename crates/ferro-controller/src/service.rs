@@ -137,6 +137,7 @@ impl Controller for ControllerService {
                 job_id: job_id.clone(),
                 name,
                 submitted_by: req.submitted_by.clone(),
+                timeout_s: req.timeout_s,
                 plan: plan.clone(),
                 per_node: Default::default(),
                 submitted: now_s(),
@@ -485,6 +486,32 @@ impl Controller for ControllerService {
 
         self.registry.release_if_done(&job_id).await;
         Ok(Response::new(ReportJobStatusResponse {}))
+    }
+}
+
+/// Cancel jobs that have outrun their wall-clock limit.
+pub async fn reap_expired(registry: std::sync::Arc<Registry>) {
+    let mut tick = tokio::time::interval(std::time::Duration::from_secs(15));
+    loop {
+        tick.tick().await;
+        for (job_id, addrs) in registry.expired_jobs().await {
+            tracing::warn!(job = %job_id, "wall-clock timeout exceeded, cancelling");
+            for a in &addrs {
+                if let Err(e) = stop_on(a, &job_id).await {
+                    tracing::warn!(job = %job_id, "could not stop on {a}: {e}");
+                }
+            }
+            registry
+                .update_job_status(JobStatus {
+                    job_id: job_id.clone(),
+                    phase: JobPhase::Cancelled as i32,
+                    message: "cancelled: wall-clock timeout exceeded".into(),
+                    ended_unix_s: now_s(),
+                    ..Default::default()
+                })
+                .await;
+            registry.release_if_done(&job_id).await;
+        }
     }
 }
 

@@ -175,6 +175,26 @@ struct TrainArgs {
     /// rsync the current directory to every target node before launching.
     #[arg(long)]
     sync: bool,
+
+    /// Cancel the job if it is still running after this long: 90s, 30m, 2h.
+    /// A hung distributed job never fails on its own, so on a shared cluster
+    /// this is what stops it holding GPUs indefinitely.
+    #[arg(long, value_parser = parse_duration)]
+    timeout: Option<u32>,
+}
+
+/// Accepts a bare number of seconds, or a value suffixed s/m/h.
+fn parse_duration(s: &str) -> Result<u32, String> {
+    let s = s.trim();
+    let (num, mult) = match s.chars().last() {
+        Some('s') => (&s[..s.len() - 1], 1),
+        Some('m') => (&s[..s.len() - 1], 60),
+        Some('h') => (&s[..s.len() - 1], 3600),
+        _ => (s, 1),
+    };
+    num.parse::<u32>()
+        .map(|n| n * mult)
+        .map_err(|_| format!("expected a duration like 90s, 30m or 2h, got `{s}`"))
 }
 
 fn parse_kv(s: &str) -> Result<(String, String), String> {
@@ -424,6 +444,7 @@ async fn train(client: &mut ControllerClient<Channel>, args: TrainArgs, json: bo
         node_filter: args.node_filter,
         mounts: args.mounts,
         // Whose job this is, for `ferro ps` on a shared cluster.
+        timeout_s: args.timeout.unwrap_or(0),
         submitted_by: std::env::var("USER")
             .or_else(|_| std::env::var("LOGNAME"))
             .unwrap_or_default(),

@@ -247,6 +247,22 @@ ferro cancel <job-id>           # stop every rank and free the GPUs
 
 Add `--json` to any command for scripting.
 
+### Timeouts
+
+```bash
+ferro train --timeout 2h -f my_train.py      # 90s, 30m and 2h all parse
+```
+
+A distributed job that **hangs** never fails: every rank sits in a collective
+waiting for a peer, reporting nothing, holding its GPUs. Nothing reclaims
+them, because from the outside a wedged job and a slow one look identical.
+
+`--timeout` is the backstop. The controller cancels the job once it exceeds
+the limit and the GPUs return to the pool. On a shared cluster, put one on
+anything you are not watching — it is the difference between losing an
+afternoon and losing a week. A rank that *fails* is handled without it: the
+controller tears down its surviving peers immediately.
+
 ### Live monitoring
 
 `ferro watch` is the cluster-wide equivalent of `watch -n 1 nvidia-smi`: every
@@ -624,10 +640,28 @@ over NCCL's socket transport (`message truncated: receiving 8 bytes instead of
 4`). Passing `output_args` too removes that exchange entirely. It only
 reproduces between nodes, which is why the intra-node run looked fine.
 
-So PP stays in the tree as a working intra-node example and a starting point,
-but **FSDP2 remains the recommendation on this cluster**. If you want to pick
-this up: try a newer torch, `ScheduleGPipe` with a single microbatch to
-minimise the schedule's own logic, or `gloo` for the stage boundaries.
+These were tried and all hang identically between nodes, while all succeed
+inside one:
+
+| Variant | Result |
+|---|---|
+| `Schedule1F1B`, 8 / 4 / 2 microbatches | hangs |
+| `ScheduleGPipe`, 4 / 2 microbatches | hangs |
+| 1 microbatch | rejected: microbatches must be >= stages |
+| Explicit `input_args` + `output_args` | fixes the truncation, still hangs |
+| No `device_id=` on `init_process_group` | hangs |
+| `NCCL_PROTO=Simple` | hangs |
+
+A watchdog (`FERRO_STACK_TIMEOUT=75`, which arms `faulthandler` in the
+example) shows rank 0 stalled inside `nn.Embedding` on the **first** forward
+of the **first** microbatch — before it has sent anything. The GPU is pinned
+at 100% by a spinning NCCL kernel, so the next kernel launch never lands.
+
+The evidence points upstream, not at this cluster: every NCCL primitive works
+between these two nodes, and the identical code path is fine within one node.
+**FSDP2 remains the recommendation here.** Worth retrying on a newer torch;
+the theory — two orders of magnitude less traffic — still holds if the
+implementation cooperates.
 
 ### Worked example: how big an LLM actually fits
 
