@@ -372,7 +372,7 @@ def evaluate(model, loader, device, world_size, n_classes):
     return totals[0].item() / n, totals[1].item() / n, balanced, recalls
 
 
-def save_checkpoint(model, opt, out_dir: Path, step: int, sharded: bool, is_master: bool):
+def save_checkpoint(model, opt, out_dir: Path, tag, sharded: bool, is_master: bool):
     """Persist the model.
 
     A sharded model must go through torch.distributed.checkpoint: each rank
@@ -385,12 +385,12 @@ def save_checkpoint(model, opt, out_dir: Path, step: int, sharded: bool, is_mast
         from torch.distributed.checkpoint.state_dict import get_state_dict
 
         model_sd, opt_sd = get_state_dict(model, opt)
-        dcp.save({"model": model_sd, "optim": opt_sd}, checkpoint_id=str(out_dir / f"step{step}"))
-        return out_dir / f"step{step}"
+        dcp.save({"model": model_sd, "optim": opt_sd}, checkpoint_id=str(out_dir / str(tag)))
+        return out_dir / str(tag)
 
     if is_master:
-        path = out_dir / f"step{step}.pt"
-        torch.save({"step": step, "model": model.state_dict()}, path)
+        path = out_dir / f"{tag}.pt"
+        torch.save({"tag": tag, "model": model.state_dict()}, path)
         return path
     return None
 
@@ -424,6 +424,9 @@ def parse_args():
     p.add_argument("--eval-every", type=int, default=1, help="validate every N epochs")
     p.add_argument("--warmup-frac", type=float, default=0.1,
                    help="fraction of training spent warming the LR up from 0")
+    p.add_argument("--patience", type=int, default=0,
+                   help="stop after this many evaluations without improvement (0 = never)")
+    p.add_argument("--weight-decay", type=float, default=0.05)
     return p.parse_args()
 
 
@@ -492,7 +495,9 @@ def main():
         prefetch_factor=2 if args.workers > 0 else None,
     )
 
-    opt = torch.optim.AdamW(model.parameters(), lr=args.lr, fused=True)
+    opt = torch.optim.AdamW(
+        model.parameters(), lr=args.lr, weight_decay=args.weight_decay, fused=True
+    )
     loss_fn = nn.CrossEntropyLoss()
 
     # Linear warmup then cosine decay. Without warmup a transformer trained
@@ -528,7 +533,7 @@ def main():
     torch.cuda.reset_peak_memory_stats(device)
     step = 0
     timed_steps, timed_seconds = 0, 0.0
-    best_acc = 0.0
+    best_acc, best_epoch, since_best = 0.0, 0, 0
     stop = False
 
     for epoch in range(args.epochs):
@@ -581,7 +586,11 @@ def main():
             val_loss, val_acc, balanced, recalls = evaluate(
                 model, val_loader, device, world_size, args.classes
             )
-            best_acc = max(best_acc, balanced)
+            improved = balanced > best_acc
+            if improved:
+                best_acc, best_epoch, since_best = balanced, epoch + 1, 0
+            else:
+                since_best += 1
             if is_master:
                 names = getattr(val_ds, "labels", tuple(str(i) for i in range(args.classes)))
                 per = "  ".join(
@@ -593,13 +602,23 @@ def main():
                     f"balanced {balanced * 100:.1f}%  [{per}]")
                 metric(step=step, loss=round(val_loss, 4))
 
-            if args.out_dir:
+            # Only checkpoint improvements. This model peaked around epoch 24
+            # and kept training to 40; saving every evaluation means the last
+            # file on disk is the most overfit one, which is what you would
+            # then deploy.
+            if args.out_dir and improved:
                 sharded = not args.no_fsdp and world_size > 1
                 path = save_checkpoint(
-                    model, opt, Path(args.out_dir), step, sharded, is_master
+                    model, opt, Path(args.out_dir), "best", sharded, is_master
                 )
                 if is_master and path:
-                    log(f"  checkpoint -> {path}")
+                    log(f"  new best ({balanced * 100:.1f}%) -> {path}")
+
+            if args.patience and since_best >= args.patience:
+                if is_master:
+                    log(f"no improvement for {since_best} evaluations; stopping "
+                        f"(best {best_acc * 100:.1f}% at epoch {best_epoch})")
+                stop = True
 
         if stop:
             break
@@ -610,7 +629,7 @@ def main():
         log("=" * 60)
         log(f"optimizer steps    {step}")
         log(f"avg step time      {avg * 1000:.0f} ms")
-        log(f"best balanced acc  {best_acc * 100:.1f}%  "
+        log(f"best balanced acc  {best_acc * 100:.1f}% at epoch {best_epoch}  "
             f"(chance is {100 / args.classes:.0f}%)")
         log(f"peak VRAM per rank {torch.cuda.max_memory_allocated(device) / 1024**3:.2f} GiB")
         log("=" * 60)

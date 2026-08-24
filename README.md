@@ -935,6 +935,26 @@ DICOM through preprocessing, FSDP2 across two GPUs, honest metrics — but 97
 scans (67 CN / 30 AD) cannot train an AD classifier, and the run says so
 plainly instead of reporting a number that flatters it.
 
+With the full ADNI1 collection — 1,705 scans, 1,225 for training, CN 552 /
+MCI 745 / AD 408 — the same model does learn:
+
+```
+epoch  4/40  balanced 33.6%  [CN=0%   MCI=99%  AD=2% ]   only guesses MCI
+epoch 24/40  balanced 45.2%  [CN=22%  MCI=58%  AD=55%]   best
+epoch 40/40  balanced 44.1%  [CN=50%  MCI=53%  AD=29%]
+best balanced acc 45.2% (chance is 33%)
+```
+
+Every class has non-zero recall and balanced accuracy is 12 points above
+chance, which is real but modest — three-way CN/MCI/AD from T1 alone is
+genuinely hard, and MCI overlaps both neighbours by definition.
+
+The run also overfits: training loss reaches 0.005 while validation loss
+climbs from 1.07 to 1.90 after epoch 12. That is why the trainer checkpoints
+**only on improvement** and supports `--patience`; saving every evaluation
+leaves the most overfit model as the last file on disk, which is the one you
+would deploy.
+
 **Validation is sharded by hand, not with `DistributedSampler`.**
 `DistributedSampler` pads the set so every rank gets an equal count, which
 duplicates samples. On a small validation set that is not a rounding detail:
