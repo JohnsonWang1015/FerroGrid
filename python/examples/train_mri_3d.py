@@ -526,6 +526,27 @@ def main():
         PaddedShard(val_ds, rank, world_size), batch_size=args.batch_size,
         shuffle=False, num_workers=max(1, args.workers // 2), pin_memory=True,
     )
+
+    # The held-out test split, scored only at the epoch validation picks as
+    # best and never used to choose anything. Selecting on a 268-scan
+    # validation set is itself noisy -- balanced accuracy swings 10 points
+    # between epochs here -- so the validation figure is optimistic by
+    # construction. This is the number to quote.
+    test_loader = None
+    if args.data_root:
+        try:
+            test_ds = ADNIVolumes(
+                Path(args.data_root), split="test", augment=False, label_set=args.label_set
+            )
+            if len(test_ds):
+                test_loader = DataLoader(
+                    PaddedShard(test_ds, rank, world_size), batch_size=args.batch_size,
+                    shuffle=False, num_workers=max(1, args.workers // 2), pin_memory=True,
+                )
+                if is_master:
+                    log(f"test split held out: {len(test_ds)} scans")
+        except FileNotFoundError:
+            pass
     if is_master:
         log(f"data: {len(train_ds)} train, {len(val_ds)} val "
             f"({', '.join(val_ds.labels) if hasattr(val_ds, 'labels') else 'synthetic'})")
@@ -534,6 +555,7 @@ def main():
     step = 0
     timed_steps, timed_seconds = 0, 0.0
     best_acc, best_epoch, since_best = 0.0, 0, 0
+    best_test = None
     stop = False
 
     for epoch in range(args.epochs):
@@ -589,6 +611,10 @@ def main():
             improved = balanced > best_acc
             if improved:
                 best_acc, best_epoch, since_best = balanced, epoch + 1, 0
+                if test_loader is not None:
+                    best_test = evaluate(
+                        model, test_loader, device, world_size, args.classes
+                    )
             else:
                 since_best += 1
             if is_master:
@@ -629,8 +655,14 @@ def main():
         log("=" * 60)
         log(f"optimizer steps    {step}")
         log(f"avg step time      {avg * 1000:.0f} ms")
-        log(f"best balanced acc  {best_acc * 100:.1f}% at epoch {best_epoch}  "
+        log(f"val  balanced acc  {best_acc * 100:.1f}% at epoch {best_epoch}  "
             f"(chance is {100 / args.classes:.0f}%)")
+        if best_test is not None:
+            _, t_acc, t_bal, t_rec = best_test
+            names = getattr(val_ds, "labels", tuple(str(i) for i in range(args.classes)))
+            per = "  ".join(f"{n}={r * 100:.0f}%" for n, r in zip(names, t_rec) if r == r)
+            log(f"TEST balanced acc  {t_bal * 100:.1f}%  acc {t_acc * 100:.1f}%  [{per}]")
+            log("                   (held out; never used to select anything)")
         log(f"peak VRAM per rank {torch.cuda.max_memory_allocated(device) / 1024**3:.2f} GiB")
         log("=" * 60)
     dist.destroy_process_group()

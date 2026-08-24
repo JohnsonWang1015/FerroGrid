@@ -945,15 +945,39 @@ epoch 40/40  balanced 44.1%  [CN=50%  MCI=53%  AD=29%]
 best balanced acc 45.2% (chance is 33%)
 ```
 
-Every class has non-zero recall and balanced accuracy is 12 points above
-chance, which is real but modest — three-way CN/MCI/AD from T1 alone is
-genuinely hard, and MCI overlaps both neighbours by definition.
+Every class has non-zero recall, which the 97-scan run never managed.
 
-The run also overfits: training loss reaches 0.005 while validation loss
-climbs from 1.07 to 1.90 after epoch 12. That is why the trainer checkpoints
-**only on improvement** and supports `--patience`; saving every evaluation
-leaves the most overfit model as the last file on disk, which is the one you
-would deploy.
+**Then check it on data that chose nothing.** Balanced accuracy swings ten
+points between epochs here, so picking the best epoch on a 268-scan
+validation set fits that set's noise. The trainer scores the held-out test
+split at whichever epoch validation calls best, and never lets it influence
+anything:
+
+```
+val  balanced acc  45.7% at epoch 24  (chance is 33%)
+TEST balanced acc  35.4%  acc 37.3%  [CN=31%  MCI=46%  AD=29%]
+```
+
+**45.7% → 35.4%.** Against 33% chance, the model generalises by about two
+points: it has essentially not learned the task. The validation figure was
+selection noise, and quoting it would have been wrong.
+
+That is the point of the test column. Every intermediate number in this
+section — 45.2%, 43.1%, 45.7% — was validation-selected and inflated by
+roughly the same margin.
+
+What the run does show is overfitting: training loss reaches 0.005 while
+validation loss climbs from 1.07 to 1.90. Hence checkpointing **only on
+improvement** and `--patience`; saving every evaluation leaves the most
+overfit model as the last file on disk, which is the one you would deploy.
+
+Three-way CN/MCI/AD from T1 alone is genuinely hard — MCI overlaps both
+neighbours by definition. If you need a working classifier rather than a
+working pipeline, the levers, in order: more data (further ADNI collections);
+a pretrained backbone instead of a transformer from scratch on 1,225 scans;
+the binary CN vs AD task, which is far more separable; or the tabular markers
+the cohort already carries (hippocampal volume, amyloid, CSF), which are
+strong predictors and much cheaper than imaging.
 
 **Validation is sharded by hand, not with `DistributedSampler`.**
 `DistributedSampler` pads the set so every rank gets an equal count, which
