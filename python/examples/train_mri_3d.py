@@ -108,10 +108,19 @@ class ADNIVolumes(Dataset):
     already the tighter constraint (see "Watch the data path").
     """
 
-    LABELS = ("CN", "MCI", "AD")
+    LABEL_SETS = {
+        "all": ("CN", "MCI", "AD"),
+        # CN vs AD is the standard ADNI benchmark: MCI sits between the two by
+        # definition and needs far more data to separate, so including a
+        # handful of MCI scans adds noise rather than a third class.
+        "cn-ad": ("CN", "AD"),
+    }
 
-    def __init__(self, root: Path, split: str, augment: bool):
-        import pandas as pd
+    def __init__(self, root: Path, split: str, augment: bool, label_set: str = "all"):
+        # csv, not pandas: this runs inside the training container, and the
+        # stock PyTorch images do not ship pandas. Reading a manifest is not
+        # worth making every user build a custom image for.
+        import csv
 
         self.root = Path(root)
         manifest = self.root / "manifest.csv"
@@ -119,18 +128,24 @@ class ADNIVolumes(Dataset):
             raise FileNotFoundError(
                 f"no manifest.csv in {self.root}. Run python/tools/preprocess_adni.py first."
             )
-        df = pd.read_csv(manifest)
-        # The cohort ships its own split; honour it rather than reshuffling,
-        # which would leak the same subject across train and test.
-        self.rows = df[df["split"] == split].reset_index(drop=True)
+        self.labels = self.LABEL_SETS[label_set]
+        with manifest.open(newline="") as fh:
+            # The cohort ships its own split; honour it rather than
+            # reshuffling, which would leak a subject across the boundary --
+            # one subject contributes several scans.
+            self.rows = [
+                r
+                for r in csv.DictReader(fh)
+                if r["split"] == split and r["label"] in self.labels
+            ]
         self.augment = augment
-        self.index = {name: i for i, name in enumerate(self.LABELS)}
+        self.index = {name: i for i, name in enumerate(self.labels)}
 
     def __len__(self):
         return len(self.rows)
 
     def __getitem__(self, i):
-        row = self.rows.iloc[i]
+        row = self.rows[i]
         vol = np.load(self.root / row["file"], mmap_mode="r")
         vol = torch.from_numpy(np.asarray(vol, dtype=np.float32)).unsqueeze(0)
 
@@ -146,9 +161,16 @@ class ADNIVolumes(Dataset):
 
 def build_dataset(args, train: bool):
     if args.data_root:
-        return ADNIVolumes(
-            Path(args.data_root), split="train" if train else "val", augment=train
+        ds = ADNIVolumes(
+            Path(args.data_root), split="train" if train else "val",
+            augment=train, label_set=args.label_set,
         )
+        if args.classes != len(ds.labels):
+            raise SystemExit(
+                f"--classes {args.classes} but --label-set {args.label_set} "
+                f"has {len(ds.labels)}: {ds.labels}"
+            )
+        return ds
     n = args.train_size if train else args.val_size
     # Different seeds so validation volumes are genuinely unseen.
     return SyntheticMRI(n, tuple(args.volume), args.classes, seed=0 if train else 7)
@@ -273,6 +295,37 @@ def build_model(args):
 # Training
 # ---------------------------------------------------------------------------
 
+class PaddedShard(Dataset):
+    """One rank's slice of a validation set, padded to a common length.
+
+    Both constraints have to hold at once:
+
+    * every rank must run the **same number of forward passes**, because a
+      sharded model all-gathers on each one and a rank that stops early leaves
+      its peers waiting in a collective until the watchdog kills the job;
+    * the metric must count each scan **once**, so the padding cannot be
+      allowed to inflate it.
+
+    So the shard is padded like `DistributedSampler` does, and each item
+    carries a 0/1 weight that removes the padding from the totals.
+    """
+
+    def __init__(self, base: Dataset, rank: int, world_size: int):
+        idx = list(range(rank, len(base), world_size))
+        per_rank = -(-len(base) // world_size)  # ceil
+        self.valid = [1.0] * len(idx) + [0.0] * (per_rank - len(idx))
+        # Repeat the last real index for padding; its weight is zero.
+        self.idx = idx + [idx[-1] if idx else 0] * (per_rank - len(idx))
+        self.base = base
+
+    def __len__(self):
+        return len(self.idx)
+
+    def __getitem__(self, i):
+        vol, label = self.base[self.idx[i]]
+        return vol, label, self.valid[i]
+
+
 @torch.no_grad()
 def evaluate(model, loader, device, world_size):
     """Validation accuracy and loss, reduced across ranks.
@@ -282,17 +335,18 @@ def evaluate(model, loader, device, world_size):
     the shards differ in size.
     """
     model.eval()
-    loss_fn = nn.CrossEntropyLoss(reduction="sum")
+    loss_fn = nn.CrossEntropyLoss(reduction="none")
     totals = torch.zeros(3, device=device)  # loss, correct, count
 
-    for vol, label in loader:
+    for vol, label, weight in loader:
         vol = vol.to(device, non_blocking=True)
         label = label.to(device, non_blocking=True)
+        weight = weight.to(device, non_blocking=True).float()
         with torch.autocast("cuda", dtype=torch.bfloat16):
             logits = model(vol)
-        totals[0] += loss_fn(logits.float(), label)
-        totals[1] += (logits.argmax(-1) == label).sum()
-        totals[2] += label.numel()
+        totals[0] += (loss_fn(logits.float(), label) * weight).sum()
+        totals[1] += ((logits.argmax(-1) == label).float() * weight).sum()
+        totals[2] += weight.sum()
 
     if world_size > 1:
         dist.all_reduce(totals)
@@ -335,6 +389,8 @@ def parse_args():
     p.add_argument("--volume", type=int, nargs=3, default=[128, 128, 128])
     p.add_argument("--in-channels", type=int, default=1)
     p.add_argument("--classes", type=int, default=3, help="CN / MCI / AD")
+    p.add_argument("--label-set", choices=("all", "cn-ad"), default="all",
+                   help="which ADNI diagnoses to train on")
     p.add_argument("--dim", type=int, default=384)
     p.add_argument("--depth", type=int, default=6)
     p.add_argument("--heads", type=int, default=6)
@@ -442,11 +498,15 @@ def main():
         log(f"LR schedule: warmup {warmup_steps} steps, then cosine over {total_steps}")
 
     val_ds = build_dataset(args, train=False)
-    val_sampler = DistributedSampler(val_ds, num_replicas=world_size, rank=rank, shuffle=False)
+    # See PaddedShard: padding keeps the ranks' collective counts aligned,
+    # the weights keep the metric honest.
     val_loader = DataLoader(
-        val_ds, batch_size=args.batch_size, sampler=val_sampler,
-        num_workers=max(1, args.workers // 2), pin_memory=True,
+        PaddedShard(val_ds, rank, world_size), batch_size=args.batch_size,
+        shuffle=False, num_workers=max(1, args.workers // 2), pin_memory=True,
     )
+    if is_master:
+        log(f"data: {len(train_ds)} train, {len(val_ds)} val "
+            f"({', '.join(val_ds.labels) if hasattr(val_ds, 'labels') else 'synthetic'})")
 
     torch.cuda.reset_peak_memory_stats(device)
     step = 0

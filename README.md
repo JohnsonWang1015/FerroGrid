@@ -804,6 +804,10 @@ GB and stream comfortably. Two things it gets right that are easy to get wrong:
 random reads per scan across the network: measured here at 0.8 scans/min from
 an SMB share versus minutes for the whole set once local.
 
+The manifest is read with the stdlib `csv` module, not pandas: this runs
+inside the training container and the stock PyTorch images do not ship pandas.
+Reading a manifest is not worth making every user build a custom image for.
+
 Then point the trainer at the output — it reads the manifest, honours the
 cohort's train/val split (never reshuffle it: the same subject appears in
 several scans and would leak across the boundary), and augments with
@@ -811,9 +815,26 @@ left-right flips only:
 
 ```bash
 ferro train --nodes 1 --gpus-per-node 2 -f \
-    --mount ~/adni_t1_128:/data/adni:ro \
-    python/examples/train_mri_3d.py --data-root /data/adni --classes 3
+    --mount /home/you/adni_t1_128:/data/adni:ro \
+    python/examples/train_mri_3d.py \
+        --data-root /data/adni --label-set cn-ad --classes 2
 ```
+
+`--label-set cn-ad` drops MCI. MCI sits between the two classes by definition
+and needs far more data to separate; a handful of MCI scans adds noise rather
+than a third class.
+
+**Check the majority baseline before believing an accuracy.** ADNI splits are
+imbalanced, and a model that has learned nothing still scores the prior. On
+the split used here validation is 17 CN and 4 AD, so 81% is what predicting
+"CN" every time achieves — an accuracy at or near that number is a null
+result, not a working model.
+
+**Validation is sharded by hand, not with `DistributedSampler`.**
+`DistributedSampler` pads the set so every rank gets an equal count, which
+duplicates samples. On a small validation set that is not a rounding detail:
+21 scans over 2 ranks became 22 evaluations, one of them counted twice, and
+the reported accuracy was of a set that does not exist.
 
 Running the synthetic version:
 
