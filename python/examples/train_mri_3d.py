@@ -24,6 +24,7 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
 import torch
 import torch.distributed as dist
 import torch.nn as nn
@@ -98,17 +99,55 @@ class SyntheticMRI(Dataset):
         return vol, label
 
 
+class ADNIVolumes(Dataset):
+    """Preprocessed ADNI T1 volumes, as written by tools/preprocess_adni.py.
+
+    Deliberately dumb: one `.npy` per scan, memory-mapped, no DICOM parsing at
+    train time. Decoding DICOM in the dataloader would make every epoch pay for
+    work whose result never changes, and on this cluster the data path is
+    already the tighter constraint (see "Watch the data path").
+    """
+
+    LABELS = ("CN", "MCI", "AD")
+
+    def __init__(self, root: Path, split: str, augment: bool):
+        import pandas as pd
+
+        self.root = Path(root)
+        manifest = self.root / "manifest.csv"
+        if not manifest.is_file():
+            raise FileNotFoundError(
+                f"no manifest.csv in {self.root}. Run python/tools/preprocess_adni.py first."
+            )
+        df = pd.read_csv(manifest)
+        # The cohort ships its own split; honour it rather than reshuffling,
+        # which would leak the same subject across train and test.
+        self.rows = df[df["split"] == split].reset_index(drop=True)
+        self.augment = augment
+        self.index = {name: i for i, name in enumerate(self.LABELS)}
+
+    def __len__(self):
+        return len(self.rows)
+
+    def __getitem__(self, i):
+        row = self.rows.iloc[i]
+        vol = np.load(self.root / row["file"], mmap_mode="r")
+        vol = torch.from_numpy(np.asarray(vol, dtype=np.float32)).unsqueeze(0)
+
+        if self.augment:
+            # Left-right flip only. Brains are near-symmetric, so it is the one
+            # augmentation that is clearly label-preserving here; rotations and
+            # crops risk moving the structures the diagnosis depends on.
+            if torch.rand(()) < 0.5:
+                vol = torch.flip(vol, dims=(3,))
+
+        return vol, self.index[row["label"]]
+
+
 def build_dataset(args, train: bool):
     if args.data_root:
-        # >>> Your ADNI dataset goes here. Something like:
-        #   from monai.data import CacheDataset
-        #   from monai.transforms import (Compose, LoadImaged, EnsureChannelFirstd,
-        #                                 Orientationd, Spacingd, NormalizeIntensityd,
-        #                                 RandSpatialCropd, RandFlipd)
-        #   return CacheDataset(data=records, transform=Compose([...]))
-        raise NotImplementedError(
-            f"--data-root={args.data_root} given, but build_dataset() is still "
-            "the template stub. Plug your ADNI loader in here."
+        return ADNIVolumes(
+            Path(args.data_root), split="train" if train else "val", augment=train
         )
     n = args.train_size if train else args.val_size
     # Different seeds so validation volumes are genuinely unseen.
@@ -295,7 +334,7 @@ def parse_args():
     p.add_argument("--accum", type=int, default=8, help="gradient accumulation steps")
     p.add_argument("--volume", type=int, nargs=3, default=[128, 128, 128])
     p.add_argument("--in-channels", type=int, default=1)
-    p.add_argument("--classes", type=int, default=3)
+    p.add_argument("--classes", type=int, default=3, help="CN / MCI / AD")
     p.add_argument("--dim", type=int, default=384)
     p.add_argument("--depth", type=int, default=6)
     p.add_argument("--heads", type=int, default=6)

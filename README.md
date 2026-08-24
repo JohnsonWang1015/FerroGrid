@@ -62,6 +62,7 @@ Requires [uv](https://docs.astral.sh/uv/) and a Rust toolchain
 | `python/examples/bench_mojo.py` | Mojo-vs-PyTorch correctness check and benchmark |
 | `python/examples/train_pp.py` | Pipeline-parallel example (works intra-node, see below) |
 | `python/examples/p2p_probe.py` | Checks which NCCL primitives your fabric supports |
+| `python/tools/preprocess_adni.py` | ADNI T1 DICOM zips → compact volumes + manifest |
 | `mojo/kernels/` | Mojo custom kernels (`ferro_gelu`), compiled via MAX |
 | `docker/Dockerfile.train` | Optional custom training image |
 | `scripts/` | Build, deploy, sync, prepare, benchmark |
@@ -769,7 +770,52 @@ otherwise collapses to the class prior and can sit there for tens of epochs)
 and **a task that is actually separable** (an early version jittered the signal
 by half the class spacing, capping even a perfect oracle at 80%).
 
-Running it:
+#### Getting ADNI onto the cluster
+
+ADNI ships as DICOM: one directory of ~160 `.dcm` files per scan, inside zips
+that expand to well over 100 GB. Decoding that in the dataloader would make
+every epoch re-do work whose result never changes, and none of these nodes has
+the disk for the extracted tree anyway.
+
+`python/tools/preprocess_adni.py` reads the `.dcm` members **straight out of
+the zip** — no extraction — and writes one `<image_id>.npy` per scan plus a
+`manifest.csv` carrying the label and the cohort's own split:
+
+```bash
+uv run --with pandas --with pydicom --with numpy --with scipy python \
+    python/tools/preprocess_adni.py \
+        --zip    /path/to/FedUQ_T1_MRI.zip \
+        --cohort /path/to/cohort_scans.csv \
+        --out    ~/adni_t1_128 --shape 128 128 128 --workers 14
+```
+
+At 128³ float16 a volume is 4.2 MB, so a few hundred scans fit in a couple of
+GB and stream comfortably. Two things it gets right that are easy to get wrong:
+
+- **Slice ordering** comes from each slice's position along the slice normal,
+  not from the filename or `InstanceNumber`. ADNI mixes conventions across
+  sites and decades, and a wrongly ordered stack looks perfectly plausible
+  while being anatomically scrambled.
+- **Slice spacing** is taken from the gap between the first two slices, not
+  `SliceThickness`, which ignores any inter-slice gap and distorts the aspect
+  ratio.
+
+**Copy the zip to local disk first.** Reading it over CIFS/NFS means ~160 small
+random reads per scan across the network: measured here at 0.8 scans/min from
+an SMB share versus minutes for the whole set once local.
+
+Then point the trainer at the output — it reads the manifest, honours the
+cohort's train/val split (never reshuffle it: the same subject appears in
+several scans and would leak across the boundary), and augments with
+left-right flips only:
+
+```bash
+ferro train --nodes 1 --gpus-per-node 2 -f \
+    --mount ~/adni_t1_128:/data/adni:ro \
+    python/examples/train_mri_3d.py --data-root /data/adni --classes 3
+```
+
+Running the synthetic version:
 
 ```bash
 # 1. Dataset on storage every node can see, at the same path.
