@@ -25,7 +25,9 @@ import io
 import os
 import re
 import time
+import tempfile
 import zipfile
+import collections
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -33,22 +35,72 @@ from pathlib import Path
 import numpy as np
 
 IMAGE_ID_RE = re.compile(r"/I(\d+)/")
+#: ADNI/<PTID>/<series>/<YYYY-MM-DD_HH_MM_SS.0>/I<id>/...
+PTID_DATE_RE = re.compile(r"^ADNI/([^/]+)/[^/]+/(\d{4}-\d{2}-\d{2})_[^/]*/I(\d+)/")
 
 
 def log(msg: str) -> None:
     print(msg, flush=True)
 
 
-def group_by_scan(zf: zipfile.ZipFile) -> dict[int, list[str]]:
-    """Map image_id -> its DICOM members. One scan is one `I<id>` directory."""
+#: ADNI ships two archive flavours and both appear in the same collection.
+DICOM_SUFFIXES = (".dcm",)
+NIFTI_SUFFIXES = (".nii", ".nii.gz")
+
+
+def group_by_scan(zf: zipfile.ZipFile) -> tuple[dict[int, list[str]], str]:
+    """Map image_id -> its members, and report which flavour the archive is.
+
+    A scan is one `I<id>` directory either way. Raw archives hold a DICOM
+    series per scan; the "Complete" collections hold a single preprocessed
+    NIfTI, already gradwarp/B1/N3-corrected, which is both better input and
+    two orders of magnitude fewer files to read.
+    """
     scans: dict[int, list[str]] = defaultdict(list)
+    kinds: set[str] = set()
     for name in zf.namelist():
-        if not name.lower().endswith(".dcm"):
+        lower = name.lower()
+        if lower.endswith(NIFTI_SUFFIXES):
+            kind = "nifti"
+        elif lower.endswith(DICOM_SUFFIXES):
+            kind = "dicom"
+        else:
             continue
         m = IMAGE_ID_RE.search(name)
         if m:
             scans[int(m.group(1))].append(name)
-    return scans
+            kinds.add(kind)
+
+    if len(kinds) > 1:
+        raise SystemExit(f"archive mixes {sorted(kinds)}; split it and run once per flavour")
+    return scans, (kinds.pop() if kinds else "empty")
+
+
+def read_nifti(zf: zipfile.ZipFile, member: str):
+    """Read one NIfTI volume out of the archive.
+
+    Reorients to canonical (RAS) first: ADNI scans arrive in assorted
+    orientations, and stacking them without reorienting trains the model on
+    whichever way each scanner happened to store its axes.
+    """
+    import nibabel as nib
+
+    data = zf.read(member)
+    suffix = ".nii.gz" if member.lower().endswith(".nii.gz") else ".nii"
+    # nibabel needs a real path for gzip members; a temp file is simpler and
+    # cheaper than reimplementing its file-map handling.
+    with tempfile.NamedTemporaryFile(suffix=suffix) as tmp:
+        tmp.write(data)
+        tmp.flush()
+        img = nib.as_closest_canonical(nib.load(tmp.name))
+        vol = np.asarray(img.dataobj, dtype=np.float32)
+        zooms = img.header.get_zooms()[:3]
+
+    if vol.ndim == 4:  # occasional singleton time axis
+        vol = vol[..., 0]
+    if vol.ndim != 3:
+        return None
+    return vol, tuple(float(z) for z in zooms)
 
 
 def read_volume(zf: zipfile.ZipFile, members: list[str]):
@@ -136,16 +188,30 @@ def normalise(vol: np.ndarray) -> np.ndarray:
     return (vol - mu) / (sd + 1e-6)
 
 
-def _worker(job):
-    """Convert one scan. Runs in its own process with its own zip handle.
+# One open ZipFile per worker process, not per scan. Opening an archive reads
+# its central directory, which for the 46.8 GB ADNI set means parsing entries
+# for ~800k files -- doing that once per scan would cost far more than the
+# conversion itself.
+_ZF = None
 
-    A ZipFile cannot be shared across processes, and this workload is a mix of
-    I/O (reading members) and CPU (resampling), so processes beat threads.
+
+def _init_worker(zip_path: str) -> None:
+    global _ZF
+    _ZF = zipfile.ZipFile(zip_path)
+
+
+def _worker(job):
+    """Convert one scan, reusing this process's open archive.
+
+    A ZipFile cannot be shared across processes, and the work is a mix of I/O
+    (reading members) and CPU (resampling), so processes beat threads.
     """
-    zip_path, members, image_id, out_path, shape = job
+    zip_path, members, image_id, out_path, shape, kind = job
     try:
-        with zipfile.ZipFile(zip_path) as zf:
-            result = read_volume(zf, members)
+        global _ZF
+        if _ZF is None:  # standalone call, e.g. from a test
+            _ZF = zipfile.ZipFile(zip_path)
+        result = read_nifti(_ZF, members[0]) if kind == "nifti" else read_volume(_ZF, members)
         if result is None:
             return image_id, False, "unreadable series"
         vol, spacing = result
@@ -174,23 +240,54 @@ def main() -> int:
     args.out.mkdir(parents=True, exist_ok=True)
 
     cohort = pd.read_csv(args.cohort, low_memory=False)
-    labels = cohort.set_index("image_id")[["label", "split_random", "PTID"]].to_dict("index")
+    cols = ["label", "split_random", "PTID"]
+    by_image_id = cohort.set_index("image_id")[cols].to_dict("index")
+    # Preprocessed ADNI collections carry their own IDA image IDs, distinct
+    # from the raw series they derive from, so image_id alone will not join a
+    # "Complete" archive to the cohort. Subject plus scan date does.
+    by_ptid_date = {
+        (r.PTID, str(r.scan_date)[:10]): {
+            "label": r.label, "split_random": r.split_random, "PTID": r.PTID
+        }
+        for r in cohort.itertuples()
+    }
     log(f"cohort: {len(cohort)} scans")
 
     with zipfile.ZipFile(args.zip) as zf:
-        scans = group_by_scan(zf)
-        usable = {i: m for i, m in scans.items() if i in labels}
-        log(f"zip: {len(scans)} scans, {len(usable)} of them in the cohort")
+        scans, kind = group_by_scan(zf)
+        if kind == "empty":
+            raise SystemExit("no .dcm or .nii members found under an I<id> directory")
+
+        # Match on image_id where it works, else on subject + scan date.
+        meta_for: dict[int, dict] = {}
+        matched_by = collections.Counter()
+        for image_id, members in scans.items():
+            if image_id in by_image_id:
+                meta_for[image_id] = by_image_id[image_id]
+                matched_by["image_id"] += 1
+                continue
+            m = PTID_DATE_RE.match(members[0])
+            if m and (key := (m.group(1), m.group(2))) in by_ptid_date:
+                meta_for[image_id] = by_ptid_date[key]
+                matched_by["ptid+date"] += 1
+
+        usable = {i: m for i, m in scans.items() if i in meta_for}
+        log(f"zip: {len(scans)} {kind} scans, {len(usable)} matched to the cohort "
+            f"({dict(matched_by)})")
+        if not usable:
+            raise SystemExit(
+                "nothing matched. Check that --cohort covers the subjects in this archive."
+            )
 
         rows, jobs = [], []
         for image_id, members in sorted(usable.items()):
             dest = args.out / f"{image_id}.npy"
-            meta = labels[image_id]
+            meta = meta_for[image_id]
             row = (image_id, dest.name, meta["label"], meta["split_random"], meta["PTID"])
             if dest.exists() and not args.overwrite:
                 rows.append(row)
                 continue
-            jobs.append(((str(args.zip), members, image_id, str(dest), shape), row))
+            jobs.append(((str(args.zip), members, image_id, str(dest), shape, kind), row))
             if args.limit and len(jobs) >= args.limit:
                 break
 
@@ -200,7 +297,11 @@ def main() -> int:
     done = failed = 0
     t0 = time.perf_counter()
     if jobs:
-        with ProcessPoolExecutor(max_workers=args.workers) as pool:
+        with ProcessPoolExecutor(
+            max_workers=args.workers,
+            initializer=_init_worker,
+            initargs=(str(args.zip),),
+        ) as pool:
             for (image_id, ok, info), (_, row) in zip(
                 pool.map(_worker, [j for j, _ in jobs], chunksize=1), jobs
             ):

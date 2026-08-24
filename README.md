@@ -859,8 +859,29 @@ uv run --with pandas --with pydicom --with numpy --with scipy python \
         --out    ~/adni_t1_128 --shape 128 128 128 --workers 14
 ```
 
+It handles both archive flavours ADNI ships, and they are not interchangeable:
+
+| Archive | Contents | Per scan |
+|---|---|---|
+| raw (`FedUQ_T1_MRI.zip`) | DICOM series | ~200 files |
+| `ADNI1_Complete *` | one preprocessed NIfTI, gradwarp/B1/N3-corrected | 1 file |
+
+Prefer the NIfTI collections: better input, and two orders of magnitude fewer
+files to move.
+
+**A preprocessed collection will not join on `image_id`.** ADNI assigns
+derivatives their own IDA image IDs, distinct from the raw series they came
+from, so matching a "Complete" archive to a cohort table by `image_id` finds
+exactly nothing. The tool falls back to subject + scan date, both of which are
+in the archive path, and reports which key it used — on the 46.8 GB ADNI1
+collection that is 1,705 of 2,294 scans matched, all by `ptid+date`.
+
 At 128³ float16 a volume is 4.2 MB, so a few hundred scans fit in a couple of
-GB and stream comfortably. Two things it gets right that are easy to get wrong:
+GB and stream comfortably. Three things it gets right that are easy to get wrong:
+
+- **Orientation.** NIfTI volumes are reoriented to canonical RAS before
+  resampling. ADNI scans arrive in assorted orientations, and stacking them
+  as-stored trains the model on whichever way each scanner wrote its axes.
 
 - **Slice ordering** comes from each slice's position along the slice normal,
   not from the filename or `InstanceNumber`. ADNI mixes conventions across
