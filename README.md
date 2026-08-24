@@ -718,7 +718,20 @@ a strided 3D conv stem, transformer blocks, activation checkpointing, bf16,
 and FSDP2 wrapping applied per block. Swap in your own `build_model` and
 `build_dataset`; everything else is ready.
 
-Measured on one RTX 3090, 95M parameters, activation checkpointing on:
+A full run on 2× RTX 4090 with FSDP2 — 128³ volumes, 15 epochs, 14.8M
+parameters, synthetic but *learnable* data:
+
+```
+FSDP2 sharding 6 blocks over 2 ranks
+LR schedule: warmup 96 steps, then cosine over 960
+epoch  3/15  train_loss 0.3173  val_loss 0.0326  val_acc 100.0%
+epoch 15/15  train_loss 0.0027  val_loss 0.0023  val_acc 100.0%
+avg step time      116 ms
+peak VRAM per rank 0.76 GiB
+```
+
+Sizing, measured on one RTX 3090 at 95M parameters with activation
+checkpointing on:
 
 | Volume | Batch/GPU | Peak VRAM | Step time |
 |---|---|---|---|
@@ -729,6 +742,32 @@ Under 3 GiB on a 24 GiB card — so this **fits on a single GPU with room for a
 much larger batch**, and multi-node FSDP would be a pure loss. In 3D imaging
 the memory pressure is *activations*, not parameters, which is why the conv
 stem's stride and activation checkpointing matter far more than sharding.
+
+#### Do not pool away the position
+
+The single most important line in this model is how the token grid reaches
+the classifier. An ablation on identical data:
+
+| Head | train loss | val accuracy |
+|---|---|---|
+| conv stem → **keep the grid** → linear | 0.0000 | **100%** |
+| conv stem → global mean → linear | 1.0719 | 24% (chance) |
+| full model, positional embeddings + attention pooling | 1.1000 | 34% (chance) |
+
+Anything that collapses the grid to one vector — a global mean, or attention
+with a learned query — discards *where* a feature was. Adding positional
+embeddings does not rescue it. The model here pools to a coarse 4×4×4 grid and
+flattens, which keeps location and still keeps the head small.
+
+This is not an artefact of synthetic data. In volumetric imaging the location
+of an abnormality is most of the diagnosis; a head that cannot represent
+position cannot represent the task.
+
+Two other things this run needed, both of which look like "the model cannot
+learn" when missing: **LR warmup** (a transformer trained from scratch
+otherwise collapses to the class prior and can sit there for tens of epochs)
+and **a task that is actually separable** (an early version jittered the signal
+by half the class spacing, capping even a perfect oracle at 80%).
 
 Running it:
 

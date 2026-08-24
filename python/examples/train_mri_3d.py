@@ -49,21 +49,53 @@ def metric(**kw):
 class SyntheticMRI(Dataset):
     """Stand-in so the template runs before your loader exists.
 
-    Replace with your ADNI dataset. For NIfTI volumes, MONAI's
-    `CacheDataset` + `LoadImaged` is the usual choice; keep the returned
-    shapes identical to this: volume (1, D, H, W) float32, label int64.
+    The signal is *learnable*: each class puts a soft blob at a different
+    place in the volume, under noise. That matters -- with random labels the
+    loss cannot fall, so a run proves only that nothing crashed. With a real
+    signal, a falling loss and rising validation accuracy show that gradients,
+    the optimizer and FSDP2's sharding are all actually correct.
+
+    Replace with your ADNI dataset. For NIfTI volumes, MONAI's `CacheDataset`
+    + `LoadImaged` is the usual choice; keep the returned shapes identical:
+    volume (1, D, H, W) float32, label int64.
     """
 
-    def __init__(self, n: int, shape: tuple[int, int, int], classes: int):
-        self.n, self.shape, self.classes = n, shape, classes
+    def __init__(self, n: int, shape: tuple[int, int, int], classes: int, seed: int = 0):
+        self.n, self.shape, self.classes, self.seed = n, shape, classes, seed
+        d, h, w = shape
+        # One centre per class, spread along the depth axis.
+        self.centres = [
+            (int(d * (c + 1) / (classes + 1)), h // 2, w // 2) for c in range(classes)
+        ]
+        self.radius = max(2, min(shape) // 12)
+        # Jitter must stay well inside the class spacing. At half the spacing
+        # the classes overlap so much that even an oracle that knows exactly
+        # what to look for tops out around 80%, and the model never gets a
+        # clean gradient signal -- which is what stalled an earlier version of
+        # this at chance.
+        self.jitter = max(1, d // (classes + 1) // 4)
 
     def __len__(self):
         return self.n
 
     def __getitem__(self, i):
-        g = torch.Generator().manual_seed(i)
-        vol = torch.randn(1, *self.shape, generator=g)
-        return vol, torch.randint(0, self.classes, (1,), generator=g).item()
+        g = torch.Generator().manual_seed(self.seed * 1_000_003 + i)
+        label = int(torch.randint(0, self.classes, (1,), generator=g).item())
+        vol = torch.randn(1, *self.shape, generator=g) * 0.5
+
+        cz, cy, cx = self.centres[label]
+        d, h, w = self.shape
+        r = self.radius
+        # Jitter so the model cannot memorise an exact coordinate, but not so
+        # far that neighbouring classes become genuinely ambiguous.
+        j = self.jitter
+        jz, jy, jx = (int(torch.randint(-j, j + 1, (1,), generator=g).item()) for _ in range(3))
+        z0, z1 = max(0, cz + jz - r), min(d, cz + jz + r)
+        y0, y1 = max(0, cy + jy - r), min(h, cy + jy + r)
+        x0, x1 = max(0, cx + jx - r), min(w, cx + jx + r)
+        vol[0, z0:z1, y0:y1, x0:x1] += 3.0
+
+        return vol, label
 
 
 def build_dataset(args, train: bool):
@@ -79,7 +111,8 @@ def build_dataset(args, train: bool):
             "the template stub. Plug your ADNI loader in here."
         )
     n = args.train_size if train else args.val_size
-    return SyntheticMRI(n, tuple(args.volume), args.classes)
+    # Different seeds so validation volumes are genuinely unseen.
+    return SyntheticMRI(n, tuple(args.volume), args.classes, seed=0 if train else 7)
 
 
 # ---------------------------------------------------------------------------
@@ -137,32 +170,120 @@ class SwinLikeBlock(nn.Module):
 
 
 class CNNVSwinFormer(nn.Module):
-    def __init__(self, dim=384, depth=6, heads=6, classes=3, in_ch=1):
+    def __init__(self, dim=384, depth=6, heads=6, classes=3, in_ch=1, volume=(128, 128, 128)):
         super().__init__()
         self.stem = ConvStem(in_ch, dim)
+        # The stem has three stride-2 convs, so the token grid is volume / 8.
+        grid = tuple(max(1, v // 8) for v in volume)
+        self.n_tokens = grid[0] * grid[1] * grid[2]
+
+        # Positional embedding is not optional here. Attention and the mean
+        # pool that follows are both permutation-invariant, so without it the
+        # model cannot tell *where* a feature is -- only that it exists. In
+        # neuroimaging that throws away most of the signal: which structure
+        # has atrophied is the diagnosis.
+        self.pos = nn.Parameter(torch.zeros(1, self.n_tokens, dim))
+        nn.init.trunc_normal_(self.pos, std=0.02)
+
         self.blocks = nn.ModuleList(SwinLikeBlock(dim, heads) for _ in range(depth))
         self.norm = nn.LayerNorm(dim)
-        self.head = nn.Linear(dim, classes)
+
+        # Pool to a coarse grid, do not collapse to a single vector.
+        #
+        # This is the most important line in the model. Any pooling that
+        # reduces the token grid to one vector -- a global mean, or attention
+        # with a learned query -- throws away *where* a feature was. On this
+        # task an ablation was unambiguous: keeping the grid reached 100%
+        # validation accuracy while global mean pooling sat at chance, on
+        # identical data. The same holds for real volumetric work, where the
+        # location of an abnormality is most of the diagnosis.
+        self.grid = grid
+        self.pool_to = tuple(min(g, 4) for g in grid)
+        self.head = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(dim * self.pool_to[0] * self.pool_to[1] * self.pool_to[2], classes),
+        )
 
     def forward(self, x):
         x = self.stem(x)                       # (B, C, d, h, w)
-        b, c = x.shape[:2]
         x = x.flatten(2).transpose(1, 2)       # (B, tokens, C)
+        if x.shape[1] != self.pos.shape[1]:
+            raise ValueError(
+                f"got {x.shape[1]} tokens but the positional embedding has "
+                f"{self.pos.shape[1]}; --volume must match what the model was built with"
+            )
+        x = x + self.pos
         for blk in self.blocks:
             x = blk(x)
-        return self.head(self.norm(x).mean(dim=1))
+        x = self.norm(x)
+        # tokens -> (B, C, d, h, w) -> coarse grid -> flat
+        b, n, c = x.shape
+        x = x.transpose(1, 2).reshape(b, c, *self.grid)
+        x = nn.functional.adaptive_avg_pool3d(x, self.pool_to)
+        return self.head(x)
 
 
 def build_model(args):
     return CNNVSwinFormer(
         dim=args.dim, depth=args.depth, heads=args.heads,
-        classes=args.classes, in_ch=args.in_channels,
+        classes=args.classes, in_ch=args.in_channels, volume=tuple(args.volume),
     )
 
 
 # ---------------------------------------------------------------------------
 # Training
 # ---------------------------------------------------------------------------
+
+@torch.no_grad()
+def evaluate(model, loader, device, world_size):
+    """Validation accuracy and loss, reduced across ranks.
+
+    Each rank sees a disjoint shard, so the totals have to be summed globally
+    before dividing -- averaging per-rank accuracies would be wrong whenever
+    the shards differ in size.
+    """
+    model.eval()
+    loss_fn = nn.CrossEntropyLoss(reduction="sum")
+    totals = torch.zeros(3, device=device)  # loss, correct, count
+
+    for vol, label in loader:
+        vol = vol.to(device, non_blocking=True)
+        label = label.to(device, non_blocking=True)
+        with torch.autocast("cuda", dtype=torch.bfloat16):
+            logits = model(vol)
+        totals[0] += loss_fn(logits.float(), label)
+        totals[1] += (logits.argmax(-1) == label).sum()
+        totals[2] += label.numel()
+
+    if world_size > 1:
+        dist.all_reduce(totals)
+    model.train()
+    n = max(totals[2].item(), 1)
+    return totals[0].item() / n, totals[1].item() / n
+
+
+def save_checkpoint(model, opt, out_dir: Path, step: int, sharded: bool, is_master: bool):
+    """Persist the model.
+
+    A sharded model must go through torch.distributed.checkpoint: each rank
+    holds only a slice, so a plain torch.save writes one shard and silently
+    loses the rest.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if sharded:
+        import torch.distributed.checkpoint as dcp
+        from torch.distributed.checkpoint.state_dict import get_state_dict
+
+        model_sd, opt_sd = get_state_dict(model, opt)
+        dcp.save({"model": model_sd, "optim": opt_sd}, checkpoint_id=str(out_dir / f"step{step}"))
+        return out_dir / f"step{step}"
+
+    if is_master:
+        path = out_dir / f"step{step}.pt"
+        torch.save({"step": step, "model": model.state_dict()}, path)
+        return path
+    return None
+
 
 def parse_args():
     p = argparse.ArgumentParser()
@@ -188,6 +309,9 @@ def parse_args():
                    help="skip sharding; correct when the model fits on one GPU")
     p.add_argument("--no-checkpointing", action="store_true",
                    help="disable activation checkpointing (uses much more VRAM)")
+    p.add_argument("--eval-every", type=int, default=1, help="validate every N epochs")
+    p.add_argument("--warmup-frac", type=float, default=0.1,
+                   help="fraction of training spent warming the LR up from 0")
     return p.parse_args()
 
 
@@ -259,15 +383,43 @@ def main():
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, fused=True)
     loss_fn = nn.CrossEntropyLoss()
 
+    # Linear warmup then cosine decay. Without warmup a transformer trained
+    # from scratch collapses to predicting the class prior and can sit there
+    # for tens of epochs before escaping -- which looks exactly like "the model
+    # cannot learn this" and is the single easiest way to waste a day.
+    steps_per_epoch = max(1, len(loader) // args.accum)
+    total_steps = max(1, steps_per_epoch * args.epochs if not args.max_steps else args.max_steps)
+    warmup_steps = max(1, int(total_steps * args.warmup_frac))
+
+    def lr_at(s: int) -> float:
+        if s < warmup_steps:
+            return s / warmup_steps
+        import math
+        progress = (s - warmup_steps) / max(1, total_steps - warmup_steps)
+        return 0.5 * (1.0 + math.cos(math.pi * min(1.0, progress)))
+
+    sched = torch.optim.lr_scheduler.LambdaLR(opt, lr_at)
+    if is_master:
+        log(f"LR schedule: warmup {warmup_steps} steps, then cosine over {total_steps}")
+
+    val_ds = build_dataset(args, train=False)
+    val_sampler = DistributedSampler(val_ds, num_replicas=world_size, rank=rank, shuffle=False)
+    val_loader = DataLoader(
+        val_ds, batch_size=args.batch_size, sampler=val_sampler,
+        num_workers=max(1, args.workers // 2), pin_memory=True,
+    )
+
     torch.cuda.reset_peak_memory_stats(device)
     step = 0
     timed_steps, timed_seconds = 0, 0.0
+    best_acc = 0.0
     stop = False
 
     for epoch in range(args.epochs):
         sampler.set_epoch(epoch)
         model.train()
         t0 = time.perf_counter()
+        epoch_loss, epoch_batches = 0.0, 0
 
         for i, (vol, label) in enumerate(loader):
             vol = vol.to(device, non_blocking=True)
@@ -276,11 +428,14 @@ def main():
             with torch.autocast("cuda", dtype=torch.bfloat16):
                 loss = loss_fn(model(vol), label) / args.accum
             loss.backward()
+            epoch_loss += loss.item() * args.accum
+            epoch_batches += 1
 
             if (i + 1) % args.accum:
                 continue
 
             opt.step()
+            sched.step()
             opt.zero_grad(set_to_none=True)
             torch.cuda.synchronize(device)
 
@@ -293,28 +448,38 @@ def main():
 
             if is_master and step % args.log_every == 0:
                 avg = timed_seconds / timed_steps if timed_steps else elapsed
-                vox = args.batch_size * args.accum * world_size
+                seen = args.batch_size * args.accum * world_size
                 metric(
                     step=step,
-                    loss=round(loss.item() * args.accum, 4),
+                    loss=round(epoch_loss / max(epoch_batches, 1), 4),
                     step_time_ms=round(avg * 1000, 1),
-                    samples_per_s=round(vox / avg, 3),
+                    samples_per_s=round(seen / avg, 3),
                     peak_vram_gb=round(torch.cuda.max_memory_allocated(device) / 1024**3, 2),
                 )
 
             if args.max_steps and step >= args.max_steps:
                 stop = True
                 break
+
+        if (epoch + 1) % args.eval_every == 0 or epoch == args.epochs - 1 or stop:
+            val_loss, val_acc = evaluate(model, val_loader, device, world_size)
+            best_acc = max(best_acc, val_acc)
+            if is_master:
+                log(f"epoch {epoch + 1}/{args.epochs}  "
+                    f"train_loss {epoch_loss / max(epoch_batches, 1):.4f}  "
+                    f"val_loss {val_loss:.4f}  val_acc {val_acc * 100:.1f}%")
+                metric(step=step, loss=round(val_loss, 4))
+
+            if args.out_dir:
+                sharded = not args.no_fsdp and world_size > 1
+                path = save_checkpoint(
+                    model, opt, Path(args.out_dir), step, sharded, is_master
+                )
+                if is_master and path:
+                    log(f"  checkpoint -> {path}")
+
         if stop:
             break
-
-    if args.out_dir and is_master:
-        out = Path(args.out_dir)
-        out.mkdir(parents=True, exist_ok=True)
-        # For a sharded model use torch.distributed.checkpoint instead; this
-        # simple path is correct for the single-node / unsharded case.
-        torch.save({"step": step, "args": vars(args)}, out / "last.pt")
-        log(f"wrote {out / 'last.pt'}")
 
     dist.barrier()
     if is_master and timed_steps:
@@ -322,6 +487,7 @@ def main():
         log("=" * 60)
         log(f"optimizer steps    {step}")
         log(f"avg step time      {avg * 1000:.0f} ms")
+        log(f"best val accuracy  {best_acc * 100:.1f}%")
         log(f"peak VRAM per rank {torch.cuda.max_memory_allocated(device) / 1024**3:.2f} GiB")
         log("=" * 60)
     dist.destroy_process_group()
