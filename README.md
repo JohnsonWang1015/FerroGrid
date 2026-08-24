@@ -824,11 +824,13 @@ ferro train --nodes 1 --gpus-per-node 2 -f \
 and needs far more data to separate; a handful of MCI scans adds noise rather
 than a third class.
 
-**Check the majority baseline before believing an accuracy.** ADNI splits are
-imbalanced, and a model that has learned nothing still scores the prior. On
-the split used here validation is 17 CN and 4 AD, so 81% is what predicting
-"CN" every time achieves — an accuracy at or near that number is a null
-result, not a working model.
+**Read the balanced accuracy, not the accuracy.** ADNI splits are imbalanced,
+and a model that has learned nothing still scores the prior: on this split
+validation is 17 CN and 4 AD, so predicting "CN" every time gives 81%. The
+trainer reports balanced accuracy (the mean of per-class recalls) and each
+class's recall alongside it, because always-predicting-the-majority scores
+`1 / n_classes` there however lopsided the split is. A run whose accuracy is
+high while its balanced accuracy sits at chance has learned nothing.
 
 **Validation is sharded by hand, not with `DistributedSampler`.**
 `DistributedSampler` pads the set so every rank gets an equal count, which

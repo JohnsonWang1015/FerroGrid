@@ -327,7 +327,7 @@ class PaddedShard(Dataset):
 
 
 @torch.no_grad()
-def evaluate(model, loader, device, world_size):
+def evaluate(model, loader, device, world_size, n_classes):
     """Validation accuracy and loss, reduced across ranks.
 
     Each rank sees a disjoint shard, so the totals have to be summed globally
@@ -337,6 +337,10 @@ def evaluate(model, loader, device, world_size):
     model.eval()
     loss_fn = nn.CrossEntropyLoss(reduction="none")
     totals = torch.zeros(3, device=device)  # loss, correct, count
+    # Per-class correct/count, so a model that has simply learned the class
+    # prior cannot hide behind overall accuracy. On an imbalanced split those
+    # two numbers are far apart and only one of them is informative.
+    per_class = torch.zeros(2, n_classes, device=device)
 
     for vol, label, weight in loader:
         vol = vol.to(device, non_blocking=True)
@@ -344,15 +348,28 @@ def evaluate(model, loader, device, world_size):
         weight = weight.to(device, non_blocking=True).float()
         with torch.autocast("cuda", dtype=torch.bfloat16):
             logits = model(vol)
+        hit = (logits.argmax(-1) == label).float() * weight
         totals[0] += (loss_fn(logits.float(), label) * weight).sum()
-        totals[1] += ((logits.argmax(-1) == label).float() * weight).sum()
+        totals[1] += hit.sum()
         totals[2] += weight.sum()
+        per_class[0].index_add_(0, label, hit)
+        per_class[1].index_add_(0, label, weight)
 
     if world_size > 1:
         dist.all_reduce(totals)
+        dist.all_reduce(per_class)
     model.train()
+
     n = max(totals[2].item(), 1)
-    return totals[0].item() / n, totals[1].item() / n
+    seen = per_class[1] > 0
+    # Balanced accuracy: the mean of the per-class recalls. Always-predict-the
+    # majority scores 1/n_classes here, however lopsided the split is.
+    balanced = (per_class[0][seen] / per_class[1][seen]).mean().item() if seen.any() else 0.0
+    recalls = [
+        (per_class[0][c] / per_class[1][c]).item() if per_class[1][c] > 0 else float("nan")
+        for c in range(n_classes)
+    ]
+    return totals[0].item() / n, totals[1].item() / n, balanced, recalls
 
 
 def save_checkpoint(model, opt, out_dir: Path, step: int, sharded: bool, is_master: bool):
@@ -561,12 +578,19 @@ def main():
                 break
 
         if (epoch + 1) % args.eval_every == 0 or epoch == args.epochs - 1 or stop:
-            val_loss, val_acc = evaluate(model, val_loader, device, world_size)
-            best_acc = max(best_acc, val_acc)
+            val_loss, val_acc, balanced, recalls = evaluate(
+                model, val_loader, device, world_size, args.classes
+            )
+            best_acc = max(best_acc, balanced)
             if is_master:
+                names = getattr(val_ds, "labels", tuple(str(i) for i in range(args.classes)))
+                per = "  ".join(
+                    f"{n}={r * 100:.0f}%" for n, r in zip(names, recalls) if r == r
+                )
                 log(f"epoch {epoch + 1}/{args.epochs}  "
                     f"train_loss {epoch_loss / max(epoch_batches, 1):.4f}  "
-                    f"val_loss {val_loss:.4f}  val_acc {val_acc * 100:.1f}%")
+                    f"val_loss {val_loss:.4f}  acc {val_acc * 100:.1f}%  "
+                    f"balanced {balanced * 100:.1f}%  [{per}]")
                 metric(step=step, loss=round(val_loss, 4))
 
             if args.out_dir:
@@ -586,7 +610,8 @@ def main():
         log("=" * 60)
         log(f"optimizer steps    {step}")
         log(f"avg step time      {avg * 1000:.0f} ms")
-        log(f"best val accuracy  {best_acc * 100:.1f}%")
+        log(f"best balanced acc  {best_acc * 100:.1f}%  "
+            f"(chance is {100 / args.classes:.0f}%)")
         log(f"peak VRAM per rank {torch.cuda.max_memory_allocated(device) / 1024**3:.2f} GiB")
         log("=" * 60)
     dist.destroy_process_group()
