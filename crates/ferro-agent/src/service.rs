@@ -4,8 +4,9 @@ use crate::launcher;
 use crate::state::SharedState;
 use ferro_proto::node_agent_server::NodeAgent;
 use ferro_proto::{
-    BenchmarkRequest, BenchmarkResponse, GetNodeInfoRequest, LaunchJobRequest, LaunchJobResponse,
-    NodeInfo, PingRequest, PingResponse, StopJobRequest, StopJobResponse,
+    BenchmarkRequest, BenchmarkResponse, ExecPluginRequest, ExecPluginResponse, GetNodeInfoRequest,
+    LaunchJobRequest, LaunchJobResponse, NodeInfo, PingRequest, PingResponse, StopJobRequest,
+    StopJobResponse,
 };
 use tonic::{Request, Response, Status};
 
@@ -84,9 +85,95 @@ impl NodeAgent for AgentService {
         }
     }
 
+    async fn exec_plugin(
+        &self,
+        req: Request<ExecPluginRequest>,
+    ) -> Result<Response<ExecPluginResponse>, Status> {
+        let req = req.into_inner();
+        let Some((program, rest)) = req.argv.split_first() else {
+            return Err(Status::invalid_argument("empty argv"));
+        };
+
+        // No shell: argv is passed through as-is, so a path containing spaces
+        // or `;` is a path and not a command.
+        let mut cmd = tokio::process::Command::new(program);
+        cmd.args(rest);
+
+        // The plugin reads its own credentials from this directory. FerroGrid
+        // never handles them, which is why they are not in the request.
+        if !req.workdir.is_empty() {
+            let dir = expand_home(&req.workdir);
+            if !std::path::Path::new(&dir).is_dir() {
+                return Err(Status::failed_precondition(format!(
+                    "plugin `{}` wants workdir {dir}, which does not exist on {}",
+                    req.plugin, self.state.node_id
+                )));
+            }
+            cmd.current_dir(dir);
+        }
+
+        tracing::info!(plugin = %req.plugin, "exec: {}", req.argv.join(" "));
+
+        let timeout = std::time::Duration::from_secs(if req.timeout_s == 0 {
+            3600
+        } else {
+            req.timeout_s as u64
+        });
+
+        let output = match tokio::time::timeout(timeout, cmd.output()).await {
+            Ok(Ok(o)) => o,
+            Ok(Err(e)) => {
+                return Err(Status::internal(format!(
+                    "could not run `{program}` on {}: {e}. Is the plugin installed there?",
+                    self.state.node_id
+                )))
+            }
+            Err(_) => {
+                return Ok(Response::new(ExecPluginResponse {
+                    exit_code: -1,
+                    output: String::new(),
+                    error: format!("timed out after {}s", timeout.as_secs()),
+                }))
+            }
+        };
+
+        Ok(Response::new(ExecPluginResponse {
+            exit_code: output.status.code().unwrap_or(-1),
+            output: tail(&String::from_utf8_lossy(&output.stdout)),
+            error: tail(&String::from_utf8_lossy(&output.stderr)),
+        }))
+    }
+
     async fn ping(&self, _req: Request<PingRequest>) -> Result<Response<PingResponse>, Status> {
         Ok(Response::new(PingResponse {
             agent_version: crate::AGENT_VERSION.to_string(),
         }))
     }
+}
+
+fn expand_home(path: &str) -> String {
+    match path.strip_prefix("~/") {
+        Some(rest) => match std::env::var("HOME") {
+            Ok(home) => format!("{home}/{rest}"),
+            Err(_) => path.to_string(),
+        },
+        None => path.to_string(),
+    }
+}
+
+/// Keep the end of a transfer tool's output: progress bars can run to
+/// megabytes, and the part that says what went wrong is at the bottom.
+fn tail(s: &str) -> String {
+    const MAX: usize = 8 * 1024;
+    let s = s.trim_end();
+    if s.len() <= MAX {
+        return s.to_string();
+    }
+    let cut = s.len() - MAX;
+    let start = s
+        .char_indices()
+        .find(|(i, _)| *i >= cut)
+        .map(|(i, _)| i)
+        .unwrap_or(s.len());
+    format!("...(truncated)\n{}", &s[start..])
 }

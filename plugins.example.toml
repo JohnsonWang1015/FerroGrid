@@ -1,0 +1,41 @@
+# FerroGrid transfer plugins.
+#
+# Copy to ~/.config/ferrogrid/plugins.toml on the CONTROLLER host and restart
+# the controller. Each plugin is an argv template, not a shell string:
+# {remote} and {local} are substituted as whole arguments and the command is
+# exec'd directly, so a path containing spaces or `;` stays a path.
+#
+# The plugin runs ON THE NODES. `ferro fetch` runs it on every healthy node at
+# once, so each node pulls its own copy rather than relaying through one host.
+#
+# FerroGrid never handles credentials. The tool reads its own configuration
+# from `workdir` on each node -- put the .env / rclone.conf there, chmod 600,
+# and keep it out of version control.
+
+[nextcloud]
+description = "Nextcloud NAS over WebDAV (NextcloudFetcher)"
+# `mirror` recreates the folder tree; use `folder` if you want a single zip.
+fetch = ["ncfetch", "mirror", "{remote}", "--out", "{local}"]
+push = ["ncfetch", "upload-folder", "{local}", "{remote}"]
+# Must contain the .env described in the NextcloudFetcher README.
+workdir = "~/.config/ferrogrid"
+
+# A public share needs no account, only the token and (optionally) a password
+# in the same .env.
+[nextcloud-public]
+description = "Nextcloud public share (read-only)"
+fetch = ["ncfetch", "public-mirror", "{remote}", "--out", "{local}"]
+workdir = "~/.config/ferrogrid"
+
+# Anything with a command line works. Examples:
+#
+# [s3]
+# description = "S3 bucket via rclone"
+# fetch = ["rclone", "copy", "s3:{remote}", "{local}", "--transfers", "8"]
+# push  = ["rclone", "copy", "{local}", "s3:{remote}", "--transfers", "8"]
+# workdir = "~/.config/ferrogrid"
+#
+# [lab-nfs]
+# description = "Another machine over rsync/SSH"
+# fetch = ["rsync", "-a", "fileserver:{remote}/", "{local}/"]
+# push  = ["rsync", "-a", "{local}/", "fileserver:{remote}/"]

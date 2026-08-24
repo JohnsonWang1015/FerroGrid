@@ -43,6 +43,9 @@ Type=simple
 Environment=FERRO_CONTROLLER=http://$CONTROLLER
 Environment=FERRO_AGENT_BIND=0.0.0.0:7071
 Environment=RUST_LOG=info
+# systemd --user starts with a minimal PATH, so user-installed transfer tools
+# (ncfetch, rclone, ...) would be invisible to plugins without this.
+Environment=PATH=%h/.local/bin:%h/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=FERRO_DEFAULT_IMAGE=$IMAGE
 $EXTRA
 ExecStart=%h/.local/bin/ferro-agent

@@ -239,6 +239,9 @@ ferro gpu                       # every GPU: VRAM, utilisation, temp, power, own
 ferro ps                        # what is running right now, per rank
 ferro watch                     # live dashboard: GPUs + running jobs, one screen
 ferro bench                     # measure each GPU, so the scheduler can rank hardware
+ferro plugins                   # transfer plugins the controller knows about
+ferro fetch <plugin> <remote> <local>   # pull data onto the nodes, in parallel
+ferro push  <plugin> <local> <remote>   # send results back
 ferro train --nodes 2 --gpus-per-node 2 train.py
 ferro jobs                      # recent jobs
 ferro job <job-id>              # placement, per-rank status, metrics, NCCL errors
@@ -263,6 +266,55 @@ the limit and the GPUs return to the pool. On a shared cluster, put one on
 anything you are not watching — it is the difference between losing an
 afternoon and losing a week. A rank that *fails* is handled without it: the
 controller tears down its surviving peers immediately.
+
+### Moving data: plugins
+
+FerroGrid does not speak WebDAV, S3 or anything else — moving bytes is a
+solved problem. What it adds is running an existing tool **on every node at
+once**, so each node pulls its own copy instead of relaying a dataset through
+the controller.
+
+A plugin is an argv template in `~/.config/ferrogrid/plugins.toml` on the
+controller host (see `plugins.example.toml`):
+
+```toml
+[nextcloud]
+description = "Nextcloud NAS over WebDAV (NextcloudFetcher)"
+fetch = ["ncfetch", "mirror", "{remote}", "--out", "{local}"]
+push  = ["ncfetch", "upload-folder", "{local}", "{remote}"]
+workdir = "~/.config/ferrogrid"
+```
+
+```bash
+ferro plugins
+ferro fetch nextcloud Datasets/adni /data/adni            # every healthy node
+ferro fetch nextcloud Datasets/adni /data/adni --node gpu-a
+ferro push  nextcloud runs/exp1 Backups/ferrogrid/exp1 --node gpu-a
+```
+
+`{remote}` and `{local}` are substituted as **whole argv elements** and the
+command is exec'd directly, never through a shell — a path containing spaces
+or `;` is a path, not an injection. Anything with a command line works;
+`plugins.example.toml` also sketches rclone and rsync.
+
+**FerroGrid never handles your credentials.** The tool reads its own config
+from `workdir` on each node — for NextcloudFetcher that is the `.env` its
+README describes, found by searching upward from the working directory.
+`scripts/install_plugin_creds.sh` will distribute one for you, but think
+first: it copies a secret to every host you name, those hosts are shared, and
+anyone with root on them can read it. Prefer a credential scoped to the share
+in question and revocable on its own — for Nextcloud, an app password — over
+your account password.
+
+Two things worth knowing:
+
+- **Install the tool on the nodes**, not just the controller. Nothing is
+  shipped for you: `uv tool install` (or pip) it on each node.
+- The agent runs under `systemd --user`, whose `PATH` is minimal. The unit
+  written by `register_node.sh` puts `~/.local/bin` and `~/.cargo/bin` on it
+  so user-installed tools are visible; a node deployed before that change will
+  report `could not run ...: No such file or directory` until it is
+  re-registered.
 
 ### Live monitoring
 

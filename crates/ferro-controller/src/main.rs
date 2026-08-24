@@ -1,6 +1,7 @@
 //! FerroGrid controller: cluster registry, GPU scheduler, job orchestrator.
 
 mod metrics;
+mod plugins;
 mod registry;
 mod scheduler;
 mod service;
@@ -27,6 +28,11 @@ struct Args {
     #[arg(long, default_value_t = 3)]
     heartbeat_secs: u32,
 
+    /// Plugin definitions. Defaults to ~/.config/ferrogrid/plugins.toml, then
+    /// ./plugins.toml.
+    #[arg(long, env = "FERRO_PLUGINS")]
+    plugins: Option<std::path::PathBuf>,
+
     /// A GPU must have at least this much free VRAM (GiB) to be scheduled.
     /// Guards against GPUs busy with workloads FerroGrid does not manage.
     #[arg(long, default_value_t = 8)]
@@ -43,9 +49,20 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
     let registry = Arc::new(Registry::new());
+    let plugins = plugins::Registry::load(args.plugins.as_deref())?;
+    match &plugins.source {
+        Some(p) => tracing::info!(
+            "loaded {} plugin(s) from {}: {}",
+            plugins.plugins.len(),
+            p.display(),
+            plugins.plugins.keys().cloned().collect::<Vec<_>>().join(", ")
+        ),
+        None => tracing::info!("no plugin config found; `ferro fetch`/`push` unavailable"),
+    }
 
     let svc = service::ControllerService {
         registry: registry.clone(),
+        plugins,
         master_port: args.master_port,
         heartbeat_interval_s: args.heartbeat_secs,
         min_free_vram_b: args.min_free_vram_gib << 30,

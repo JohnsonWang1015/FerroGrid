@@ -64,6 +64,12 @@ enum Cmd {
         #[arg(long)]
         force: bool,
     },
+    /// List the transfer plugins the controller has configured.
+    Plugins,
+    /// Download data onto the nodes with a plugin.
+    Fetch(TransferArgs),
+    /// Upload data from a node with a plugin.
+    Push(TransferArgs),
     /// Live dashboard: nodes, GPUs and running jobs on one screen.
     Watch {
         /// Seconds between redraws.
@@ -94,6 +100,27 @@ enum Cmd {
     },
     /// Cancel a running job.
     Cancel { job_id: String },
+}
+
+#[derive(clap::Args, Debug, Clone)]
+struct TransferArgs {
+    /// Plugin name, as shown by `ferro plugins`.
+    plugin: String,
+
+    /// Remote path, as the plugin understands it.
+    remote: String,
+
+    /// Path on the node.
+    local: String,
+
+    /// Only these nodes, repeatable. Default for fetch: every healthy node,
+    /// each pulling its own copy in parallel.
+    #[arg(long = "node")]
+    node_filter: Vec<String>,
+
+    /// Give up after this long: 90s, 30m, 2h.
+    #[arg(long, value_parser = parse_duration, default_value = "1h")]
+    timeout: u32,
 }
 
 #[derive(clap::Args, Debug, Clone)]
@@ -249,6 +276,30 @@ async fn main() -> Result<()> {
                 Ok(())
             })
             .await?;
+        }
+        Cmd::Plugins => {
+            let r = client.list_plugins(ListPluginsRequest {}).await?.into_inner();
+            render::plugins(&r.plugins, cli.json);
+        }
+        // Bind the action before destructuring, so the match arm can move `a`.
+        ref c @ (Cmd::Fetch(ref a) | Cmd::Push(ref a)) => {
+            let action = if matches!(c, Cmd::Fetch(_)) { "fetch" } else { "push" };
+            eprintln!("{action}: {} <-> {} via {}", a.remote, a.local, a.plugin);
+            let r = client
+                .run_plugin(RunPluginRequest {
+                    plugin: a.plugin.clone(),
+                    action: action.to_string(),
+                    remote: a.remote.clone(),
+                    local: a.local.clone(),
+                    node_filter: a.node_filter.clone(),
+                    timeout_s: a.timeout,
+                })
+                .await?
+                .into_inner();
+            render::transfer(&r.results, cli.json);
+            if r.results.iter().any(|x| x.exit_code != 0) {
+                std::process::exit(1);
+            }
         }
         Cmd::Bench { node_filter, force } => {
             eprintln!("benchmarking (a few seconds per GPU)...");

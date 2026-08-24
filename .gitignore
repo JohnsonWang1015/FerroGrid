@@ -5,3 +5,4 @@ __pycache__/
 /mojo/build
 /.venv
 /tests/__pycache__
+/plugins.toml

@@ -46,6 +46,13 @@ See README.md for architecture, deployment and measured results.
   `output_args` to `PipelineStage` regardless -- `input_args` alone uses a
   deprecated shape-inference path that corrupts metadata over sockets.
 
+- Plugins are argv templates, never shell strings, and are exec'd directly:
+  substitution happens per argv element so paths cannot inject. Credentials
+  never travel through FerroGrid -- the tool reads its own config from the
+  plugin `workdir` on each node.
+- `systemd --user` has a minimal PATH; the agent unit must extend it or
+  user-installed tools (ncfetch, rclone) are invisible to plugins.
+
 ## Conventions
 
 - Live views (`ferro watch`, `-w` on the read-only commands) redraw faster than

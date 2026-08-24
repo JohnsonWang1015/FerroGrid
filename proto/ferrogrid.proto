@@ -213,6 +213,37 @@ message ProcessEntry {
 }
 message ListProcessesResponse { repeated ProcessEntry processes = 1; }
 
+// Plugins: external transfer tools (Nextcloud, S3, rsync, ...) that FerroGrid
+// invokes on the nodes rather than reimplementing.
+message PluginInfo {
+  string name        = 1;
+  string description = 2;
+  bool can_fetch     = 3;
+  bool can_push      = 4;
+}
+message ListPluginsRequest {}
+message ListPluginsResponse { repeated PluginInfo plugins = 1; }
+
+message RunPluginRequest {
+  string plugin  = 1;
+  // "fetch" (remote -> node) or "push" (node -> remote).
+  string action  = 2;
+  string remote  = 3;
+  string local   = 4;
+  // Empty => every healthy node. Fetching on all of them in parallel is the
+  // point: each node pulls its own copy instead of relaying through one host.
+  repeated string node_filter = 5;
+  uint32 timeout_s = 6;
+}
+message PluginResult {
+  string node_id  = 1;
+  int32 exit_code = 2;
+  string output   = 3;
+  string error    = 4;
+  double seconds  = 5;
+}
+message RunPluginResponse { repeated PluginResult results = 1; }
+
 // `ferro bench`: ask agents to measure their GPUs.
 message BenchmarkNodesRequest {
   repeated string node_filter = 1;
@@ -254,6 +285,8 @@ service Controller {
   rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
   rpc ListProcesses(ListProcessesRequest) returns (ListProcessesResponse);
   rpc BenchmarkNodes(BenchmarkNodesRequest) returns (BenchmarkNodesResponse);
+  rpc ListPlugins(ListPluginsRequest) returns (ListPluginsResponse);
+  rpc RunPlugin(RunPluginRequest) returns (RunPluginResponse);
   rpc CancelJob(CancelJobRequest) returns (CancelJobResponse);
   rpc StreamLogs(LogRequest) returns (stream LogLine);
 
@@ -293,6 +326,20 @@ message StopJobResponse { bool stopped = 1; string message = 2; }
 message BenchmarkRequest {
   bool force = 1;
 }
+
+// The controller resolves a plugin's argv from its own config and sends it
+// here already expanded, so the agent never parses a command string.
+message ExecPluginRequest {
+  string plugin    = 1;
+  repeated string argv = 2;
+  string workdir   = 3;
+  uint32 timeout_s = 4;
+}
+message ExecPluginResponse {
+  int32 exit_code = 1;
+  string output   = 2;
+  string error    = 3;
+}
 message BenchmarkResponse { repeated GpuBenchmark results = 1; }
 
 message GetNodeInfoRequest {}
@@ -305,4 +352,5 @@ service NodeAgent {
   rpc StopJob(StopJobRequest) returns (StopJobResponse);
   rpc Ping(PingRequest) returns (PingResponse);
   rpc Benchmark(BenchmarkRequest) returns (BenchmarkResponse);
+  rpc ExecPlugin(ExecPluginRequest) returns (ExecPluginResponse);
 }

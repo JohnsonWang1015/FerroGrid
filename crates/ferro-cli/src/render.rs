@@ -622,3 +622,89 @@ pub fn benchmarks(results: &[GpuBenchmark], json: bool) {
     println!("{t}");
     println!("Scores are cached on each node and used to rank placements.");
 }
+
+pub fn plugins(list: &[PluginInfo], json: bool) {
+    if json {
+        let v: Vec<_> = list
+            .iter()
+            .map(|p| {
+                serde_json::json!({
+                    "name": p.name, "description": p.description,
+                    "fetch": p.can_fetch, "push": p.can_push,
+                })
+            })
+            .collect();
+        return dump(&v);
+    }
+
+    if list.is_empty() {
+        println!("No plugins configured.");
+        println!("Copy plugins.example.toml to ~/.config/ferrogrid/plugins.toml on the");
+        println!("controller host and restart it.");
+        return;
+    }
+
+    let mut t = table(&["PLUGIN", "FETCH", "PUSH", "DESCRIPTION"]);
+    for p in list {
+        let mark = |ok: bool| {
+            if ok {
+                Cell::new("yes").fg(Color::Green)
+            } else {
+                Cell::new("-").fg(Color::Grey)
+            }
+        };
+        t.add_row(vec![
+            Cell::new(&p.name),
+            mark(p.can_fetch),
+            mark(p.can_push),
+            Cell::new(&p.description),
+        ]);
+    }
+    println!("{t}");
+}
+
+pub fn transfer(results: &[PluginResult], json: bool) {
+    if json {
+        let v: Vec<_> = results
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "node_id": r.node_id, "exit_code": r.exit_code,
+                    "seconds": r.seconds, "output": r.output, "error": r.error,
+                })
+            })
+            .collect();
+        return dump(&v);
+    }
+
+    let mut t = table(&["NODE", "RESULT", "TOOK"]);
+    for r in results {
+        t.add_row(vec![
+            Cell::new(&r.node_id),
+            if r.exit_code == 0 {
+                Cell::new("ok").fg(Color::Green)
+            } else {
+                Cell::new(format!("failed ({})", r.exit_code)).fg(Color::Red)
+            },
+            Cell::new(format!("{:.1}s", r.seconds)),
+        ]);
+    }
+    println!("{t}");
+
+    // Only the failures' output, and only the tail of it: a successful
+    // transfer's progress bars are noise, a failure's last lines are the reason.
+    for r in results.iter().filter(|r| r.exit_code != 0) {
+        println!("\n--- {} ---", r.node_id);
+        for line in r.error.lines().rev().take(12).collect::<Vec<_>>().iter().rev() {
+            println!("  {line}");
+        }
+        if r.error.trim().is_empty() {
+            for line in r.output.lines().rev().take(8).collect::<Vec<_>>().iter().rev() {
+                println!("  {line}");
+            }
+        }
+    }
+
+    let ok = results.iter().filter(|r| r.exit_code == 0).count();
+    println!("\n{ok}/{} node(s) succeeded", results.len());
+}

@@ -14,6 +14,7 @@ use tonic::{Request, Response, Status};
 
 pub struct ControllerService {
     pub registry: Arc<Registry>,
+    pub plugins: crate::plugins::Registry,
     pub master_port: u32,
     pub heartbeat_interval_s: u32,
     pub min_free_vram_b: u64,
@@ -355,6 +356,108 @@ impl Controller for ControllerService {
         Ok(Response::new(BenchmarkNodesResponse { results }))
     }
 
+    async fn list_plugins(
+        &self,
+        _req: Request<ListPluginsRequest>,
+    ) -> Result<Response<ListPluginsResponse>, Status> {
+        Ok(Response::new(ListPluginsResponse {
+            plugins: self
+                .plugins
+                .plugins
+                .iter()
+                .map(|(name, p)| PluginInfo {
+                    name: name.clone(),
+                    description: p.description.clone(),
+                    can_fetch: !p.fetch.is_empty(),
+                    can_push: !p.push.is_empty(),
+                })
+                .collect(),
+        }))
+    }
+
+    async fn run_plugin(
+        &self,
+        req: Request<RunPluginRequest>,
+    ) -> Result<Response<RunPluginResponse>, Status> {
+        let req = req.into_inner();
+
+        let plugin = self
+            .plugins
+            .get(&req.plugin)
+            .map_err(|e| Status::not_found(format!("{e:#}")))?;
+        let argv = plugin
+            .argv(&req.action, &req.remote, &req.local)
+            .map_err(|e| Status::invalid_argument(format!("{e:#}")))?;
+
+        let targets: Vec<(String, String)> = self
+            .registry
+            .node_states()
+            .await
+            .iter()
+            .filter(|n| n.healthy)
+            .filter_map(|n| n.info.as_ref())
+            .filter(|i| req.node_filter.is_empty() || req.node_filter.contains(&i.node_id))
+            .map(|i| (i.node_id.clone(), i.address.clone()))
+            .collect();
+
+        if targets.is_empty() {
+            return Err(Status::failed_precondition("no healthy nodes selected"));
+        }
+
+        tracing::info!(
+            plugin = %req.plugin,
+            action = %req.action,
+            nodes = targets.len(),
+            "running plugin: {}", argv.join(" ")
+        );
+
+        // Concurrently, because the whole point is that each node fetches its
+        // own copy rather than queueing behind the others.
+        let mut tasks = Vec::new();
+        for (node_id, addr) in targets {
+            let argv = argv.clone();
+            let plugin_name = req.plugin.clone();
+            let workdir = plugin.workdir.clone();
+            let timeout_s = req.timeout_s;
+            tasks.push(tokio::spawn(async move {
+                let started = std::time::Instant::now();
+                let outcome = exec_plugin_on(&addr, &plugin_name, argv, workdir, timeout_s).await;
+                let seconds = started.elapsed().as_secs_f64();
+                match outcome {
+                    Ok((code, out, err)) => PluginResult {
+                        node_id,
+                        exit_code: code,
+                        output: out,
+                        error: err,
+                        seconds,
+                    },
+                    Err(e) => PluginResult {
+                        node_id,
+                        exit_code: -1,
+                        output: String::new(),
+                        error: e,
+                        seconds,
+                    },
+                }
+            }));
+        }
+
+        let mut results = Vec::new();
+        for t in tasks {
+            match t.await {
+                Ok(r) => results.push(r),
+                Err(e) => results.push(PluginResult {
+                    node_id: "?".into(),
+                    exit_code: -1,
+                    error: format!("task failed: {e}"),
+                    ..Default::default()
+                }),
+            }
+        }
+        results.sort_by(|a, b| a.node_id.cmp(&b.node_id));
+        Ok(Response::new(RunPluginResponse { results }))
+    }
+
     async fn cancel_job(
         &self,
         req: Request<CancelJobRequest>,
@@ -534,6 +637,29 @@ async fn dispatch(addr: &str, req: LaunchJobRequest) -> Result<(), String> {
     } else {
         Err(resp.message)
     }
+}
+
+async fn exec_plugin_on(
+    addr: &str,
+    plugin: &str,
+    argv: Vec<String>,
+    workdir: String,
+    timeout_s: u32,
+) -> Result<(i32, String, String), String> {
+    let mut client = NodeAgentClient::connect(endpoint(addr))
+        .await
+        .map_err(|e| format!("connect: {e}"))?;
+    let resp = client
+        .exec_plugin(ExecPluginRequest {
+            plugin: plugin.to_string(),
+            argv,
+            workdir,
+            timeout_s,
+        })
+        .await
+        .map_err(|e| format!("{}", e.message()))?
+        .into_inner();
+    Ok((resp.exit_code, resp.output, resp.error))
 }
 
 async fn stop_on(addr: &str, job_id: &str) -> Result<(), String> {
