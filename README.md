@@ -36,13 +36,17 @@ uv run --all-extras ferro-setup
 That single command creates the virtualenv, installs PyTorch and Mojo/MAX,
 builds the Rust binaries, and links `ferro` / `ferro-agent` /
 `ferro-controller` into `~/.local/bin`. Re-run it any time; it is idempotent.
+If `~/.local/bin` is not on your PATH it says so at the end and prints the
+`export` line; `--add-to-path` appends that line to your shell rc instead
+(bash, zsh and fish; also idempotent).
 
 Lighter variants:
 
 ```bash
 uv run ferro-setup                    # control plane only, no torch/Mojo
 uv sync --extra mojo                  # Python side only, with Mojo/MAX
-uv run --all-extras ferro-setup --portable   # binaries for older servers
+uv run --all-extras ferro-setup --portable      # binaries for older servers
+uv run --all-extras ferro-setup --add-to-path   # also extend PATH in your shell rc
 ```
 
 Requires [uv](https://docs.astral.sh/uv/) and a Rust toolchain

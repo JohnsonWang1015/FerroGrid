@@ -15,6 +15,8 @@ from pathlib import Path
 
 BINARIES = ("ferro", "ferro-agent", "ferro-controller")
 
+MARKER = "# added by ferro-setup"
+
 
 def repo_root() -> Path:
     # Installed into the venv, so locate the repo from the CWD upwards rather
@@ -90,9 +92,67 @@ def link_binaries(out_dir: Path, bin_dir: Path) -> None:
         dst.symlink_to(src)
         print(f"  {name} -> {src}")
 
-    if str(bin_dir) not in os.environ.get("PATH", "").split(os.pathsep):
-        print(f"\n  ! {bin_dir} is not on your PATH. Add this to your shell rc:")
-        print(f'      export PATH="{bin_dir}:$PATH"')
+
+def on_path(bin_dir: Path, path: str | None = None) -> bool:
+    """Is bin_dir already reachable through PATH?
+
+    Compare resolved paths, not strings: an entry can be spelled with a
+    trailing slash, through a symlinked home, or relative, and still be the
+    same directory. A string compare there warns about a PATH that works.
+    """
+    if path is None:
+        path = os.environ.get("PATH", "")
+    target = bin_dir.expanduser().resolve()
+    for entry in path.split(os.pathsep):
+        if not entry:
+            continue
+        try:
+            if Path(entry).expanduser().resolve() == target:
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def shell_rc(shell: str | None = None) -> tuple[Path, str] | None:
+    """Pick the rc file for the user's shell and the line that extends PATH.
+
+    Returns None for a shell we do not know how to edit, so the caller can
+    fall back to printing the hint.
+    """
+    if shell is None:
+        shell = os.environ.get("SHELL", "")
+    name = Path(shell).name
+    home = Path.home()
+    if name == "bash":
+        return home / ".bashrc", 'export PATH="{bin_dir}:$PATH"'
+    if name == "zsh":
+        zdotdir = os.environ.get("ZDOTDIR")
+        return Path(zdotdir or home) / ".zshrc", 'export PATH="{bin_dir}:$PATH"'
+    if name == "fish":
+        return home / ".config" / "fish" / "config.fish", 'fish_add_path "{bin_dir}"'
+    return None
+
+
+def add_to_path(bin_dir: Path) -> Path | None:
+    """Append a PATH line to the shell rc file. Idempotent.
+
+    Returns the file written, or None if the shell is unsupported or the line
+    is already there.
+    """
+    target = shell_rc()
+    if target is None:
+        return None
+    rc, template = target
+    line = template.format(bin_dir=bin_dir)
+    if rc.is_file() and line in rc.read_text():
+        print(f"  {rc} already extends PATH, leaving it alone")
+        return None
+    rc.parent.mkdir(parents=True, exist_ok=True)
+    with rc.open("a") as fh:
+        fh.write(f"\n{MARKER}\n{line}\n")
+    print(f"  appended to {rc}:  {line}")
+    return rc
 
 
 def report_mojo() -> None:
@@ -124,6 +184,11 @@ def main() -> None:
         default=Path.home() / ".local" / "bin",
         help="where to link the binaries (default: ~/.local/bin)",
     )
+    ap.add_argument(
+        "--add-to-path",
+        action="store_true",
+        help="append the PATH line to your shell rc instead of just printing it",
+    )
     args = ap.parse_args()
 
     root = repo_root()
@@ -131,7 +196,25 @@ def main() -> None:
     out_dir = build_rust(root, args.portable)
     link_binaries(out_dir, args.bin_dir)
     report_mojo()
-    print("\nDone. Try:  ferro --help")
+
+    # PATH last: it is the one thing the user may still have to act on, and a
+    # warning printed mid-run scrolls away above `Done. Try: ferro --help`.
+    reachable = on_path(args.bin_dir)
+    written = None
+    if not reachable and args.add_to_path:
+        print("==> PATH")
+        written = add_to_path(args.bin_dir)
+
+    if reachable:
+        print("\nDone. Try:  ferro --help")
+    elif written is not None:
+        print(f"\nDone. Open a new shell (or `source {written}`), then:  ferro --help")
+    else:
+        print(f"\nDone, but {args.bin_dir} is not on your PATH.")
+        print("  Add this to your shell rc:")
+        print(f'      export PATH="{args.bin_dir}:$PATH"')
+        print("  or re-run with --add-to-path to have it appended for you.")
+        print(f"\nUntil then:  {args.bin_dir}/ferro --help")
 
 
 if __name__ == "__main__":
