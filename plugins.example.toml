@@ -20,6 +20,16 @@ push = ["ncfetch", "upload-folder", "{local}", "{remote}"]
 # Must contain the .env described in the NextcloudFetcher README.
 workdir = "~/.config/ferrogrid"
 
+# Single file. Measured on this cluster: one large file moves at ~32 MB/s,
+# while the same bytes as a tree of ~200 small DICOMs manage 0.44 MB/s -- 74x
+# slower. WebDAV pays a round trip per file, so **transfer archives, not
+# directory trees**, and unpack on the node.
+[nextcloud-file]
+description = "Nextcloud: one file (use this for archives)"
+fetch = ["ncfetch", "file", "{remote}", "--out", "{local}"]
+push = ["ncfetch", "upload", "{local}", "{remote}"]
+workdir = "~/.config/ferrogrid"
+
 # A public share needs no account, only the token and (optionally) a password
 # in the same .env.
 [nextcloud-public]

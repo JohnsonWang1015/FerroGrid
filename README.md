@@ -306,6 +306,24 @@ anyone with root on them can read it. Prefer a credential scoped to the share
 in question and revocable on its own — for Nextcloud, an app password — over
 your account password.
 
+#### Transfer archives, not directory trees
+
+Measured on this cluster, fetching the same ADNI scan two ways:
+
+| Shape | Throughput |
+|---|---|
+| One 1.8 GB archive | **32.5 MB/s** |
+| 208 DICOM files (56 MB total) | 0.44 MB/s |
+
+**74× apart.** WebDAV pays a round trip per file, so a scan's ~200 small
+DICOMs spend all their time on latency and none on bandwidth. `ncfetch
+folder` does not help — it fetches file by file and zips locally.
+
+The consequence is concrete: the 46.8 GB ADNI archive on Nextcloud takes about
+**24 minutes** as one file, where the same data as a tree, or from the lab SMB
+server at 1.1 MB/s, takes most of a day. Fetch the archive with the
+`nextcloud-file` plugin and unpack on the node.
+
 Two things worth knowing:
 
 - **Install the tool on the nodes**, not just the controller. Nothing is
