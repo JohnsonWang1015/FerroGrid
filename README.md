@@ -972,12 +972,26 @@ improvement** and `--patience`; saving every evaluation leaves the most
 overfit model as the last file on disk, which is the one you would deploy.
 
 Three-way CN/MCI/AD from T1 alone is genuinely hard — MCI overlaps both
-neighbours by definition. If you need a working classifier rather than a
-working pipeline, the levers, in order: more data (further ADNI collections);
-a pretrained backbone instead of a transformer from scratch on 1,225 scans;
-the binary CN vs AD task, which is far more separable; or the tabular markers
-the cohort already carries (hippocampal volume, amyloid, CSF), which are
-strong predictors and much cheaper than imaging.
+neighbours by definition. Dropping to CN vs AD on the same data, same model,
+same protocol shows the difference is the task and not the pipeline:
+
+| Task | val | **test** | chance | over chance |
+|---|---|---|---|---|
+| CN / MCI / AD | 45.7% | **35.4%** | 33.3% | +2 |
+| CN vs AD | 68.1% | **59.8%** | 50.0% | **+10** |
+
+The binary model learns real signal — ten points above chance on data that
+selected nothing, with balanced recall (CN 57%, AD 63%). Note the val→test
+gap appears in both, ~8-10 points each time: that is what selecting an epoch
+on a small validation set costs, consistently, and why the test column is not
+optional.
+
+59.8% is still well short of what T1-based CN/AD reaches in the literature. To
+close that gap, in order: more data (further ADNI collections are on the same
+NAS); a pretrained backbone rather than a transformer learned from scratch on
+692 scans; or the tabular markers the cohort already carries (hippocampal
+volume, amyloid, CSF), which are strong predictors and far cheaper than
+imaging.
 
 **Validation is sharded by hand, not with `DistributedSampler`.**
 `DistributedSampler` pads the set so every rank gets an equal count, which
