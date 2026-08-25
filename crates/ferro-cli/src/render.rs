@@ -1,4 +1,9 @@
 //! Table and JSON rendering for the CLI.
+//!
+//! Every view builds a whole frame as a `String` and hands it back rather than
+//! printing as it goes. `ferro watch` needs the finished screen in one write:
+//! drawing it piecemeal, after the round-trip to the controller that produced
+//! it, is what a redraw at `-n 1` looks like from the other side -- a flicker.
 
 use comfy_table::{presets::UTF8_FULL, Cell, Color, ContentArrangement, Table};
 use ferro_gpu::fmt_gib;
@@ -12,8 +17,19 @@ fn table(headers: &[&str]) -> Table {
     t
 }
 
-fn dump<T: serde::Serialize>(v: &T) {
-    println!("{}", serde_json::to_string_pretty(v).unwrap_or_default());
+fn dump<T: serde::Serialize>(v: &T) -> String {
+    format!("{}\n", serde_json::to_string_pretty(v).unwrap_or_default())
+}
+
+/// `println!` for a frame under construction.
+macro_rules! line {
+    ($out:ident) => {
+        $out.push('\n')
+    };
+    ($out:ident, $($arg:tt)*) => {{
+        use std::fmt::Write as _;
+        let _ = writeln!($out, $($arg)*);
+    }};
 }
 
 fn now_s() -> i64 {
@@ -52,7 +68,7 @@ fn health_cell(healthy: bool) -> Cell {
     }
 }
 
-pub fn nodes(nodes: &[NodeState], json: bool) {
+pub fn nodes(nodes: &[NodeState], json: bool) -> String {
     if json {
         let v: Vec<_> = nodes
             .iter()
@@ -77,8 +93,7 @@ pub fn nodes(nodes: &[NodeState], json: bool) {
     }
 
     if nodes.is_empty() {
-        println!("No nodes registered. Start ferro-agent on your servers.");
-        return;
+        return "No nodes registered. Start ferro-agent on your servers.\n".into();
     }
 
     let mut t = table(&["NODE", "ADDRESS", "NCCL IP", "STATUS", "AGE", "GPUS", "FREE", "DRIVER", "CUDA", "CPU"]);
@@ -97,18 +112,20 @@ pub fn nodes(nodes: &[NodeState], json: bool) {
             Cell::new(i.cpu_count),
         ]);
     }
-    println!("{t}");
+    let mut out = String::new();
+    line!(out, "{t}");
 
     for n in nodes {
         if let Some(i) = &n.info {
             if !i.gpu_error.is_empty() {
-                println!("  ! {}: GPU detection failed: {}", i.node_id, i.gpu_error);
+                line!(out, "  ! {}: GPU detection failed: {}", i.node_id, i.gpu_error);
             }
         }
     }
+    out
 }
 
-pub fn gpus(entries: &[GpuEntry], json: bool) {
+pub fn gpus(entries: &[GpuEntry], json: bool) -> String {
     if json {
         let v: Vec<_> = entries
             .iter()
@@ -135,8 +152,7 @@ pub fn gpus(entries: &[GpuEntry], json: bool) {
     }
 
     if entries.is_empty() {
-        println!("No GPUs reported yet.");
-        return;
+        return "No GPUs reported yet.\n".into();
     }
 
     let mut t = table(&["NODE", "IDX", "NAME", "VRAM USED / TOTAL", "UTIL", "TEMP", "POWER", "CC", "JOB"]);
@@ -163,14 +179,16 @@ pub fn gpus(entries: &[GpuEntry], json: bool) {
             },
         ]);
     }
-    println!("{t}");
-
     let total = entries.len();
     let free = entries
         .iter()
         .filter(|e| e.gpu.as_ref().map(|g| g.allocated_job_id.is_empty()).unwrap_or(false))
         .count();
-    println!("{free}/{total} GPU(s) free");
+
+    let mut out = String::new();
+    line!(out, "{t}");
+    line!(out, "{free}/{total} GPU(s) free");
+    out
 }
 
 fn phase_cell(p: JobPhase) -> Cell {
@@ -201,7 +219,7 @@ fn num(v: f64) -> String {
     }
 }
 
-pub fn jobs(list: &[JobSummary], json: bool) {
+pub fn jobs(list: &[JobSummary], json: bool) -> String {
     if json {
         let v: Vec<_> = list
             .iter()
@@ -223,8 +241,7 @@ pub fn jobs(list: &[JobSummary], json: bool) {
     }
 
     if list.is_empty() {
-        println!("No jobs submitted yet.");
-        return;
+        return "No jobs submitted yet.\n".into();
     }
 
     let mut t = table(&["JOB ID", "NAME", "PHASE", "WORLD", "NODES", "STEP", "SAMPLES/S", "NCCL ERR", "SUBMITTED"]);
@@ -247,10 +264,12 @@ pub fn jobs(list: &[JobSummary], json: bool) {
             Cell::new(ts(j.submitted_unix_s)),
         ]);
     }
-    println!("{t}");
+    let mut out = String::new();
+    line!(out, "{t}");
+    out
 }
 
-pub fn job_detail(j: &JobSummary, json: bool) {
+pub fn job_detail(j: &JobSummary, json: bool) -> String {
     if json {
         let m = j.metrics.clone().unwrap_or_default();
         let p = j.plan.clone().unwrap_or_default();
@@ -287,14 +306,18 @@ pub fn job_detail(j: &JobSummary, json: bool) {
         }));
     }
 
+    let mut out = String::new();
     let p = j.plan.clone().unwrap_or_default();
-    println!("Job     {}  ({})", j.job_id, j.name);
-    println!("Phase   {}", j.phase().label());
-    println!(
+    line!(out, "Job     {}  ({})", j.job_id, j.name);
+    line!(out, "Phase   {}", j.phase().label());
+    line!(
+        out,
         "Rendez  MASTER_ADDR={} MASTER_PORT={} WORLD_SIZE={}",
-        p.master_addr, p.master_port, p.world_size
+        p.master_addr,
+        p.master_port,
+        p.world_size
     );
-    println!();
+    line!(out);
 
     let mut t = table(&["RANK", "NODE", "GPUS", "PHASE", "EXIT", "STARTED", "ENDED", "MESSAGE"]);
     for pl in &p.placements {
@@ -311,7 +334,7 @@ pub fn job_detail(j: &JobSummary, json: bool) {
             Cell::new(st.map(|s| s.message.clone()).unwrap_or_default()),
         ]);
     }
-    println!("{t}");
+    line!(out, "{t}");
 
     let m = j.metrics.clone().unwrap_or_default();
     let mut mt = table(&["STEP", "LOSS", "SAMPLES/S", "TOKENS/S", "STEP MS", "PEAK VRAM GB", "AVG GPU UTIL"]);
@@ -324,17 +347,18 @@ pub fn job_detail(j: &JobSummary, json: bool) {
         Cell::new(num(m.peak_vram_gb)),
         Cell::new(format!("{:.0}%", m.avg_gpu_util_pct)),
     ]);
-    println!("{mt}");
+    line!(out, "{mt}");
 
     if !j.nccl_errors.is_empty() {
-        println!("\nNCCL / distributed errors ({}):", j.nccl_errors.len());
+        line!(out, "\nNCCL / distributed errors ({}):", j.nccl_errors.len());
         for e in j.nccl_errors.iter().take(20) {
-            println!("  {e}");
+            line!(out, "  {e}");
         }
     }
+    out
 }
 
-pub fn submit(r: &SubmitJobResponse, json: bool) {
+pub fn submit(r: &SubmitJobResponse, json: bool) -> String {
     if json {
         let p = r.plan.clone().unwrap_or_default();
         return dump(&serde_json::json!({
@@ -353,24 +377,31 @@ pub fn submit(r: &SubmitJobResponse, json: bool) {
     }
 
     if !r.accepted {
+        // A rejection is not a view; it belongs on stderr next to the exit code.
         eprintln!("submit failed: {}", r.message);
-        return;
+        return String::new();
     }
 
+    let mut out = String::new();
     let p = r.plan.clone().unwrap_or_default();
-    println!("Submitted {}", r.job_id);
-    println!(
+    line!(out, "Submitted {}", r.job_id);
+    line!(
+        out,
         "  MASTER_ADDR={}  MASTER_PORT={}  WORLD_SIZE={}",
-        p.master_addr, p.master_port, p.world_size
+        p.master_addr,
+        p.master_port,
+        p.world_size
     );
     for pl in &p.placements {
-        println!(
+        line!(
+            out,
             "  NODE_RANK={}  node={}  gpus=[{}]",
             pl.node_rank,
             pl.node_id,
             pl.gpu_indices.iter().map(|g| g.to_string()).collect::<Vec<_>>().join(",")
         );
     }
+    out
 }
 
 pub fn log_line(l: &LogLine) {
@@ -383,7 +414,7 @@ pub fn log_line(l: &LogLine) {
 }
 
 /// One-screen live view: GPUs with utilisation bars, plus anything running.
-pub fn dashboard(nodes: &[NodeState], gpus: &[GpuEntry], jobs: &[JobSummary]) {
+pub fn dashboard(nodes: &[NodeState], gpus: &[GpuEntry], jobs: &[JobSummary]) -> String {
     let ready = nodes.iter().filter(|n| n.healthy).count();
     let stale: Vec<&str> = nodes
         .iter()
@@ -406,7 +437,9 @@ pub fn dashboard(nodes: &[NodeState], gpus: &[GpuEntry], jobs: &[JobSummary]) {
         .max()
         .unwrap_or(0);
 
-    println!(
+    let mut out = String::new();
+    line!(
+        out,
         "nodes {ready}/{} ready   GPUs {free}/{} free   VRAM {} / {}   data age <={oldest}s",
         nodes.len(),
         gpus.len(),
@@ -414,9 +447,9 @@ pub fn dashboard(nodes: &[NodeState], gpus: &[GpuEntry], jobs: &[JobSummary]) {
         fmt_gib(total_b)
     );
     if !stale.is_empty() {
-        println!("  ! not reporting: {}", stale.join(", "));
+        line!(out, "  ! not reporting: {}", stale.join(", "));
     }
-    println!();
+    line!(out);
 
     let mut t = table(&["NODE", "IDX", "GPU", "UTIL", "", "VRAM", "TEMP", "POWER", "JOB"]);
     for e in gpus {
@@ -455,15 +488,15 @@ pub fn dashboard(nodes: &[NodeState], gpus: &[GpuEntry], jobs: &[JobSummary]) {
             },
         ]);
     }
-    println!("{t}");
+    line!(out, "{t}");
 
     let live: Vec<&JobSummary> = jobs.iter().filter(|j| !j.phase().is_terminal()).collect();
     if live.is_empty() {
-        println!("\nNo running jobs.");
-        return;
+        line!(out, "\nNo running jobs.");
+        return out;
     }
 
-    println!();
+    line!(out);
     let mut jt = table(&["JOB", "NAME", "PHASE", "WORLD", "STEP", "LOSS", "TOKENS/S", "STEP MS", "VRAM GB", "NCCL ERR"]);
     for j in live {
         let m = j.metrics.clone().unwrap_or_default();
@@ -485,7 +518,8 @@ pub fn dashboard(nodes: &[NodeState], gpus: &[GpuEntry], jobs: &[JobSummary]) {
             },
         ]);
     }
-    println!("{jt}");
+    line!(out, "{jt}");
+    out
 }
 
 fn elapsed(started: i64) -> String {
@@ -504,7 +538,7 @@ fn elapsed(started: i64) -> String {
 
 /// `ferro ps`: one row per rank, so you can see which node and which cards a
 /// job is actually occupying rather than just that it exists.
-pub fn processes(procs: &[ProcessEntry], json: bool) {
+pub fn processes(procs: &[ProcessEntry], json: bool) -> String {
     if json {
         let v: Vec<_> = procs
             .iter()
@@ -532,8 +566,7 @@ pub fn processes(procs: &[ProcessEntry], json: bool) {
     }
 
     if procs.is_empty() {
-        println!("Nothing running.");
-        return;
+        return "Nothing running.\n".into();
     }
 
     let mut t = table(&["JOB", "USER", "NAME", "NODE", "RANK", "GPUS", "PHASE", "UPTIME", "UTIL", "VRAM", "STEP", "TOKENS/S"]);
@@ -568,13 +601,15 @@ pub fn processes(procs: &[ProcessEntry], json: bool) {
             Cell::new(num(m.tokens_per_s)),
         ]);
     }
-    println!("{t}");
-    println!("{} rank(s) running", procs.len());
+    let mut out = String::new();
+    line!(out, "{t}");
+    line!(out, "{} rank(s) running", procs.len());
+    out
 }
 
 /// `ferro bench`: measured throughput per GPU, with a relative column so it is
 /// obvious which cards the scheduler will favour.
-pub fn benchmarks(results: &[GpuBenchmark], json: bool) {
+pub fn benchmarks(results: &[GpuBenchmark], json: bool) -> String {
     if json {
         let v: Vec<_> = results
             .iter()
@@ -589,8 +624,7 @@ pub fn benchmarks(results: &[GpuBenchmark], json: bool) {
     }
 
     if results.is_empty() {
-        println!("No results.");
-        return;
+        return "No results.\n".into();
     }
 
     let best = results.iter().map(|r| r.tflops).fold(0.0_f64, f64::max);
@@ -619,11 +653,13 @@ pub fn benchmarks(results: &[GpuBenchmark], json: bool) {
             },
         ]);
     }
-    println!("{t}");
-    println!("Scores are cached on each node and used to rank placements.");
+    let mut out = String::new();
+    line!(out, "{t}");
+    line!(out, "Scores are cached on each node and used to rank placements.");
+    out
 }
 
-pub fn plugins(list: &[PluginInfo], json: bool) {
+pub fn plugins(list: &[PluginInfo], json: bool) -> String {
     if json {
         let v: Vec<_> = list
             .iter()
@@ -638,10 +674,10 @@ pub fn plugins(list: &[PluginInfo], json: bool) {
     }
 
     if list.is_empty() {
-        println!("No plugins configured.");
-        println!("Copy plugins.example.toml to ~/.config/ferrogrid/plugins.toml on the");
-        println!("controller host and restart it.");
-        return;
+        return "No plugins configured.\n\
+                Copy plugins.example.toml to ~/.config/ferrogrid/plugins.toml on the\n\
+                controller host and restart it.\n"
+            .into();
     }
 
     let mut t = table(&["PLUGIN", "FETCH", "PUSH", "DESCRIPTION"]);
@@ -660,10 +696,12 @@ pub fn plugins(list: &[PluginInfo], json: bool) {
             Cell::new(&p.description),
         ]);
     }
-    println!("{t}");
+    let mut out = String::new();
+    line!(out, "{t}");
+    out
 }
 
-pub fn transfer(results: &[PluginResult], json: bool) {
+pub fn transfer(results: &[PluginResult], json: bool) -> String {
     if json {
         let v: Vec<_> = results
             .iter()
@@ -689,22 +727,24 @@ pub fn transfer(results: &[PluginResult], json: bool) {
             Cell::new(format!("{:.1}s", r.seconds)),
         ]);
     }
-    println!("{t}");
+    let mut out = String::new();
+    line!(out, "{t}");
 
     // Only the failures' output, and only the tail of it: a successful
     // transfer's progress bars are noise, a failure's last lines are the reason.
     for r in results.iter().filter(|r| r.exit_code != 0) {
-        println!("\n--- {} ---", r.node_id);
-        for line in r.error.lines().rev().take(12).collect::<Vec<_>>().iter().rev() {
-            println!("  {line}");
+        line!(out, "\n--- {} ---", r.node_id);
+        for l in r.error.lines().rev().take(12).collect::<Vec<_>>().iter().rev() {
+            line!(out, "  {l}");
         }
         if r.error.trim().is_empty() {
-            for line in r.output.lines().rev().take(8).collect::<Vec<_>>().iter().rev() {
-                println!("  {line}");
+            for l in r.output.lines().rev().take(8).collect::<Vec<_>>().iter().rev() {
+                line!(out, "  {l}");
             }
         }
     }
 
     let ok = results.iter().filter(|r| r.exit_code == 0).count();
-    println!("\n{ok}/{} node(s) succeeded", results.len());
+    line!(out, "\n{ok}/{} node(s) succeeded", results.len());
+    out
 }

@@ -58,6 +58,12 @@ See README.md for architecture, deployment and measured results.
 - Live views (`ferro watch`, `-w` on the read-only commands) redraw faster than
   agents report. Always surface data age alongside the numbers -- a stale
   reading looks exactly like an idle GPU otherwise.
+- Renderers build a frame and return it; only `main` prints. Clearing the
+  screen and then fetching leaves it blank for the whole round-trip, which at
+  `-n 1` is the flicker. `Screen` overwrites the previous frame in one write
+  (`\x1b[K` per line, `\x1b[J` at the end) and clears only on the first frame
+  and on resize, and it trims the frame to the window: a view that scrolls puts
+  the next repaint a row off and smears.
 
 - Training scripts report metrics by printing `FERRO_METRIC {json}` on stdout.
 - Agents resolve relative script paths against their own `--workspace`

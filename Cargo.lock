@@ -381,6 +381,7 @@ dependencies = [
  "chrono",
  "clap",
  "comfy-table",
+ "crossterm",
  "ferro-gpu",
  "ferro-proto",
  "prost",

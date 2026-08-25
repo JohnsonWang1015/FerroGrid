@@ -7,6 +7,7 @@ use clap::{Parser, Subcommand};
 use ferro_proto::controller_client::ControllerClient;
 use ferro_proto::*;
 use std::collections::HashMap;
+use std::io::Write;
 use tonic::transport::Channel;
 
 #[derive(Parser, Debug)]
@@ -242,8 +243,7 @@ async fn main() -> Result<()> {
             repeat(watch, cli.json, || async {
                 let mut c = client.clone();
                 let r = c.list_nodes(ListNodesRequest {}).await?.into_inner();
-                render::nodes(&r.nodes, cli.json);
-                Ok(())
+                Ok(render::nodes(&r.nodes, cli.json))
             })
             .await?;
         }
@@ -251,8 +251,7 @@ async fn main() -> Result<()> {
             repeat(watch, cli.json, || async {
                 let mut c = client.clone();
                 let r = c.list_gpus(ListGpusRequest {}).await?.into_inner();
-                render::gpus(&r.gpus, cli.json);
-                Ok(())
+                Ok(render::gpus(&r.gpus, cli.json))
             })
             .await?;
         }
@@ -263,8 +262,7 @@ async fn main() -> Result<()> {
                 let nodes = c.list_nodes(ListNodesRequest {}).await?.into_inner();
                 let gpus = c.list_gpus(ListGpusRequest {}).await?.into_inner();
                 let jobs = c.list_jobs(ListJobsRequest { limit: 8 }).await?.into_inner();
-                render::dashboard(&nodes.nodes, &gpus.gpus, &jobs.jobs);
-                Ok(())
+                Ok(render::dashboard(&nodes.nodes, &gpus.gpus, &jobs.jobs))
             })
             .await?;
         }
@@ -272,14 +270,13 @@ async fn main() -> Result<()> {
             repeat(watch, cli.json, || async {
                 let mut c = client.clone();
                 let r = c.list_processes(ListProcessesRequest {}).await?.into_inner();
-                render::processes(&r.processes, cli.json);
-                Ok(())
+                Ok(render::processes(&r.processes, cli.json))
             })
             .await?;
         }
         Cmd::Plugins => {
             let r = client.list_plugins(ListPluginsRequest {}).await?.into_inner();
-            render::plugins(&r.plugins, cli.json);
+            print!("{}", render::plugins(&r.plugins, cli.json));
         }
         // Bind the action before destructuring, so the match arm can move `a`.
         ref c @ (Cmd::Fetch(ref a) | Cmd::Push(ref a)) => {
@@ -296,7 +293,7 @@ async fn main() -> Result<()> {
                 })
                 .await?
                 .into_inner();
-            render::transfer(&r.results, cli.json);
+            print!("{}", render::transfer(&r.results, cli.json));
             if r.results.iter().any(|x| x.exit_code != 0) {
                 std::process::exit(1);
             }
@@ -307,14 +304,13 @@ async fn main() -> Result<()> {
                 .benchmark_nodes(BenchmarkNodesRequest { node_filter, force })
                 .await?
                 .into_inner();
-            render::benchmarks(&r.results, cli.json);
+            print!("{}", render::benchmarks(&r.results, cli.json));
         }
         Cmd::Jobs { limit, watch } => {
             repeat(watch, cli.json, || async {
                 let mut c = client.clone();
                 let r = c.list_jobs(ListJobsRequest { limit }).await?.into_inner();
-                render::jobs(&r.jobs, cli.json);
-                Ok(())
+                Ok(render::jobs(&r.jobs, cli.json))
             })
             .await?;
         }
@@ -325,8 +321,7 @@ async fn main() -> Result<()> {
                     .get_job(GetJobRequest { job_id: job_id.clone() })
                     .await?
                     .into_inner();
-                render::job_detail(&r, cli.json);
-                Ok(())
+                Ok(render::job_detail(&r, cli.json))
             })
             .await?;
         }
@@ -442,7 +437,7 @@ fn sync_project(nodes: &[NodeState], args: &SyncArgs) -> Result<()> {
     Ok(())
 }
 
-/// Run `f` once, or repeatedly with a cleared screen when watching.
+/// Run `f` once, or repeatedly as a live view when watching.
 ///
 /// Note the refresh rate is bounded below by the agents' heartbeat interval
 /// (controller `--heartbeat-secs`, default 3): asking for -n 1 redraws every
@@ -451,25 +446,124 @@ fn sync_project(nodes: &[NodeState], args: &SyncArgs) -> Result<()> {
 async fn repeat<F, Fut>(w: WatchArgs, json: bool, mut f: F) -> Result<()>
 where
     F: FnMut() -> Fut,
-    Fut: std::future::Future<Output = Result<()>>,
+    Fut: std::future::Future<Output = Result<String>>,
 {
     if !w.watch {
-        return f().await;
+        print!("{}", f().await?);
+        return Ok(());
     }
     if json {
         anyhow::bail!("--watch and --json cannot be combined");
     }
+
     let period = std::time::Duration::from_secs_f64(w.interval.max(0.1));
+    let mut screen = Screen::new();
     loop {
-        // Clear screen + home the cursor, the same trick `watch` uses.
-        print!("\x1b[2J\x1b[H");
-        println!(
-            "FerroGrid  {}   every {:.1}s   (Ctrl-C to exit)\n",
+        // Build the whole frame before anything reaches the terminal: the fetch
+        // below is most of the interval at -n 1, and a screen cleared before it
+        // is a screen that spends most of its life blank.
+        let frame = format!(
+            "FerroGrid  {}   every {:.1}s   (Ctrl-C to exit)\n\n{}",
             chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
-            w.interval
+            w.interval,
+            f().await?
         );
-        f().await?;
-        tokio::time::sleep(period).await;
+        screen.draw(&frame);
+
+        tokio::select! {
+            _ = tokio::time::sleep(period) => {}
+            // Leave the last frame up; `Screen`'s drop puts the cursor back.
+            // Whatever we leave behind, the next shell inherits.
+            _ = interrupted() => break,
+        }
+    }
+    Ok(())
+}
+
+/// Ctrl-C, or SIGTERM: `timeout 10 ferro watch` is a normal thing to script,
+/// and exiting without restoring the cursor leaves the operator without one.
+async fn interrupted() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        if let Ok(mut term) = signal(SignalKind::terminate()) {
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {}
+                _ = term.recv() => {}
+            }
+            return;
+        }
+    }
+    let _ = tokio::signal::ctrl_c().await;
+}
+
+/// A live view repainted in place.
+///
+/// Nothing is ever cleared in advance. Each frame is written over the previous
+/// one in a single write, erasing the tail of every line it lands on
+/// (`\x1b[K`) and whatever a shorter frame left below (`\x1b[J`). Clearing
+/// first -- what `watch(1)` does -- is what makes a one-second refresh flicker.
+struct Screen {
+    /// Terminal size the previous frame was laid out for. A resize rewraps the
+    /// tables, so the old and new lines no longer line up and the screen does
+    /// need one honest clear.
+    size: Option<(u16, u16)>,
+}
+
+impl Screen {
+    fn new() -> Self {
+        // A cursor parked mid-table and blinking through every repaint reads as
+        // flicker of its own.
+        print!("\x1b[?25l");
+        Self { size: None }
+    }
+
+    fn draw(&mut self, frame: &str) {
+        let size = crossterm::terminal::size().ok();
+        // A pty with no size set (a pipe, a `script` capture) reports zero;
+        // that is "unknown", not "no room", so nothing gets trimmed.
+        let rows = size
+            .filter(|(_, r)| *r >= 3)
+            .map(|(_, r)| r as usize)
+            .unwrap_or(usize::MAX);
+
+        let mut buf = String::with_capacity(frame.len() + 128);
+        if size != self.size {
+            buf.push_str("\x1b[2J");
+            self.size = size;
+        }
+        buf.push_str("\x1b[H");
+
+        // A frame taller than the window would scroll, and then the next
+        // repaint would land a row too high and smear. Stop one row short and
+        // say what was dropped instead.
+        let total = frame.lines().count();
+        for (drawn, l) in frame.lines().enumerate() {
+            if drawn + 1 >= rows {
+                let hidden = total - drawn;
+                buf.push_str(&format!(
+                    "\x1b[7m+{hidden} more line(s) -- enlarge the window\x1b[0m"
+                ));
+                break;
+            }
+            buf.push_str(l);
+            buf.push_str("\x1b[K\n");
+        }
+        buf.push_str("\x1b[J");
+
+        let mut out = std::io::stdout().lock();
+        let _ = out.write_all(buf.as_bytes());
+        let _ = out.flush();
+    }
+
+}
+
+impl Drop for Screen {
+    /// Also covers the error paths: a controller that goes away mid-watch must
+    /// not take the cursor with it.
+    fn drop(&mut self) {
+        print!("\x1b[?25h");
+        let _ = std::io::stdout().flush();
     }
 }
 
@@ -502,7 +596,7 @@ async fn train(client: &mut ControllerClient<Channel>, args: TrainArgs, json: bo
     };
 
     let resp = client.submit_job(req).await?.into_inner();
-    render::submit(&resp, json);
+    print!("{}", render::submit(&resp, json));
 
     if !resp.accepted {
         std::process::exit(1);
@@ -514,7 +608,7 @@ async fn train(client: &mut ControllerClient<Channel>, args: TrainArgs, json: bo
             .await?
             .into_inner();
         println!();
-        render::job_detail(&final_job, json);
+        print!("{}", render::job_detail(&final_job, json));
         if final_job.phase() != JobPhase::Succeeded {
             std::process::exit(1);
         }

@@ -367,7 +367,12 @@ on the agents' heartbeat (controller `--heartbeat-secs`, default 3), so
 `-n 1` redraws every second over data that changes every three. Both views
 show how stale the numbers are — an `AGE` column in `ferro nodes`, a
 `data age` figure in `ferro watch` — so a wedged agent reads as stale rather
-than as an idle GPU. Start the controller with `--heartbeat-secs 1` if you
+than as an idle GPU.
+
+Redraws are in place: the screen is never blanked before the fetch, so `-n 1`
+does not flicker the way `watch -n 1 nvidia-smi` does. A window too short for
+the view says how many lines it is hiding on the last row rather than
+scrolling, and Ctrl-C leaves the final frame on screen. Start the controller with `--heartbeat-secs 1` if you
 want the dashboard to genuinely track second by second.
 
 ### Running your own project
