@@ -53,6 +53,13 @@ See README.md for architecture, deployment and measured results.
   busy" clock that makes idleness a duration. A driver that cannot attribute
   utilisation at all must report *unknown*, never 0%: one of those is grounds
   for calling somebody's job a squatter and the other is not.
+- `ferro ps <pid>` reads the node live (`DescribeProcess`) instead of using the
+  heartbeat: the heartbeat's command is trimmed for the table and its numbers
+  are up to one interval old. The controller asks whichever node's last
+  heartbeat mentions the pid and falls back to asking everyone, because pids
+  are unique per machine and the heartbeat only lists GPU holders.
+- `/proc/<pid>/cmdline` is NUL-separated, not space-separated: splitting it on
+  whitespace leaves embedded NULs in the string and the terminal eats them.
 - `/proc/<pid>/stat` field 2 is the executable name and may itself contain
   spaces and parentheses, so parse from the *last* `)`. Process start time is
   `/proc/stat`'s `btime` + `starttime`/100 -- USER_HZ is 100 in the userspace

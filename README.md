@@ -242,6 +242,7 @@ ferro nodes                     # servers, health, driver, free GPU count
 ferro gpu                       # every GPU: VRAM, utilisation, temp, power, owning job
 ferro ps                        # what is running right now, per rank --
                                 #   plus every other process holding a GPU
+ferro ps <pid>                  # one process in full: command, cwd, holds
 ferro ps --by-user              # who is holding how much, where
 ferro ps --idle 6h              # VRAM held, nothing computing, for 6h+
 ferro watch                     # live dashboard: GPUs + running jobs, one screen
@@ -431,6 +432,32 @@ watching".
 ferro ps --idle 6h              # forgotten notebooks, not jobs between epochs
 ferro ps --by-user              # one row per person, biggest holder first
 ```
+
+`ferro ps <pid>` drops the table and describes one process, read fresh off the
+node rather than from the last heartbeat: its whole command line (the table
+only has room for a prefix, and the argument that says which run this is tends
+to be at the end), working directory, parent, RSS, every card it holds and how
+much of each, and the one command that would actually stop it — `docker kill`
+for a container, `ferro cancel` for a job of ours, `kill` otherwise.
+
+```
+$ ferro ps 3796021
+Process 3796021 on lab126
+  user       johnson (uid 1001)
+  process    S (sleeping), 33 thread(s), RSS 1.2 GiB
+  started    2026-08-26 00:58  (49s ago)
+  activity   98% of an SM attributed to this pid
+  gpu 0      NVIDIA GeForce RTX 3090 holding 7.5 GiB, card at 98%
+  cwd        /home/johnson/FerroGrid
+  parent     3795998 python .../torchrun --nnodes=1...
+  job        j500be58353  (ferro job j500be58353 / ferro logs j500be58353)
+  command    /home/johnson/FerroGrid/.venv/bin/python -u python/examples/train_fsdp2.py --steps 3000
+  stop it    ferro cancel j500be58353
+```
+
+Pids are unique per machine only, so every node that has one answers; a pid
+holding no GPU is described too, which is how you find out *which* machine it
+is on. `-w` works here as well, if you want to watch one process.
 
 `--by-user` folds the same data per person: nodes, GPUs, VRAM, how many of
 their processes are idle, and how long the oldest has been up. On a shared

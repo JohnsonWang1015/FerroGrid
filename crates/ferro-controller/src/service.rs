@@ -333,6 +333,42 @@ impl Controller for ControllerService {
         Ok(Response::new(ListProcessesResponse { processes }))
     }
 
+    async fn describe_process(
+        &self,
+        req: Request<DescribeProcessRequest>,
+    ) -> Result<Response<DescribeProcessResponse>, Status> {
+        let pid = req.into_inner().pid;
+
+        // Ask the node whose last heartbeat mentions the pid; if none does,
+        // ask every healthy node. Pids are unique per machine, so "which node
+        // is this even on" is half the question -- and the last heartbeat only
+        // lists processes that hold a GPU.
+        let nodes = self.registry.node_states().await;
+        let healthy: Vec<(String, String)> = nodes
+            .iter()
+            .filter(|n| n.healthy)
+            .filter_map(|n| n.info.as_ref())
+            .map(|i| (i.node_id.clone(), i.address.clone()))
+            .collect();
+        let known: Vec<(String, String)> = nodes
+            .iter()
+            .filter_map(|n| n.info.as_ref())
+            .filter(|i| i.processes.iter().any(|p| p.pid == pid))
+            .map(|i| (i.node_id.clone(), i.address.clone()))
+            .collect();
+        let targets = if known.is_empty() { healthy } else { known };
+
+        let mut matches = Vec::new();
+        for (node_id, address) in targets {
+            match describe_on(&address, pid).await {
+                Ok(detail) if detail.found => matches.push(detail),
+                Ok(_) => {}
+                Err(e) => tracing::debug!(node = %node_id, "describe pid {pid} failed: {e}"),
+            }
+        }
+        Ok(Response::new(DescribeProcessResponse { matches }))
+    }
+
     async fn benchmark_nodes(
         &self,
         req: Request<BenchmarkNodesRequest>,
@@ -629,6 +665,17 @@ impl Controller for ControllerService {
 }
 
 /// Cancel jobs that have outrun their wall-clock limit.
+async fn describe_on(addr: &str, pid: u32) -> Result<ProcessDetail, String> {
+    let mut client = NodeAgentClient::connect(endpoint(addr))
+        .await
+        .map_err(|e| format!("connect: {e}"))?;
+    Ok(client
+        .describe_process(DescribeProcessRequest { pid })
+        .await
+        .map_err(|e| e.message().to_string())?
+        .into_inner())
+}
+
 /// Ask the scheduler where this job goes. Auto mode picks the shape itself,
 /// which is why the caller cannot precompute it.
 fn plan_for(

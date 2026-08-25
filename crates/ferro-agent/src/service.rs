@@ -4,9 +4,9 @@ use crate::launcher;
 use crate::state::SharedState;
 use ferro_proto::node_agent_server::NodeAgent;
 use ferro_proto::{
-    BenchmarkRequest, BenchmarkResponse, ExecPluginRequest, ExecPluginResponse, GetNodeInfoRequest,
-    LaunchJobRequest, LaunchJobResponse, NodeInfo, PingRequest, PingResponse, StopJobRequest,
-    StopJobResponse,
+    BenchmarkRequest, BenchmarkResponse, DescribeProcessRequest, ExecPluginRequest,
+    ExecPluginResponse, GetNodeInfoRequest, LaunchJobRequest, LaunchJobResponse, NodeInfo,
+    PingRequest, PingResponse, ProcessDetail, StopJobRequest, StopJobResponse,
 };
 use tonic::{Request, Response, Status};
 
@@ -27,6 +27,14 @@ impl NodeAgent for AgentService {
         _req: Request<GetNodeInfoRequest>,
     ) -> Result<Response<NodeInfo>, Status> {
         Ok(Response::new(self.state.node_info().await))
+    }
+
+    async fn describe_process(
+        &self,
+        req: Request<DescribeProcessRequest>,
+    ) -> Result<Response<ProcessDetail>, Status> {
+        let pid = req.into_inner().pid;
+        Ok(Response::new(crate::procs::describe(&self.state, pid).await))
     }
 
     async fn launch_job(

@@ -54,6 +54,10 @@ enum Cmd {
     /// Show what is running right now, per rank, plus every other process
     /// holding a GPU.
     Ps {
+        /// Show one process in full instead of the table: its whole command
+        /// line, where it runs from, what it holds, and what would stop it.
+        pid: Option<u32>,
+
         /// Only processes that have been idle at least this long, VRAM held
         /// but nothing computing: --idle, --idle 6h. Default 1h.
         #[arg(long, value_parser = parse_duration, num_args = 0..=1,
@@ -284,7 +288,18 @@ async fn main() -> Result<()> {
             })
             .await?;
         }
-        Cmd::Ps { idle, by_user, watch } => {
+        // One pid in full, rather than everything in a table. Read fresh off
+        // the node: the table's copy is a heartbeat old and its command is
+        // trimmed to fit.
+        Cmd::Ps { pid: Some(pid), watch, .. } => {
+            repeat(watch, cli.json, || async {
+                let mut c = client.clone();
+                let r = c.describe_process(DescribeProcessRequest { pid }).await?.into_inner();
+                Ok(render::process_detail(pid, &r.matches, cli.json))
+            })
+            .await?;
+        }
+        Cmd::Ps { idle, by_user, watch, .. } => {
             repeat(watch, cli.json, || async {
                 let mut c = client.clone();
                 let r = c.list_processes(ListProcessesRequest {}).await?.into_inner();

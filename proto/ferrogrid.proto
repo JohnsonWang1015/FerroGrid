@@ -289,6 +289,59 @@ message ProcessEntry {
 }
 message ListProcessesResponse { repeated ProcessEntry processes = 1; }
 
+// `ferro ps <pid>`: everything about one process, read fresh off the node
+// rather than taken from the last heartbeat.
+message DescribeProcessRequest { uint32 pid = 1; }
+
+// One GPU a process is holding.
+message GpuHold {
+  uint32 index            = 1;
+  string name             = 2;
+  uint64 memory_used_b    = 3;   // this process's share
+  uint32 device_util_pct  = 4;   // the whole card, not this pid
+}
+
+message ProcessDetail {
+  string node_id         = 1;
+  uint32 pid             = 2;
+  // False when the node has no such process; the other fields are then unset.
+  bool found             = 3;
+  string user            = 4;
+  uint32 uid             = 5;
+  // The full command line, untruncated -- the table only has room for a
+  // prefix, and the argument that says which run this is tends to be at the
+  // end.
+  string command         = 6;
+  string cwd             = 7;
+  string state           = 8;    // running, sleeping, zombie, ...
+  uint32 threads         = 9;
+  uint64 rss_b           = 10;
+  int64 started_unix_s   = 11;
+  uint32 ppid            = 12;
+  string parent_command  = 13;
+  string container       = 14;
+  string container_id    = 15;
+  string job_id          = 16;
+  string kind            = 17;   // "compute" | "graphics"
+  uint32 utilization_pct = 18;
+  bool utilization_known = 19;
+  int64 busy_unix_s      = 20;
+  repeated GpuHold gpus  = 21;
+  // Login the agent runs as, for the "stop it with" hint.
+  string node_user       = 22;
+  // Whether `busy_unix_s` is a sighting or just when the agent started
+  // watching. "Idle since we started looking" is a weaker claim than "idle
+  // since it last did work", and the difference matters when the conclusion
+  // is that somebody should give a card back.
+  bool busy_seen         = 23;
+}
+
+message DescribeProcessResponse {
+  // One entry per node that has the pid. More than one is possible: pids are
+  // only unique per machine.
+  repeated ProcessDetail matches = 1;
+}
+
 // Plugins: external transfer tools (Nextcloud, S3, rsync, ...) that FerroGrid
 // invokes on the nodes rather than reimplementing.
 message PluginInfo {
@@ -360,6 +413,7 @@ service Controller {
   rpc GetJob(GetJobRequest) returns (JobSummary);
   rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
   rpc ListProcesses(ListProcessesRequest) returns (ListProcessesResponse);
+  rpc DescribeProcess(DescribeProcessRequest) returns (DescribeProcessResponse);
   rpc BenchmarkNodes(BenchmarkNodesRequest) returns (BenchmarkNodesResponse);
   rpc ListPlugins(ListPluginsRequest) returns (ListPluginsResponse);
   rpc RunPlugin(RunPluginRequest) returns (RunPluginResponse);
@@ -424,6 +478,7 @@ message PingResponse { string agent_version = 1; }
 
 service NodeAgent {
   rpc GetNodeInfo(GetNodeInfoRequest) returns (NodeInfo);
+  rpc DescribeProcess(DescribeProcessRequest) returns (ProcessDetail);
   rpc LaunchJob(LaunchJobRequest) returns (LaunchJobResponse);
   rpc StopJob(StopJobRequest) returns (StopJobResponse);
   rpc Ping(PingRequest) returns (PingResponse);

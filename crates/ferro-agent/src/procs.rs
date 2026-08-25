@@ -13,7 +13,7 @@
 //! GiB" is the useful half of the answer.
 
 use crate::state::AgentState;
-use ferro_proto::GpuProcess;
+use ferro_proto::{GpuHold, GpuProcess, ProcessDetail};
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
@@ -32,9 +32,9 @@ pub struct Lookups {
     containers_refreshed_s: i64,
     /// uid -> login name.
     users: HashMap<u32, String>,
-    /// pid -> last time it was seen using the GPU. Idleness is a duration, and
+    /// pid -> when it was last seen using the GPU. Idleness is a duration and
     /// NVML only ever reports an instant, so somebody has to keep the clock.
-    busy: HashMap<u32, i64>,
+    busy: HashMap<u32, Busy>,
 }
 
 fn now_s() -> i64 {
@@ -93,9 +93,9 @@ pub async fn snapshot(state: &AgentState) -> Vec<GpuProcess> {
             // A pid we have never seen starts its idle clock now: the agent
             // may have just started, and "unknown since boot" must not be
             // reported as "idle since boot".
-            let e = lookups.busy.entry(*pid).or_insert(now);
+            let e = lookups.busy.entry(*pid).or_insert(Busy { at: now, seen: false });
             if busy {
-                *e = now;
+                *e = Busy { at: now, seen: true };
             }
         }
         lookups.busy.retain(|pid, _| live.contains(pid));
@@ -133,10 +133,115 @@ pub async fn snapshot(state: &AgentState) -> Vec<GpuProcess> {
             kind: if p.graphics { "graphics" } else { "compute" }.into(),
             utilization_pct: util.as_ref().and_then(|u| u.get(&p.pid).copied()).unwrap_or(0),
             utilization_known: util.is_some(),
-            busy_unix_s: lookups.busy.get(&p.pid).copied().unwrap_or(0),
+            busy_unix_s: lookups.busy.get(&p.pid).map(|b| b.at).unwrap_or(0),
         });
     }
     out
+}
+
+/// Everything about one pid, read now rather than taken from the last
+/// heartbeat: the table has room for a prefix of the command, and the argument
+/// that says which run this is tends to be at the end of it.
+///
+/// Answers for any pid on this node, not just the ones holding a GPU -- "which
+/// machine is this pid even on" is half the question.
+pub async fn describe(state: &AgentState, pid: u32) -> ProcessDetail {
+    let mut out = ProcessDetail {
+        node_id: state.node_id.clone(),
+        pid,
+        node_user: std::env::var("USER").unwrap_or_default(),
+        ..Default::default()
+    };
+    if !std::path::Path::new(&format!("/proc/{pid}")).exists() {
+        return out;
+    }
+    out.found = true;
+
+    let d = read_details(pid);
+    out.uid = d.uid.unwrap_or_default();
+    out.cwd = std::fs::read_link(format!("/proc/{pid}/cwd"))
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    // The full argv this time; the heartbeat's copy is trimmed for the table.
+    out.command = cmdline(pid);
+    if out.command.is_empty() {
+        out.command = d.command.clone();
+    }
+    out.started_unix_s = d.started_unix_s;
+    out.container_id = d.container_id.clone().unwrap_or_default();
+
+    if let Ok(status) = std::fs::read_to_string(format!("/proc/{pid}/status")) {
+        out.state = parse_status_field(&status, "State:").unwrap_or_default();
+        out.threads = parse_status_field(&status, "Threads:")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+        out.rss_b = parse_status_field(&status, "VmRSS:")
+            .and_then(|v| v.split_whitespace().next().and_then(|kb| kb.parse::<u64>().ok()))
+            .map(|kb| kb * 1024)
+            .unwrap_or(0);
+    }
+
+    // The parent is what tells a stray worker from a supervised one: a
+    // container's processes hang off containerd, ours off the agent.
+    if let Some((ppid, _)) = read_stat(pid) {
+        out.ppid = ppid;
+        if ppid > 0 {
+            out.parent_command = read_command(ppid);
+        }
+    }
+
+    let holds = state.monitor.processes();
+    let util = state.monitor.process_utilization();
+    let mut lookups = state.lookups.lock().await;
+    out.user = user_name(&mut lookups, d.uid);
+    if let Some(b) = lookups.busy.get(&pid) {
+        out.busy_unix_s = b.at;
+        out.busy_seen = b.seen;
+    }
+    out.utilization_known = util.is_some();
+    out.utilization_pct = util.as_ref().and_then(|u| u.get(&pid).copied()).unwrap_or(0);
+
+    if let Some(id) = d.container_id.as_ref() {
+        // One `docker ps` at most, and only when the process is in a container.
+        let mut wanted: HashMap<u32, Details> = HashMap::new();
+        wanted.insert(pid, d.clone());
+        resolve_containers(&mut lookups, &wanted).await;
+        out.container = lookups.containers.get(id).cloned().unwrap_or_default();
+    }
+    drop(lookups);
+
+    let gpus = state.gpu_snapshot().await;
+    for h in holds.iter().filter(|h| h.pid == pid) {
+        let dev = gpus.iter().find(|g| g.index == h.gpu_index);
+        out.kind = if h.graphics { "graphics" } else { "compute" }.into();
+        out.gpus.push(GpuHold {
+            index: h.gpu_index,
+            name: dev.map(|g| g.name.clone()).unwrap_or_default(),
+            memory_used_b: h.memory_used_b,
+            device_util_pct: dev.map(|g| g.utilization_pct).unwrap_or(0),
+        });
+        if out.job_id.is_empty() {
+            out.job_id = dev.map(|g| g.allocated_job_id.clone()).unwrap_or_default();
+        }
+    }
+    out
+}
+
+/// `Name:\tvalue` lines in `/proc/<pid>/status`.
+fn parse_status_field(status: &str, field: &str) -> Option<String> {
+    status
+        .lines()
+        .find(|l| l.starts_with(field))
+        .map(|l| l[field.len()..].trim().to_string())
+}
+
+/// When a process was last seen working, and whether that is a sighting at
+/// all: a pid first seen while idle starts its clock now, and saying so is the
+/// difference between "idle for 7h" and "idle for as long as we have looked".
+#[derive(Clone, Copy, Default)]
+struct Busy {
+    at: i64,
+    seen: bool,
 }
 
 #[derive(Clone, Default)]
@@ -163,17 +268,23 @@ fn read_details(pid: u32) -> Details {
     d
 }
 
+/// The whole command line, NUL-separated argv joined with spaces. `python -c`
+/// puts an entire script in one element, so newlines are collapsed too --
+/// kept verbatim they turn one table row into twenty.
+fn cmdline(pid: u32) -> String {
+    let raw = std::fs::read(format!("/proc/{pid}/cmdline")).unwrap_or_default();
+    one_line(
+        &String::from_utf8_lossy(&raw)
+            .split('\0')
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join(" "),
+    )
+}
+
 /// argv joined for display; `comm` when the process is not ours to read.
 fn read_command(pid: u32) -> String {
-    let raw = std::fs::read(format!("/proc/{pid}/cmdline")).unwrap_or_default();
-    let joined = String::from_utf8_lossy(&raw)
-        .split('\0')
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ");
-    // `python -c` puts a whole script in one argv element; kept verbatim it
-    // turns one table row into twenty.
-    let joined = one_line(&joined);
+    let joined = cmdline(pid);
     let cmd = if joined.is_empty() {
         // Kernel threads have an empty cmdline, and so do zombies.
         std::fs::read_to_string(format!("/proc/{pid}/comm"))
@@ -386,6 +497,15 @@ mod tests {
         fields[19] = "8371".into(); // field 22: starttime
         let stat = format!("42 (py (a b) thon) {}", fields.join(" "));
         assert_eq!(parse_stat(&stat), Some((1234, 8371)));
+    }
+
+    #[test]
+    fn status_fields_come_back_trimmed() {
+        let status = "Name:\tpython\nState:\tS (sleeping)\nThreads:\t12\nVmRSS:\t  4096 kB\n";
+        assert_eq!(parse_status_field(status, "State:").as_deref(), Some("S (sleeping)"));
+        assert_eq!(parse_status_field(status, "Threads:").as_deref(), Some("12"));
+        assert_eq!(parse_status_field(status, "VmRSS:").as_deref(), Some("4096 kB"));
+        assert_eq!(parse_status_field(status, "Nope:"), None);
     }
 
     #[test]

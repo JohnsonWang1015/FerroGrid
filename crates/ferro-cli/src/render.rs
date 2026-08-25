@@ -37,6 +37,31 @@ macro_rules! line {
 /// libel a job between epochs.
 const IDLE_AFTER_S: i64 = 3600;
 
+/// GiB reads as "0.0 GiB" for anything small; host RSS is often megabytes.
+fn fmt_bytes(b: u64) -> String {
+    const MIB: f64 = (1u64 << 20) as f64;
+    match b {
+        0 => "-".into(),
+        b if b < (1 << 30) => format!("{:.0} MiB", b as f64 / MIB),
+        b => fmt_gib(b),
+    }
+}
+
+/// A timestamp that is still readable days later: `ts` alone gives a time of
+/// day, which is no use on a process that started three weeks ago.
+fn stamp(unix: i64) -> String {
+    if unix <= 0 {
+        return "-".into();
+    }
+    match chrono::DateTime::from_timestamp(unix, 0) {
+        Some(t) => t
+            .with_timezone(&chrono::Local)
+            .format("%Y-%m-%d %H:%M")
+            .to_string(),
+        None => "-".into(),
+    }
+}
+
 /// Compact duration for a table cell: 45s, 12m, 3h, 5d.
 fn short_dur(secs: i64) -> String {
     match secs {
@@ -826,7 +851,165 @@ pub fn processes_by_user(procs: &[ProcessEntry], json: bool) -> String {
     out
 }
 
-/// How long a process has been holding VRAM without computing, when the
+/// `ferro ps <pid>`: one process in full.
+///
+/// Everything the table has no room for -- the whole command line, where it
+/// runs from, what its parent is, which cards it holds and how much of each --
+/// plus the one command that would stop it, which is different for a container
+/// than for a host process.
+pub fn process_detail(pid: u32, matches: &[ProcessDetail], json: bool) -> String {
+    if json {
+        let v: Vec<_> = matches
+            .iter()
+            .map(|d| {
+                serde_json::json!({
+                    "node_id": d.node_id,
+                    "pid": d.pid,
+                    "user": d.user,
+                    "uid": d.uid,
+                    "command": d.command,
+                    "cwd": d.cwd,
+                    "state": d.state,
+                    "threads": d.threads,
+                    "rss_b": d.rss_b,
+                    "started_unix_s": d.started_unix_s,
+                    "ppid": d.ppid,
+                    "parent_command": d.parent_command,
+                    "container": d.container,
+                    "container_id": d.container_id,
+                    "job_id": d.job_id,
+                    "kind": d.kind,
+                    "utilization_pct": d.utilization_known.then_some(d.utilization_pct),
+                    "busy_unix_s": d.busy_unix_s,
+                    "gpus": d.gpus.iter().map(|g| serde_json::json!({
+                        "index": g.index,
+                        "name": g.name,
+                        "memory_used_b": g.memory_used_b,
+                        "device_util_pct": g.device_util_pct,
+                    })).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+        return dump(&v);
+    }
+
+    if matches.is_empty() {
+        // Not "no such process": the agents answer for their own machines, and
+        // one of them being unreachable looks the same from here.
+        let mut out = String::new();
+        line!(out, "No process {pid} on any reporting node.");
+        line!(out, "It may have exited, or be on a node whose agent is not reporting.");
+        return out;
+    }
+
+    let mut out = String::new();
+    for (i, d) in matches.iter().enumerate() {
+        if i > 0 {
+            line!(out);
+        }
+        // Pids are unique per machine only, so two nodes can both be right.
+        line!(out, "Process {} on {}", d.pid, d.node_id);
+        line!(out, "  user       {}{}", who_is(d), owner_note(d));
+        line!(
+            out,
+            "  process    {}, {} thread(s), RSS {}",
+            if d.state.is_empty() { "?".into() } else { d.state.clone() },
+            d.threads,
+            fmt_bytes(d.rss_b)
+        );
+        line!(out, "  started    {}  ({} ago)", stamp(d.started_unix_s), elapsed(d.started_unix_s));
+        // Only meaningful for a process on a GPU: "idle" here is about SM
+        // time, not about whether the process is doing anything at all.
+        if !d.gpus.is_empty() {
+            line!(out, "  activity   {}", activity(d));
+        }
+
+        for g in &d.gpus {
+            line!(
+                out,
+                "  gpu {:<6} {} holding {}, card at {}%",
+                g.index,
+                if g.name.is_empty() { "GPU".into() } else { g.name.clone() },
+                fmt_gib(g.memory_used_b),
+                g.device_util_pct
+            );
+        }
+        if d.gpus.is_empty() {
+            line!(out, "  gpu        none -- this process is not holding a GPU");
+        }
+
+        if !d.container.is_empty() || !d.container_id.is_empty() {
+            let id: String = d.container_id.chars().take(12).collect();
+            line!(out, "  container  {} ({id})", short_or(&d.container, "?"));
+        }
+        if !d.cwd.is_empty() {
+            line!(out, "  cwd        {}", d.cwd);
+        }
+        if d.ppid > 0 {
+            line!(out, "  parent     {} {}", d.ppid, shorten(&d.parent_command, 60));
+        }
+        if d.job_id.is_empty() {
+            line!(out, "  job        -- not launched by FerroGrid");
+        } else {
+            line!(out, "  job        {}  (ferro job {} / ferro logs {})", d.job_id, d.job_id, d.job_id);
+        }
+        line!(out, "  command    {}", short_or(&d.command, "?"));
+        line!(out, "  stop it    {}", stop_hint(d));
+    }
+    out
+}
+
+fn short_or(s: &str, fallback: &str) -> String {
+    if s.is_empty() { fallback.to_string() } else { s.to_string() }
+}
+
+fn who_is(d: &ProcessDetail) -> String {
+    if d.user.is_empty() { format!("uid {}", d.uid) } else { d.user.clone() }
+}
+
+/// Name the account only when it adds something the name does not.
+fn owner_note(d: &ProcessDetail) -> String {
+    if d.user.is_empty() {
+        String::new()
+    } else {
+        format!(" (uid {})", d.uid)
+    }
+}
+
+fn activity(d: &ProcessDetail) -> String {
+    if !d.utilization_known {
+        return "unknown -- this driver cannot attribute utilisation to a pid".into();
+    }
+    if d.utilization_pct > 0 {
+        return format!("{}% of an SM attributed to this pid", d.utilization_pct);
+    }
+    if d.busy_unix_s <= 0 {
+        return "idle right now".into();
+    }
+    let idle = short_dur((now_s() - d.busy_unix_s).max(0));
+    if d.busy_seen {
+        format!("idle {idle} -- last did work at {}", stamp(d.busy_unix_s))
+    } else {
+        // Never caught working, which is only as strong a claim as the agent
+        // is old: it starts every pid's clock the first time it sees it.
+        format!("idle {idle} -- nothing seen since watching began at {}", stamp(d.busy_unix_s))
+    }
+}
+
+/// What would actually stop it. `kill` on a containerised pid usually bounces
+/// off a restart policy, and the container name is not visible from the host
+/// process table -- which is the whole reason to say it here.
+fn stop_hint(d: &ProcessDetail) -> String {
+    if !d.job_id.is_empty() {
+        return format!("ferro cancel {}", d.job_id);
+    }
+    if !d.container.is_empty() {
+        return format!("docker kill {} -- on {}", d.container, d.node_id);
+    }
+    format!("kill {} on {} -- needs {} or root", d.pid, d.node_id, who_is(d))
+}
+
+/// How long a process has been holding VRAM without computing, when the/// How long a process has been holding VRAM without computing, when the
 /// driver could tell us. `None` means the question is unanswerable here, which
 /// is not the same as "busy" -- and only one of the two justifies calling
 /// somebody's job a squatter.
