@@ -459,6 +459,13 @@ Pids are unique per machine only, so every node that has one answers; a pid
 holding no GPU is described too, which is how you find out *which* machine it
 is on. `-w` works here as well, if you want to watch one process.
 
+Command lines are redacted at the agent: an argument following `--api-key`,
+`--token`, `--password` and friends (or after the `=` in `HF_TOKEN=...`) is
+replaced before it leaves the node. A command line is already readable by
+anyone on that machine, but FerroGrid copies it to everyone holding a client
+and into every JSON dump — somebody else's inference-server key is not ours to
+publish.
+
 `--by-user` folds the same data per person: nodes, GPUs, VRAM, how many of
 their processes are idle, and how long the oldest has been up. On a shared
 cluster the question is rarely "which processes exist" but "whose are they, and

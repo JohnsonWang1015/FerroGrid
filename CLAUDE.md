@@ -58,6 +58,10 @@ See README.md for architecture, deployment and measured results.
   are up to one interval old. The controller asks whichever node's last
   heartbeat mentions the pid and falls back to asking everyone, because pids
   are unique per machine and the heartbeat only lists GPU holders.
+- Command lines reported upstream are redacted for credential-looking flags in
+  `procs::redact_secrets`. `ps` on the node shows the same string to anyone
+  logged in there, but FerroGrid fans it out to every client and JSON dump; a
+  real lab box had an inference server running with `--api-key` in argv.
 - `/proc/<pid>/cmdline` is NUL-separated, not space-separated: splitting it on
   whitespace leaves embedded NULs in the string and the terminal eats them.
 - `/proc/<pid>/stat` field 2 is the executable name and may itself contain

@@ -273,13 +273,50 @@ fn read_details(pid: u32) -> Details {
 /// kept verbatim they turn one table row into twenty.
 fn cmdline(pid: u32) -> String {
     let raw = std::fs::read(format!("/proc/{pid}/cmdline")).unwrap_or_default();
-    one_line(
-        &String::from_utf8_lossy(&raw)
-            .split('\0')
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join(" "),
-    )
+    let argv: Vec<String> = String::from_utf8_lossy(&raw)
+        .split('\0')
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect();
+    one_line(&redact_secrets(argv).join(" "))
+}
+
+/// Flag names whose value is a credential. Not exhaustive and not meant to be:
+/// it catches the shapes that actually turn up on a lab box.
+const SECRET_FLAGS: [&str; 8] = [
+    "api-key", "api_key", "apikey", "token", "password", "passwd", "secret", "credential",
+];
+
+/// Blank out anything that looks like a credential in an argv.
+///
+/// A command line is already world-readable on its own machine, but this copies
+/// it to everyone holding a `ferro` client and into every JSON dump and
+/// screenshot of the table. Somebody else's inference server API key is not
+/// ours to publish.
+fn redact_secrets(argv: Vec<String>) -> Vec<String> {
+    let looks_secret = |s: &str| {
+        let name = s.trim_start_matches('-').to_ascii_lowercase();
+        SECRET_FLAGS.iter().any(|f| name.contains(f))
+    };
+    let mut out = Vec::with_capacity(argv.len());
+    let mut redact_next = false;
+    for arg in argv {
+        if redact_next {
+            redact_next = false;
+            out.push("<redacted>".to_string());
+            continue;
+        }
+        // `--api-key=VALUE` and `HF_TOKEN=VALUE` carry it inline; a bare
+        // `--api-key` carries it in the next element.
+        match arg.split_once('=') {
+            Some((name, _)) if looks_secret(name) => out.push(format!("{name}=<redacted>")),
+            _ => {
+                redact_next = looks_secret(&arg) && !arg.contains('=');
+                out.push(arg);
+            }
+        }
+    }
+    out
 }
 
 /// argv joined for display; `comm` when the process is not ours to read.
@@ -497,6 +534,29 @@ mod tests {
         fields[19] = "8371".into(); // field 22: starttime
         let stat = format!("42 (py (a b) thon) {}", fields.join(" "));
         assert_eq!(parse_stat(&stat), Some((1234, 8371)));
+    }
+
+    #[test]
+    fn credentials_do_not_leave_the_node() {
+        let argv = |s: &str| s.split(' ').map(str::to_string).collect::<Vec<_>>();
+        assert_eq!(
+            redact_secrets(argv("llama-server --host 0.0.0.0 --api-key sk-abc123 --port 9010")).join(" "),
+            "llama-server --host 0.0.0.0 --api-key <redacted> --port 9010"
+        );
+        assert_eq!(
+            redact_secrets(argv("python train.py --hf-token=hf_xyz")).join(" "),
+            "python train.py --hf-token=<redacted>"
+        );
+        assert_eq!(
+            redact_secrets(argv("env HF_TOKEN=hf_xyz python train.py")).join(" "),
+            "env HF_TOKEN=<redacted> python train.py"
+        );
+        // A flag that merely sounds alarming keeps its value: over-redacting
+        // makes the command unreadable, which is the point of showing it.
+        assert_eq!(
+            redact_secrets(argv("llama-server --cache-type-k q4_0 -ngl 99")).join(" "),
+            "llama-server --cache-type-k q4_0 -ngl 99"
+        );
     }
 
     #[test]
