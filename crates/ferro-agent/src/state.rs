@@ -135,6 +135,14 @@ impl AgentState {
             workspace: self.workspace.clone(),
             user: std::env::var("USER").unwrap_or_default(),
             processes: self.process_snapshot().await,
+            // Re-read rather than cached: a link that renegotiated after a
+            // cable was moved should not need an agent restart to show up.
+            link_iface: self.nccl_ifname.clone().unwrap_or_default(),
+            link_mbps: self
+                .nccl_ifname
+                .as_deref()
+                .and_then(crate::net::link_speed_mbps)
+                .unwrap_or(0),
         }
     }
 

@@ -75,6 +75,14 @@ See README.md for architecture, deployment and measured results.
   submitted in the same second must still have an order, and it has to agree
   with the position each was told.
 
+- `ferro net` measures pairs strictly one at a time: two probes at once share
+  the switch and each ends up measuring the other. It sends to the peer's
+  `nccl_address`, not its management address -- on these boxes they are
+  frequently different wires, and the one NCCL uses is the one worth knowing.
+  The negotiated link speed in `ferro nodes` is a different claim from measured
+  throughput: it covers the node-to-switch hop only, and a 1000 Mb/s NIC with
+  zero errors can still sit behind a 100 Mb/s path.
+
 - A failed rank must tear down its peers: survivors sit in a collective
   forever holding GPUs. The controller does this in `report_job_status`.
 - `torch.distributed.pipelining` hangs cross-node here even though every NCCL

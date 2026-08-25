@@ -8,6 +8,7 @@
 
 mod bench;
 mod launcher;
+mod net;
 mod procs;
 mod service;
 mod state;

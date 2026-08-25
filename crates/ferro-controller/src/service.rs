@@ -369,6 +369,65 @@ impl Controller for ControllerService {
         Ok(Response::new(DescribeProcessResponse { matches }))
     }
 
+    async fn measure_network(
+        &self,
+        req: Request<MeasureNetworkRequest>,
+    ) -> Result<Response<MeasureNetworkResponse>, Status> {
+        let req = req.into_inner();
+        let seconds = if req.seconds == 0 { 3 } else { req.seconds };
+
+        let nodes = self.registry.node_states().await;
+        let targets: Vec<NodeInfo> = nodes
+            .iter()
+            .filter(|n| n.healthy)
+            .filter_map(|n| n.info.clone())
+            .filter(|i| req.node_filter.is_empty() || req.node_filter.contains(&i.node_id))
+            .collect();
+
+        if targets.len() < 2 {
+            return Err(Status::failed_precondition(
+                "need at least two healthy nodes to measure a link between",
+            ));
+        }
+
+        let mut ordered: Vec<(&NodeInfo, &NodeInfo)> = Vec::new();
+        for (i, a) in targets.iter().enumerate() {
+            for b in targets.iter().skip(i + 1) {
+                ordered.push((a, b));
+                if req.both_ways {
+                    ordered.push((b, a));
+                }
+            }
+        }
+
+        let mut pairs = Vec::new();
+        {
+            for (from, to) in ordered {
+                // Strictly one pair at a time: two probes at once share the
+                // same switch and each would measure the other's traffic.
+                let mut pair = NetPair {
+                    from_node: from.node_id.clone(),
+                    to_node: to.node_id.clone(),
+                    // The path is only ever as fast as its slower end.
+                    link_mbps: match (from.link_mbps, to.link_mbps) {
+                        (0, b) => b,
+                        (a, 0) => a,
+                        (a, b) => a.min(b),
+                    },
+                    ..Default::default()
+                };
+                // Measure the interface NCCL would use, not the management IP:
+                // on these boxes they are frequently not the same wire.
+                match measure_pair(&from.address, &to.address, &to.nccl_address, seconds).await {
+                    Ok(mbps) => pair.mbps = mbps,
+                    Err(e) => pair.error = e,
+                }
+                pairs.push(pair);
+            }
+        }
+        Ok(Response::new(MeasureNetworkResponse { pairs }))
+    }
+
     async fn benchmark_nodes(
         &self,
         req: Request<BenchmarkNodesRequest>,
@@ -665,6 +724,39 @@ impl Controller for ControllerService {
 }
 
 /// Cancel jobs that have outrun their wall-clock limit.
+/// One direction, one pair: open a sink on the receiver, then have the sender
+/// blast at it for `seconds`.
+async fn measure_pair(
+    from_addr: &str,
+    to_addr: &str,
+    to_host: &str,
+    seconds: u32,
+) -> Result<f64, String> {
+    let mut receiver = NodeAgentClient::connect(endpoint(to_addr))
+        .await
+        .map_err(|e| format!("connect receiver: {e}"))?;
+    let port = receiver
+        .net_sink(NetSinkRequest { seconds })
+        .await
+        .map_err(|e| format!("sink: {}", e.message()))?
+        .into_inner()
+        .port;
+
+    let mut sender = NodeAgentClient::connect(endpoint(from_addr))
+        .await
+        .map_err(|e| format!("connect sender: {e}"))?;
+    let result = sender
+        .net_probe(NetProbeRequest {
+            host: to_host.to_string(),
+            port,
+            seconds,
+        })
+        .await
+        .map_err(|e| format!("probe: {}", e.message()))?
+        .into_inner();
+    Ok(result.mbps)
+}
+
 async fn describe_on(addr: &str, pid: u32) -> Result<ProcessDetail, String> {
     let mut client = NodeAgentClient::connect(endpoint(addr))
         .await

@@ -247,6 +247,7 @@ ferro ps --by-user              # who is holding how much, where
 ferro ps --idle 6h              # VRAM held, nothing computing, for 6h+
 ferro watch                     # live dashboard: GPUs + running jobs, one screen
 ferro bench                     # measure each GPU, so the scheduler can rank hardware
+ferro net                       # measure real throughput between every pair of nodes
 ferro plugins                   # transfer plugins the controller knows about
 ferro fetch <plugin> <remote> <local>   # pull data onto the nodes, in parallel
 ferro push  <plugin> <local> <remote>   # send results back
@@ -305,6 +306,40 @@ starts counting then.
 
 With `-f/--follow` the CLI says it is waiting and starts streaming logs when
 the job actually launches.
+
+### Measuring the fabric
+
+```bash
+ferro net                       # every pair, 3s each, one at a time
+ferro net -s 10 --both-ways     # longer, and both directions
+ferro net --node lab18 --node lab126
+```
+
+`ferro nodes` shows what each node's interface **negotiated** (`LINK`), flagged
+red when it is behind the rest of the cluster. `ferro net` shows what two nodes
+actually **achieve**, which is a different number and the one a cross-node job
+runs at:
+
+```
+FROM     TO       MEASURED   LINK       OF LINK
+lab126   lab18     37 Mb/s   1000 Mb/s  4%
+lab18    lab126    92 Mb/s   1000 Mb/s  9%
+lab126   lab199   942 Mb/s   1000 Mb/s  94%
+```
+
+A row well under its link speed is the interesting one: the negotiated speed is
+between the node and whatever it is plugged into, and says nothing about the
+rest of the path. The example above is real — that node's NIC reports 1000
+Mb/s full duplex with zero errors and no traffic shaping, and still moves 37
+Mb/s inbound, which puts the bottleneck in the network between it and everyone
+else rather than in the machine.
+
+Plain TCP rather than an NCCL benchmark: it needs no GPUs, no image and no
+rendezvous, so it still works on a node whose CUDA is broken — which is exactly
+when you want to know whether the network is to blame. Pairs are measured one
+at a time, because two probes at once would each be measuring the other. It
+saturates the link while it runs, so it is a diagnostic, not something to leave
+in a loop.
 
 ### Moving data: plugins
 

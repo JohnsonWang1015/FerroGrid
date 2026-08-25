@@ -5,8 +5,9 @@ use crate::state::SharedState;
 use ferro_proto::node_agent_server::NodeAgent;
 use ferro_proto::{
     BenchmarkRequest, BenchmarkResponse, DescribeProcessRequest, ExecPluginRequest,
-    ExecPluginResponse, GetNodeInfoRequest, LaunchJobRequest, LaunchJobResponse, NodeInfo,
-    PingRequest, PingResponse, ProcessDetail, StopJobRequest, StopJobResponse,
+    ExecPluginResponse, GetNodeInfoRequest, LaunchJobRequest, LaunchJobResponse, NetProbeRequest,
+    NetProbeResponse, NetSinkRequest, NetSinkResponse, NodeInfo, PingRequest, PingResponse,
+    ProcessDetail, StopJobRequest, StopJobResponse,
 };
 use tonic::{Request, Response, Status};
 
@@ -90,6 +91,31 @@ impl NodeAgent for AgentService {
         match crate::bench::run(self.state.clone(), force).await {
             Ok(results) => Ok(Response::new(BenchmarkResponse { results })),
             Err(e) => Err(Status::internal(format!("benchmark failed: {e:#}"))),
+        }
+    }
+
+    async fn net_sink(
+        &self,
+        req: Request<NetSinkRequest>,
+    ) -> Result<Response<NetSinkResponse>, Status> {
+        match crate::net::sink(req.into_inner().seconds).await {
+            Ok(port) => Ok(Response::new(NetSinkResponse { port: port as u32 })),
+            Err(e) => Err(Status::internal(format!("open sink failed: {e:#}"))),
+        }
+    }
+
+    async fn net_probe(
+        &self,
+        req: Request<NetProbeRequest>,
+    ) -> Result<Response<NetProbeResponse>, Status> {
+        let req = req.into_inner();
+        match crate::net::probe(&req.host, req.port as u16, req.seconds).await {
+            Ok((bytes_sent, seconds)) => Ok(Response::new(NetProbeResponse {
+                bytes_sent,
+                seconds,
+                mbps: crate::net::mbps(bytes_sent, seconds),
+            })),
+            Err(e) => Err(Status::internal(format!("probe failed: {e:#}"))),
         }
     }
 

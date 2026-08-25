@@ -100,6 +100,25 @@ fn bar(pct: u32, width: usize) -> String {
     format!("{}{}", "\u{2588}".repeat(filled), "\u{2591}".repeat(width - filled))
 }
 
+/// Negotiated link speed, flagged when it is behind the rest of the cluster.
+/// A cross-node job runs at the speed of its slowest end, so a node that came
+/// up at 100 Mb/s is a 10x tax that nothing else in the tool would show.
+fn link_cell(mbps: u32, best: u32) -> Cell {
+    if mbps == 0 {
+        return Cell::new("-").fg(Color::Grey);
+    }
+    let label = if mbps >= 1000 {
+        format!("{}G", mbps / 1000)
+    } else {
+        format!("{mbps}M")
+    };
+    if best > 0 && mbps < best {
+        Cell::new(label).fg(Color::Red)
+    } else {
+        Cell::new(label)
+    }
+}
+
 fn health_cell(healthy: bool) -> Cell {
     if healthy {
         Cell::new("ready").fg(Color::Green)
@@ -122,6 +141,8 @@ pub fn nodes(nodes: &[NodeState], json: bool) -> String {
                     "healthy": n.healthy,
                     "gpus": i.gpus.len(),
                     "free_gpus": n.free_gpus,
+                    "link_iface": i.link_iface,
+                    "link_mbps": i.link_mbps,
                     "driver": i.driver_version,
                     "cuda": i.cuda_version,
                     "cpus": i.cpu_count,
@@ -136,13 +157,23 @@ pub fn nodes(nodes: &[NodeState], json: bool) -> String {
         return "No nodes registered. Start ferro-agent on your servers.\n".into();
     }
 
-    let mut t = table(&["NODE", "ADDRESS", "NCCL IP", "STATUS", "AGE", "GPUS", "FREE", "DRIVER", "CUDA", "CPU"]);
+    let mut t = table(&["NODE", "ADDRESS", "NCCL IP", "LINK", "STATUS", "AGE", "GPUS", "FREE", "DRIVER", "CUDA", "CPU"]);
+    // The fastest link present is the yardstick: one node at a tenth of what
+    // its neighbours negotiated is the interesting case, and it is invisible
+    // everywhere else.
+    let best_link = nodes
+        .iter()
+        .filter_map(|n| n.info.as_ref())
+        .map(|i| i.link_mbps)
+        .max()
+        .unwrap_or(0);
     for n in nodes {
         let i = n.info.clone().unwrap_or_default();
         t.add_row(vec![
             Cell::new(&i.node_id),
             Cell::new(&i.address),
             Cell::new(&i.nccl_address),
+            link_cell(i.link_mbps, best_link),
             health_cell(n.healthy),
             age_cell(n.last_seen_unix_s),
             Cell::new(i.gpus.len()),
@@ -1078,6 +1109,88 @@ fn shorten(cmd: &str, max: usize) -> String {
     format!("{}...", short.chars().take(max).collect::<String>())
 }
 
+
+/// `ferro net`: what a cross-node job would actually get.
+///
+/// The number that matters is the slowest pair: a job spanning two nodes runs
+/// at the speed of the link between them, whatever the GPUs can do.
+pub fn network(pairs: &[NetPair], json: bool) -> String {
+    if json {
+        let v: Vec<_> = pairs
+            .iter()
+            .map(|p| {
+                serde_json::json!({
+                    "from": p.from_node,
+                    "to": p.to_node,
+                    "mbps": p.mbps,
+                    "link_mbps": p.link_mbps,
+                    "error": p.error,
+                })
+            })
+            .collect();
+        return dump(&v);
+    }
+
+    if pairs.is_empty() {
+        return "No pairs measured.\n".into();
+    }
+
+    // Worst first: that is the one that decides what multi-node costs.
+    let mut rows: Vec<&NetPair> = pairs.iter().collect();
+    rows.sort_by(|a, b| a.mbps.partial_cmp(&b.mbps).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut t = table(&["FROM", "TO", "MEASURED", "LINK", "OF LINK", "NOTE"]);
+    for p in &rows {
+        let pct = if p.link_mbps > 0 { p.mbps / p.link_mbps as f64 * 100.0 } else { 0.0 };
+        t.add_row(vec![
+            Cell::new(&p.from_node),
+            Cell::new(&p.to_node),
+            if p.error.is_empty() {
+                Cell::new(format!("{:.0} Mb/s", p.mbps)).fg(throughput_colour(p.mbps))
+            } else {
+                Cell::new("-").fg(Color::Red)
+            },
+            if p.link_mbps > 0 {
+                Cell::new(format!("{} Mb/s", p.link_mbps))
+            } else {
+                Cell::new("-").fg(Color::Grey)
+            },
+            // Well under the link speed means the wire is not the whole story:
+            // a duplex mismatch, a busy uplink, or a slow path through a
+            // bridge rather than the interface NCCL was pinned to.
+            if p.link_mbps > 0 && p.error.is_empty() {
+                Cell::new(format!("{pct:.0}%")).fg(if pct < 60.0 { Color::Yellow } else { Color::Green })
+            } else {
+                Cell::new("-").fg(Color::Grey)
+            },
+            Cell::new(&p.error).fg(Color::Red),
+        ]);
+    }
+
+    let mut out = String::new();
+    line!(out, "{t}");
+    if let Some(worst) = rows.iter().find(|p| p.error.is_empty()) {
+        line!(
+            out,
+            "Slowest pair {} <-> {} at {:.0} Mb/s ({:.0} MB/s). A job spanning them moves \
+             gradients at that speed, whatever the GPUs can do.",
+            worst.from_node,
+            worst.to_node,
+            worst.mbps,
+            worst.mbps / 8.0
+        );
+    }
+    out
+}
+
+fn throughput_colour(mbps: f64) -> Color {
+    match mbps {
+        m if m >= 5000.0 => Color::Green,
+        m if m >= 800.0 => Color::Green,
+        m if m >= 200.0 => Color::Yellow,
+        _ => Color::Red,
+    }
+}
 
 /// `ferro bench`: measured throughput per GPU, with a relative column so it is
 /// obvious which cards the scheduler will favour.

@@ -81,6 +81,21 @@ enum Cmd {
         #[arg(long)]
         force: bool,
     },
+    /// Measure real TCP throughput between every pair of nodes.
+    Net {
+        /// Only these node ids, repeatable. Default: every healthy node.
+        #[arg(long = "node")]
+        node_filter: Vec<String>,
+
+        /// Seconds to measure each pair for.
+        #[arg(long, short = 's', default_value_t = 3)]
+        seconds: u32,
+
+        /// Measure both directions of every pair. Ethernet is usually
+        /// symmetric; when it is not, that is the diagnosis.
+        #[arg(long)]
+        both_ways: bool,
+    },
     /// List the transfer plugins the controller has configured.
     Plugins,
     /// Download data onto the nodes with a plugin.
@@ -311,6 +326,20 @@ async fn main() -> Result<()> {
                 })
             })
             .await?;
+        }
+        Cmd::Net { node_filter, seconds, both_ways } => {
+            // Pairs are measured one at a time so they do not measure each
+            // other, so this takes a while and should say so.
+            let n = if node_filter.is_empty() { 0 } else { node_filter.len() };
+            eprintln!(
+                "measuring {} pair(s) at {seconds}s each, one at a time...",
+                if n > 1 { format!("{}", n * (n - 1) / 2) } else { "all".into() }
+            );
+            let r = client
+                .measure_network(MeasureNetworkRequest { node_filter, seconds, both_ways })
+                .await?
+                .into_inner();
+            print!("{}", render::network(&r.pairs, cli.json));
         }
         Cmd::Plugins => {
             let r = client.list_plugins(ListPluginsRequest {}).await?.into_inner();

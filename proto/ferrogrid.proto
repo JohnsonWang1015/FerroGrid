@@ -82,6 +82,11 @@ message NodeInfo {
   string user           = 13;
   // Everything holding a GPU on this node, ours or not.
   repeated GpuProcess processes = 14;
+  // The interface carrying nccl_address and what it negotiated. A node that
+  // came up at 100 Mb/s looks exactly like a healthy one everywhere else, and
+  // drags every job that spans it down by 10x.
+  string link_iface = 15;
+  uint32 link_mbps  = 16;   // 0 = unknown
 }
 
 // ---------------------------------------------------------------------------
@@ -373,6 +378,41 @@ message PluginResult {
 }
 message RunPluginResponse { repeated PluginResult results = 1; }
 
+// `ferro net`: measured TCP throughput between nodes, which is what a
+// cross-node job actually runs at -- `p2p_probe.py` proves NCCL connects, this
+// says how fast.
+message MeasureNetworkRequest {
+  repeated string node_filter = 1;
+  // Seconds per pair. 0 => controller default.
+  uint32 seconds = 2;
+  // Measure both directions. Ethernet is usually symmetric, so this is off by
+  // default -- but when it is not, that asymmetry is the diagnosis.
+  bool both_ways = 3;
+}
+message NetPair {
+  string from_node = 1;
+  string to_node   = 2;
+  double mbps      = 3;
+  // The slower of the two ends' link speeds, for context. 0 = unknown.
+  uint32 link_mbps = 4;
+  string error     = 5;
+}
+message MeasureNetworkResponse { repeated NetPair pairs = 1; }
+
+// Agent side of the measurement: one node drains, the other sends.
+message NetSinkRequest { uint32 seconds = 1; }
+message NetSinkResponse { uint32 port = 1; }
+message NetProbeRequest {
+  string host    = 1;
+  uint32 port    = 2;
+  uint32 seconds = 3;
+}
+message NetProbeResponse {
+  uint64 bytes_sent = 1;
+  double seconds    = 2;
+  double mbps       = 3;
+}
+
 // `ferro bench`: ask agents to measure their GPUs.
 message BenchmarkNodesRequest {
   repeated string node_filter = 1;
@@ -415,6 +455,7 @@ service Controller {
   rpc ListProcesses(ListProcessesRequest) returns (ListProcessesResponse);
   rpc DescribeProcess(DescribeProcessRequest) returns (DescribeProcessResponse);
   rpc BenchmarkNodes(BenchmarkNodesRequest) returns (BenchmarkNodesResponse);
+  rpc MeasureNetwork(MeasureNetworkRequest) returns (MeasureNetworkResponse);
   rpc ListPlugins(ListPluginsRequest) returns (ListPluginsResponse);
   rpc RunPlugin(RunPluginRequest) returns (RunPluginResponse);
   rpc CancelJob(CancelJobRequest) returns (CancelJobResponse);
@@ -483,5 +524,8 @@ service NodeAgent {
   rpc StopJob(StopJobRequest) returns (StopJobResponse);
   rpc Ping(PingRequest) returns (PingResponse);
   rpc Benchmark(BenchmarkRequest) returns (BenchmarkResponse);
+  // Open a short-lived TCP sink, then blast at somebody else's.
+  rpc NetSink(NetSinkRequest) returns (NetSinkResponse);
+  rpc NetProbe(NetProbeRequest) returns (NetProbeResponse);
   rpc ExecPlugin(ExecPluginRequest) returns (ExecPluginResponse);
 }
