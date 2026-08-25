@@ -32,6 +32,21 @@ macro_rules! line {
     }};
 }
 
+/// How long a process must sit on its VRAM doing nothing before `ferro ps`
+/// says so. Short enough to catch a forgotten notebook, long enough not to
+/// libel a job between epochs.
+const IDLE_AFTER_S: i64 = 3600;
+
+/// Compact duration for a table cell: 45s, 12m, 3h, 5d.
+fn short_dur(secs: i64) -> String {
+    match secs {
+        s if s < 60 => format!("{s}s"),
+        s if s < 3600 => format!("{}m", s / 60),
+        s if s < 86_400 => format!("{}h", s / 3600),
+        s => format!("{}d", s / 86_400),
+    }
+}
+
 fn now_s() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -172,18 +187,13 @@ pub fn gpus(entries: &[GpuEntry], json: bool) -> String {
             Cell::new(format!("{}C", g.temperature_c)),
             Cell::new(format!("{}/{}W", g.power_usage_mw / 1000, g.power_limit_mw / 1000)),
             Cell::new(&g.cuda_capability),
-            if g.allocated_job_id.is_empty() {
-                Cell::new("-").fg(Color::Grey)
-            } else {
-                Cell::new(&g.allocated_job_id).fg(Color::Magenta)
-            },
+            owner_cell(&g, &e.occupants, e.schedulable),
         ]);
     }
     let total = entries.len();
-    let free = entries
-        .iter()
-        .filter(|e| e.gpu.as_ref().map(|g| g.allocated_job_id.is_empty()).unwrap_or(false))
-        .count();
+    // "Free" means placeable, which is the controller's call: no job of ours
+    // and enough VRAM left for one.
+    let free = entries.iter().filter(|e| e.schedulable).count();
 
     let mut out = String::new();
     line!(out, "{t}");
@@ -383,6 +393,7 @@ pub fn submit(r: &SubmitJobResponse, json: bool) -> String {
     }
 
     let mut out = String::new();
+
     let p = r.plan.clone().unwrap_or_default();
     line!(out, "Submitted {}", r.job_id);
     line!(
@@ -422,10 +433,7 @@ pub fn dashboard(nodes: &[NodeState], gpus: &[GpuEntry], jobs: &[JobSummary]) ->
         .filter_map(|n| n.info.as_ref().map(|i| i.node_id.as_str()))
         .collect();
 
-    let free = gpus
-        .iter()
-        .filter(|e| e.gpu.as_ref().map(|g| g.allocated_job_id.is_empty()).unwrap_or(false))
-        .count();
+    let free = gpus.iter().filter(|e| e.schedulable).count();
     let used_b: u64 = gpus.iter().filter_map(|e| e.gpu.as_ref()).map(|g| g.memory_used_b).sum();
     let total_b: u64 = gpus.iter().filter_map(|e| e.gpu.as_ref()).map(|g| g.memory_total_b).sum();
 
@@ -481,11 +489,7 @@ pub fn dashboard(nodes: &[NodeState], gpus: &[GpuEntry], jobs: &[JobSummary]) ->
             )),
             Cell::new(format!("{}C", g.temperature_c)),
             Cell::new(format!("{}W", g.power_usage_mw / 1000)),
-            if g.allocated_job_id.is_empty() {
-                Cell::new("-").fg(Color::Grey)
-            } else {
-                Cell::new(&g.allocated_job_id).fg(Color::Magenta)
-            },
+            owner_cell(&g, &e.occupants, e.schedulable),
         ]);
     }
     line!(out, "{t}");
@@ -537,7 +541,9 @@ fn elapsed(started: i64) -> String {
 }
 
 /// `ferro ps`: one row per rank, so you can see which node and which cards a
-/// job is actually occupying rather than just that it exists.
+/// job is actually occupying rather than just that it exists -- plus a row for
+/// every other process holding a GPU, which is what tells "free" apart from
+/// "idle but occupied by somebody else".
 pub fn processes(procs: &[ProcessEntry], json: bool) -> String {
     if json {
         let v: Vec<_> = procs
@@ -546,16 +552,24 @@ pub fn processes(procs: &[ProcessEntry], json: bool) -> String {
                 let m = p.metrics.clone().unwrap_or_default();
                 serde_json::json!({
                     "job_id": p.job_id,
+                    "external": p.external,
+                    "pid": p.pid,
+                    "command": p.command,
+                    "container": p.container,
+                    "kind": p.kind,
                     "user": p.user,
                     "runs_as": p.runs_as,
                     "name": p.name,
                     "node_id": p.node_id,
+                    "node_last_seen_unix_s": p.node_last_seen_unix_s,
                     "node_rank": p.node_rank,
                     "gpu_indices": p.gpu_indices,
-                    "phase": p.phase().label(),
+                    "phase": if p.external { external_phase(p) } else { p.phase().label() },
                     "world_size": p.world_size,
                     "started_unix_s": p.started_unix_s,
                     "gpu_util_pct": p.gpu_util_pct,
+                    "proc_util_pct": p.proc_util_known.then_some(p.proc_util_pct),
+                    "idle_s": idle_for(p),
                     "vram_used_gb": p.vram_used_gb,
                     "step": m.step,
                     "tokens_per_s": m.tokens_per_s,
@@ -566,13 +580,19 @@ pub fn processes(procs: &[ProcessEntry], json: bool) -> String {
     }
 
     if procs.is_empty() {
-        return "Nothing running.\n".into();
+        return "Nothing running, and no other process is holding a GPU.\n".into();
     }
 
-    let mut t = table(&["JOB", "USER", "NAME", "NODE", "RANK", "GPUS", "PHASE", "UPTIME", "UTIL", "VRAM", "STEP", "TOKENS/S"]);
+    // AGE is how long ago the node last reported: every other number on the row
+    // is that old, and a wedged agent looks exactly like an idle GPU without it.
+    let mut t = table(&["JOB", "USER", "NAME", "NODE", "AGE", "RANK", "GPUS", "PHASE", "UPTIME", "UTIL", "VRAM", "STEP", "TOKENS/S"]);
     for p in procs {
         let m = p.metrics.clone().unwrap_or_default();
-        let util = p.gpu_util_pct.round() as u32;
+        let util = if p.external && p.proc_util_known {
+            p.proc_util_pct.round() as u32
+        } else {
+            p.gpu_util_pct.round() as u32
+        };
         // Submitter, plus the node account the container runs as when they
         // differ -- on a shared cluster "whose job" and "which uid wrote this
         // checkpoint" are different questions.
@@ -583,29 +603,272 @@ pub fn processes(procs: &[ProcessEntry], json: bool) -> String {
             (u, r) => format!("{u}→{r}"),
         };
         t.add_row(vec![
-            Cell::new(&p.job_id),
+            if p.external {
+                // Nothing owns it as far as FerroGrid is concerned, so name the
+                // one handle that does: its pid on that node.
+                Cell::new(format!("pid {}", p.pid)).fg(Color::Grey)
+            } else {
+                Cell::new(&p.job_id)
+            },
             Cell::new(who).fg(Color::Blue),
-            Cell::new(&p.name),
+            if p.external {
+                Cell::new(describe(p)).fg(Color::Grey)
+            } else {
+                Cell::new(&p.name)
+            },
             Cell::new(&p.node_id),
-            Cell::new(format!("{}/{}", p.node_rank, p.world_size.max(1))),
+            age_cell(p.node_last_seen_unix_s),
+            if p.external {
+                Cell::new("-")
+            } else {
+                Cell::new(format!("{}/{}", p.node_rank, p.world_size.max(1)))
+            },
             Cell::new(p.gpu_indices.iter().map(|g| g.to_string()).collect::<Vec<_>>().join(",")),
-            phase_cell(p.phase()),
+            if p.external {
+                // An orphan is one of ours that outlived its job record --
+                // usually a container a restarted controller lost track of,
+                // and the one external row somebody has to act on. An idle
+                // squatter is the other: VRAM held, nothing computing.
+                match (external_phase(p), idle_for(p)) {
+                    ("orphan", _) => Cell::new("orphan").fg(Color::Yellow),
+                    (_, Some(i)) if i >= IDLE_AFTER_S => {
+                        Cell::new(format!("idle {}", short_dur(i))).fg(Color::Yellow)
+                    }
+                    (other, _) => Cell::new(other).fg(Color::Grey),
+                }
+            } else {
+                phase_cell(p.phase())
+            },
             Cell::new(elapsed(p.started_unix_s)),
-            Cell::new(format!("{util}%")).fg(match util {
-                0..=10 => Color::Red,      // running but idle GPUs means a stall
-                11..=70 => Color::Yellow,
-                _ => Color::Green,
+            // For an external row this is the process's own utilisation where
+            // the driver can attribute it, and the device's otherwise --
+            // greyed in that case to say it is not about this pid. Never red:
+            // an idle rank is our stall, an idle squatter is somebody else's.
+            Cell::new(format!("{util}%")).fg(match (p.external, p.proc_util_known) {
+                (true, true) if util > 0 => Color::Green,
+                (true, _) => Color::Grey,
+                _ => match util {
+                    0..=10 => Color::Red, // running but idle GPUs means a stall
+                    11..=70 => Color::Yellow,
+                    _ => Color::Green,
+                },
             }),
             Cell::new(format!("{:.1}G", p.vram_used_gb)),
-            Cell::new(m.step),
-            Cell::new(num(m.tokens_per_s)),
+            if p.external { Cell::new("-") } else { Cell::new(m.step) },
+            if p.external { Cell::new("-") } else { Cell::new(num(m.tokens_per_s)) },
         ]);
     }
+    let ranks = procs.iter().filter(|p| !p.external).count();
+    let external = procs.len() - ranks;
+    // Deliberately not called "other users": the process may well be your own
+    // shell, and VRAM does not care whose it is.
+    let others = match external {
+        0 => String::new(),
+        n => format!(", {n} other process(es) holding GPUs"),
+    };
+
     let mut out = String::new();
     line!(out, "{t}");
-    line!(out, "{} rank(s) running", procs.len());
+    line!(out, "{ranks} rank(s) running{others}");
     out
 }
+
+/// The JOB column of a GPU table: our job when we placed one, otherwise
+/// whoever else is on the card. "-" has to mean *nobody*, or the whole table
+/// reads as an empty cluster while somebody's training runs on it.
+fn owner_cell(g: &Gpu, occupants: &[GpuOccupant], schedulable: bool) -> Cell {
+    if !g.allocated_job_id.is_empty() {
+        return Cell::new(&g.allocated_job_id).fg(Color::Magenta);
+    }
+    let Some(top) = occupants.first() else {
+        return Cell::new("-").fg(Color::Grey);
+    };
+    let more = match occupants.len() {
+        1 => String::new(),
+        n => format!(" +{}", n - 1),
+    };
+    let label = format!(
+        "ext:{}{more} {:.0}G",
+        if top.user.is_empty() { "?" } else { &top.user },
+        occupants.iter().map(|o| o.memory_used_b as f64 / (1u64 << 30) as f64).sum::<f64>()
+    );
+    // Idle is the actionable case: somebody is holding the card, not using
+    // it. A card with room left is greyed -- the compositor's 80 MB is worth
+    // knowing about but is not why your job did not place.
+    let idle = occupants
+        .iter()
+        .all(|o| o.busy_unix_s > 0 && now_s() - o.busy_unix_s >= IDLE_AFTER_S);
+    Cell::new(label).fg(match (schedulable, idle) {
+        (true, _) => Color::Grey,
+        (false, true) => Color::Yellow,
+        (false, false) => Color::Blue,
+    })
+}
+
+/// `ferro ps --by-user`: who is holding what, across the cluster.
+///
+/// The question a shared cluster actually asks is not "which processes exist"
+/// but "whose are they, and can I ask for the card back".
+pub fn processes_by_user(procs: &[ProcessEntry], json: bool) -> String {
+    #[derive(Default)]
+    struct Tally {
+        nodes: std::collections::BTreeSet<String>,
+        gpus: usize,
+        vram_gb: f64,
+        procs: usize,
+        idle_procs: usize,
+        oldest: i64,
+        ours: usize,
+    }
+
+    let mut by_user: std::collections::BTreeMap<String, Tally> = Default::default();
+    for p in procs {
+        let who = match (p.user.as_str(), p.runs_as.as_str()) {
+            ("", "") => "-",
+            ("", r) => r,
+            (u, _) => u,
+        };
+        let t = by_user.entry(who.to_string()).or_default();
+        t.nodes.insert(p.node_id.clone());
+        t.gpus += p.gpu_indices.len();
+        t.vram_gb += p.vram_used_gb;
+        t.procs += 1;
+        if idle_for(p).is_some_and(|i| i >= IDLE_AFTER_S) {
+            t.idle_procs += 1;
+        }
+        if !p.external {
+            t.ours += 1;
+        }
+        if p.started_unix_s > 0 && (t.oldest == 0 || p.started_unix_s < t.oldest) {
+            t.oldest = p.started_unix_s;
+        }
+    }
+
+    if json {
+        let v: Vec<_> = by_user
+            .iter()
+            .map(|(user, t)| {
+                serde_json::json!({
+                    "user": user,
+                    "nodes": t.nodes.iter().collect::<Vec<_>>(),
+                    "gpus": t.gpus,
+                    "vram_gb": t.vram_gb,
+                    "processes": t.procs,
+                    "ferro_ranks": t.ours,
+                    "idle_processes": t.idle_procs,
+                    "oldest_unix_s": t.oldest,
+                })
+            })
+            .collect();
+        return dump(&v);
+    }
+
+    if by_user.is_empty() {
+        return "Nobody is holding a GPU.\n".into();
+    }
+
+    // Biggest holder first: that is who you go and talk to.
+    let mut rows: Vec<(&String, &Tally)> = by_user.iter().collect();
+    rows.sort_by(|a, b| b.1.vram_gb.partial_cmp(&a.1.vram_gb).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut t = table(&["USER", "NODES", "GPUS", "VRAM", "PROCS", "VIA FERRO", "IDLE", "OLDEST"]);
+    for (user, v) in &rows {
+        t.add_row(vec![
+            Cell::new(user).fg(Color::Blue),
+            Cell::new(v.nodes.iter().cloned().collect::<Vec<_>>().join(",")),
+            Cell::new(v.gpus),
+            Cell::new(format!("{:.1}G", v.vram_gb)),
+            Cell::new(v.procs),
+            if v.ours > 0 { Cell::new(v.ours).fg(Color::Green) } else { Cell::new("-").fg(Color::Grey) },
+            if v.idle_procs > 0 {
+                Cell::new(v.idle_procs).fg(Color::Yellow)
+            } else {
+                Cell::new("-").fg(Color::Grey)
+            },
+            Cell::new(elapsed(v.oldest)),
+        ]);
+    }
+
+    let mut out = String::new();
+    line!(out, "{t}");
+    line!(
+        out,
+        "{} user(s), {:.1}G held in total",
+        rows.len(),
+        rows.iter().map(|(_, v)| v.vram_gb).sum::<f64>()
+    );
+    out
+}
+
+/// How long a process has been holding VRAM without computing, when the
+/// driver could tell us. `None` means the question is unanswerable here, which
+/// is not the same as "busy" -- and only one of the two justifies calling
+/// somebody's job a squatter.
+pub fn idle_for(p: &ProcessEntry) -> Option<i64> {
+    if !p.proc_util_known || p.busy_unix_s <= 0 {
+        return None;
+    }
+    // A compositor holding 50 MB is idle by construction and nobody's problem;
+    // listing it as a squatter buries the ones that are.
+    if p.kind == "graphics" {
+        return None;
+    }
+    Some((now_s() - p.busy_unix_s).max(0))
+}
+
+/// Keep only processes idle for at least `secs`. Our own ranks never qualify:
+/// nothing attributes utilisation to them, and an idle rank is a stall to
+/// debug rather than a squatter to evict.
+pub fn only_idle(procs: Vec<ProcessEntry>, secs: Option<u32>) -> Vec<ProcessEntry> {
+    let Some(secs) = secs else { return procs };
+    procs
+        .into_iter()
+        .filter(|p| idle_for(p).is_some_and(|i| i >= secs as i64))
+        .collect()
+}
+
+/// What an external row is: a leftover of ours, somebody's compute job, or
+/// just the machine's display server -- which holds VRAM but is nobody's
+/// problem, and saying so keeps people from hunting it down.
+fn external_phase(p: &ProcessEntry) -> &'static str {
+    if !p.job_id.is_empty() {
+        "orphan"
+    } else if p.kind == "graphics" {
+        "display"
+    } else {
+        "external"
+    }
+}
+
+/// Command line for an external process, prefixed with its container when it
+/// has one -- `docker kill <name>` and `kill <pid>` are different fixes.
+fn describe(p: &ProcessEntry) -> String {
+    let cmd = if p.command.is_empty() { "?" } else { p.command.as_str() };
+    let cmd = shorten(cmd, 64);
+    if p.container.is_empty() {
+        cmd
+    } else {
+        format!("[{}] {cmd}", p.container)
+    }
+}
+
+/// Make a command fit a table cell. argv[0] is usually an absolute path into a
+/// venv or a conda env -- most of the width and none of the information, since
+/// the script name right after it is what identifies the work. The untouched
+/// command line is still in `--json`.
+fn shorten(cmd: &str, max: usize) -> String {
+    let (head, rest) = match cmd.split_once(' ') {
+        Some((h, r)) => (h, r),
+        None => (cmd, ""),
+    };
+    let head = head.rsplit('/').next().unwrap_or(head);
+    let short = if rest.is_empty() { head.to_string() } else { format!("{head} {rest}") };
+    if short.chars().count() <= max {
+        return short;
+    }
+    format!("{}...", short.chars().take(max).collect::<String>())
+}
+
 
 /// `ferro bench`: measured throughput per GPU, with a relative column so it is
 /// obvious which cards the scheduler will favour.
@@ -747,4 +1010,21 @@ pub fn transfer(results: &[PluginResult], json: bool) -> String {
     let ok = results.iter().filter(|r| r.exit_code == 0).count();
     line!(out, "\n{ok}/{} node(s) succeeded", results.len());
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn commands_lose_their_interpreter_path_first() {
+        assert_eq!(shorten("/opt/conda/envs/x/bin/python train.py --lr 3e-4", 64), "python train.py --lr 3e-4");
+        assert_eq!(shorten("./gpu_loop /work/poly.cado", 64), "gpu_loop /work/poly.cado");
+        assert_eq!(shorten("nvidia-smi", 64), "nvidia-smi");
+    }
+
+    #[test]
+    fn what_is_left_is_capped() {
+        assert_eq!(shorten("python a.py --flag value", 12), "python a.py ...");
+    }
 }

@@ -51,8 +51,20 @@ enum Cmd {
     },
     /// Copy the current project to every node's workspace over rsync/SSH.
     Sync(SyncArgs),
-    /// Show what is running right now, per rank, like `docker ps`.
+    /// Show what is running right now, per rank, plus every other process
+    /// holding a GPU.
     Ps {
+        /// Only processes that have been idle at least this long, VRAM held
+        /// but nothing computing: --idle, --idle 6h. Default 1h.
+        #[arg(long, value_parser = parse_duration, num_args = 0..=1,
+              default_missing_value = "1h", value_name = "FOR")]
+        idle: Option<u32>,
+
+        /// One row per user instead of one per process: who is holding how
+        /// much, where.
+        #[arg(long)]
+        by_user: bool,
+
         #[command(flatten)]
         watch: WatchArgs,
     },
@@ -266,11 +278,16 @@ async fn main() -> Result<()> {
             })
             .await?;
         }
-        Cmd::Ps { watch } => {
+        Cmd::Ps { idle, by_user, watch } => {
             repeat(watch, cli.json, || async {
                 let mut c = client.clone();
                 let r = c.list_processes(ListProcessesRequest {}).await?.into_inner();
-                Ok(render::processes(&r.processes, cli.json))
+                let procs = render::only_idle(r.processes, idle);
+                Ok(if by_user {
+                    render::processes_by_user(&procs, cli.json)
+                } else {
+                    render::processes(&procs, cli.json)
+                })
             })
             .await?;
         }

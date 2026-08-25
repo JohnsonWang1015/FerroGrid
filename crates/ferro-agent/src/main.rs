@@ -8,6 +8,7 @@
 
 mod bench;
 mod launcher;
+mod procs;
 mod service;
 mod state;
 
@@ -150,6 +151,7 @@ async fn heartbeat_loop(state: Arc<AgentState>, args: Args) {
                         node_id: state.node_id.clone(),
                         gpus: state.gpu_snapshot().await,
                         jobs: state.job_statuses().await,
+                        processes: state.process_snapshot().await,
                     };
                     match client.heartbeat(req).await {
                         Ok(resp) => {

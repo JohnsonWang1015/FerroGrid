@@ -48,7 +48,8 @@ async fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
-    let registry = Arc::new(Registry::new());
+    let min_free_vram_b = args.min_free_vram_gib << 30;
+    let registry = Arc::new(Registry::new(min_free_vram_b));
     let plugins = plugins::Registry::load(args.plugins.as_deref())?;
     match &plugins.source {
         Some(p) => tracing::info!(
@@ -65,7 +66,7 @@ async fn main() -> Result<()> {
         plugins,
         master_port: args.master_port,
         heartbeat_interval_s: args.heartbeat_secs,
-        min_free_vram_b: args.min_free_vram_gib << 30,
+        min_free_vram_b,
     };
 
     tracing::info!(

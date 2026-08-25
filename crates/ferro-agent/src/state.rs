@@ -1,9 +1,10 @@
 //! Shared agent state: GPU monitor, node identity, and the running job table.
 
+use crate::procs::{self, Lookups};
 use crate::Args;
 use anyhow::{Context, Result};
 use ferro_gpu::GpuMonitor;
-use ferro_proto::{Gpu, JobPhase, JobStatus, NodeInfo};
+use ferro_proto::{Gpu, GpuProcess, JobPhase, JobStatus, NodeInfo};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -16,6 +17,10 @@ pub struct RunningJob {
     pub status: JobStatus,
     /// Container name when running under Docker; used by `docker kill`.
     pub container: Option<String>,
+    /// Pid of the process we spawned (torchrun, or the docker CLI). Only the
+    /// no-docker case is useful for attribution: a container's workers descend
+    /// from containerd, not from us.
+    pub launcher_pid: Option<u32>,
     pub child: Option<tokio::process::Child>,
 }
 
@@ -32,6 +37,8 @@ pub struct AgentState {
     pub controller: String,
     pub monitor: GpuMonitor,
     pub jobs: Mutex<HashMap<String, RunningJob>>,
+    /// Caches behind `ferro ps`: container names and uid -> login name.
+    pub lookups: Mutex<Lookups>,
 }
 
 impl AgentState {
@@ -81,6 +88,7 @@ impl AgentState {
             controller: args.controller.clone(),
             monitor: GpuMonitor::new(),
             jobs: Mutex::new(HashMap::new()),
+            lookups: Mutex::new(Lookups::default()),
         })
     }
 
@@ -104,6 +112,11 @@ impl AgentState {
         self.monitor.snapshot(&allocs)
     }
 
+    /// Every process holding a GPU here, ours and everyone else's.
+    pub async fn process_snapshot(&self) -> Vec<GpuProcess> {
+        procs::snapshot(self).await
+    }
+
     pub async fn node_info(&self) -> NodeInfo {
         NodeInfo {
             node_id: self.node_id.clone(),
@@ -121,6 +134,7 @@ impl AgentState {
             gpu_error: self.monitor.init_error().unwrap_or_default().to_string(),
             workspace: self.workspace.clone(),
             user: std::env::var("USER").unwrap_or_default(),
+            processes: self.process_snapshot().await,
         }
     }
 

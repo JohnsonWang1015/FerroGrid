@@ -33,7 +33,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-nvml-wrapper = "0.12"
+# legacy-functions: the _v2 process queries, needed on the pre-510 drivers
+# still running on some lab nodes.
+nvml-wrapper = { version = "0.12", features = ["legacy-functions"] }
 uuid = { version = "1", features = ["v4"] }
 chrono = "0.4"
 comfy-table = "8"

@@ -39,6 +39,25 @@ See README.md for architecture, deployment and measured results.
 - Mojo 1.0 removed `fn` (use `def`) and deprecated `alias` (use `comptime`).
   Kernel API is in `extensibility`; stdlib imports are `std.`-prefixed.
 
+- `ferro ps` lists every process on every GPU, not just ours, so a card held
+  by somebody's notebook is not read as free. NVML's process queries are
+  `_v3` on driver 510+; the older lab drivers need the `_v2` fallback, which
+  lives behind nvml-wrapper's `legacy-functions` feature. Attribution is by
+  cgroup id + a cached `docker ps` for containers and by the pid ancestry
+  chain for `--no-docker` jobs: a container's workers descend from containerd,
+  never from the agent, so ancestry alone finds nothing under Docker.
+- NVML's per-process utilisation is a *sampled* API: ask for samples newer
+  than the last one you saw (feed its own timestamps back -- they are its
+  clock, not yours), and treat `NotFound` as "nothing happened since", not as
+  an error. It only ever reports instants, so the agent keeps the "last seen
+  busy" clock that makes idleness a duration. A driver that cannot attribute
+  utilisation at all must report *unknown*, never 0%: one of those is grounds
+  for calling somebody's job a squatter and the other is not.
+- `/proc/<pid>/stat` field 2 is the executable name and may itself contain
+  spaces and parentheses, so parse from the *last* `)`. Process start time is
+  `/proc/stat`'s `btime` + `starttime`/100 -- USER_HZ is 100 in the userspace
+  ABI whatever the kernel's tick rate is.
+
 - A failed rank must tear down its peers: survivors sit in a collective
   forever holding GPUs. The controller does this in `report_job_status`.
 - `torch.distributed.pipelining` hangs cross-node here even though every NCCL
@@ -55,6 +74,13 @@ See README.md for architecture, deployment and measured results.
 
 ## Conventions
 
+- "Free" means *placeable* everywhere it appears (`ferro nodes` FREE, the
+  `n/m free` counts, `GpuEntry.schedulable`): no job of ours **and** at least
+  `--min-free-vram-gib` left, which is exactly what the scheduler applies. A
+  view that counts a card somebody else filled as free promises placements
+  that then fail. "Occupied" is a separate answer from "unusable" -- a
+  compositor holding 80 MB is worth showing but does not make a 24 GB card
+  unavailable.
 - Live views (`ferro watch`, `-w` on the read-only commands) redraw faster than
   agents report. Always surface data age alongside the numbers -- a stale
   reading looks exactly like an idle GPU otherwise.

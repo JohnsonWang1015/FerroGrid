@@ -57,7 +57,10 @@ impl Controller for ControllerService {
         req: Request<HeartbeatRequest>,
     ) -> Result<Response<HeartbeatResponse>, Status> {
         let req = req.into_inner();
-        let known = self.registry.heartbeat(&req.node_id, req.gpus).await;
+        let known = self
+            .registry
+            .heartbeat(&req.node_id, req.gpus, req.processes)
+            .await;
         for status in req.jobs {
             self.registry.update_job_status(status).await;
         }
@@ -305,9 +308,94 @@ impl Controller for ControllerService {
                         .iter()
                         .map(|g| g.memory_used_b as f64 / (1u64 << 30) as f64)
                         .sum(),
+                    external: false,
+                    pid: 0,
+                    command: String::new(),
+                    container: String::new(),
+                    kind: String::new(),
+                    // Our own ranks own whole GPUs, so the device figure above
+                    // already is this rank's utilisation.
+                    proc_util_pct: 0.0,
+                    proc_util_known: false,
+                    busy_unix_s: 0,
+                    node_last_seen_unix_s: g
+                        .nodes
+                        .get(&p.node_id)
+                        .map(|n| n.last_seen)
+                        .unwrap_or(0),
                 });
             }
         }
+
+        // Everything else the agents found on the cards. A GPU with no rank on
+        // it is not necessarily a free GPU: someone's notebook, another
+        // scheduler's container or a leftover of ours after a controller
+        // restart hold VRAM just the same, and `ferro ps` is where people look
+        // before asking why the cluster is full.
+        let ours: std::collections::HashSet<&str> = g
+            .jobs
+            .values()
+            .filter(|j| !j.phase().is_terminal())
+            .map(|j| j.job_id.as_str())
+            .collect();
+
+        let mut nodes: Vec<&crate::registry::Node> = g.nodes.values().collect();
+        nodes.sort_by(|a, b| a.info.node_id.cmp(&b.info.node_id));
+        for node in nodes {
+            // NVML reports a process once per device it holds; one row per pid
+            // keeps a 4-GPU trainer from looking like four separate squatters.
+            let mut by_pid: std::collections::BTreeMap<u32, Vec<&GpuProcess>> = Default::default();
+            for p in &node.info.processes {
+                if ours.contains(p.job_id.as_str()) {
+                    continue; // already listed above, as the rank that owns it
+                }
+                by_pid.entry(p.pid).or_default().push(p);
+            }
+
+            for (pid, procs) in by_pid {
+                let first = procs[0];
+                let indices: Vec<u32> = procs.iter().map(|p| p.gpu_index).collect();
+                let held: Vec<&Gpu> = indices
+                    .iter()
+                    .filter_map(|i| gpu_by_key.get(&(node.info.node_id.as_str(), *i)).copied())
+                    .collect();
+                let n = held.len().max(1) as f64;
+                processes.push(ProcessEntry {
+                    // Non-empty only for a job of ours the controller has
+                    // forgotten -- the stray worth naming.
+                    job_id: first.job_id.clone(),
+                    name: String::new(),
+                    node_id: node.info.node_id.clone(),
+                    node_rank: 0,
+                    gpu_indices: indices,
+                    phase: JobPhase::Unspecified as i32,
+                    started_unix_s: first.started_unix_s,
+                    world_size: 0,
+                    image: String::new(),
+                    user: first.user.clone(),
+                    runs_as: String::new(),
+                    metrics: None,
+                    // Device utilisation, as for our own ranks: NVML cannot
+                    // attribute SM time to a pid. The VRAM figure, however, is
+                    // this process's own.
+                    gpu_util_pct: held.iter().map(|g| g.utilization_pct as f64).sum::<f64>() / n,
+                    vram_used_gb: procs
+                        .iter()
+                        .map(|p| p.memory_used_b as f64 / (1u64 << 30) as f64)
+                        .sum(),
+                    external: true,
+                    pid,
+                    command: first.command.clone(),
+                    container: first.container.clone(),
+                    kind: first.kind.clone(),
+                    proc_util_pct: first.utilization_pct as f64,
+                    proc_util_known: first.utilization_known,
+                    busy_unix_s: first.busy_unix_s,
+                    node_last_seen_unix_s: node.last_seen,
+                });
+            }
+        }
+
         Ok(Response::new(ListProcessesResponse { processes }))
     }
 
@@ -463,6 +551,7 @@ impl Controller for ControllerService {
         req: Request<CancelJobRequest>,
     ) -> Result<Response<CancelJobResponse>, Status> {
         let id = req.into_inner().job_id;
+
         let addrs: Vec<String> = {
             let g = self.registry.inner.lock().await;
             let Some(job) = g.jobs.get(&id) else {

@@ -27,6 +27,42 @@ message Gpu {
   int64 bench_unix_s      = 14;
 }
 
+// A process holding a GPU right now, as reported by NVML on the node.
+// FerroGrid did not necessarily launch it: an interactive python, another
+// scheduler's container or a desktop session all show up here, which is the
+// difference between "this GPU is free" and "this GPU is idle but occupied".
+message GpuProcess {
+  uint32 gpu_index     = 1;
+  uint32 pid           = 2;   // host pid, even for processes inside containers
+  uint64 memory_used_b = 3;   // 0 when the driver does not report per-process memory
+  string user          = 4;   // OS user owning the process
+  string command       = 5;   // argv, trimmed; falls back to comm
+  int64 started_unix_s = 6;
+  string container     = 7;   // docker container name, empty when on the host
+  // Set when the agent could attribute this process to a job it launched.
+  string job_id        = 8;
+  string kind          = 9;   // "compute" | "graphics"
+  // SM utilisation NVML attributes to this pid. Older drivers cannot do it at
+  // all, hence the companion flag: 0% and "we don't know" are different
+  // answers, and only one of them justifies calling a process a squatter.
+  uint32 utilization_pct = 10;
+  bool utilization_known = 11;
+  // Last time the agent saw this process doing work. `now - busy_unix_s` is
+  // how long it has been sitting on its VRAM doing nothing. 0 = unknown.
+  int64 busy_unix_s      = 12;
+}
+
+// Foreign processes on one GPU, folded per user: the JOB column needs "who
+// else is on this card", not a process list.
+message GpuOccupant {
+  string user          = 1;
+  uint32 processes     = 2;
+  uint64 memory_used_b = 3;
+  // Last time any of this user's processes on the card did work; 0 = the
+  // driver cannot attribute utilisation, so idleness is unknown.
+  int64 busy_unix_s    = 4;
+}
+
 message NodeInfo {
   string node_id        = 1;   // stable id, defaults to hostname
   string hostname       = 2;
@@ -44,6 +80,8 @@ message NodeInfo {
   string workspace      = 12;
   // OS user the agent runs as, used as the rsync/ssh login.
   string user           = 13;
+  // Everything holding a GPU on this node, ours or not.
+  repeated GpuProcess processes = 14;
 }
 
 // ---------------------------------------------------------------------------
@@ -61,6 +99,7 @@ message HeartbeatRequest {
   string node_id        = 1;
   repeated Gpu gpus     = 2;
   repeated JobStatus jobs = 3;
+  repeated GpuProcess processes = 4;
 }
 message HeartbeatResponse { bool known = 1; }
 
@@ -79,6 +118,13 @@ message GpuEntry {
   string node_id = 1;
   Gpu gpu        = 2;
   bool healthy   = 3;
+  // Who else is on this card. Empty does not mean idle -- it can also mean the
+  // node's agent is too old to report processes.
+  repeated GpuOccupant occupants = 4;
+  // Whether the scheduler would place work here: no job of ours, and enough
+  // free VRAM. Somebody's compositor holding 80 MB does not make a 24 GB card
+  // unusable, so "occupied" and "unusable" are separate answers.
+  bool schedulable = 5;
 }
 message ListGpusResponse { repeated GpuEntry gpus = 1; }
 
@@ -190,7 +236,8 @@ message GpuBenchmark {
 message GetJobRequest { string job_id = 1; }
 message ListJobsRequest { uint32 limit = 1; }
 
-// `ferro ps`: what is running right now, and on which GPUs.
+// `ferro ps`: what is running right now, and on which GPUs -- including
+// processes FerroGrid did not launch.
 message ListProcessesRequest {}
 message ProcessEntry {
   string job_id        = 1;
@@ -210,6 +257,23 @@ message ProcessEntry {
   // Live utilisation of just this rank's GPUs, averaged.
   double gpu_util_pct  = 11;
   double vram_used_gb  = 12;
+  // Set for a process FerroGrid did not launch, or whose job this controller
+  // no longer knows about. Then job_id/name/phase carry nothing useful and
+  // pid/command/container describe the process instead.
+  bool external        = 15;
+  uint32 pid           = 16;
+  string command       = 17;
+  string container     = 18;
+  // Utilisation of this process alone, where the driver can attribute it, and
+  // when it was last seen doing work. `gpu_util_pct` above stays the device's.
+  double proc_util_pct = 21;
+  bool proc_util_known = 22;
+  int64 busy_unix_s    = 23;
+  // When the node this row came from last reported. Every number here is only
+  // as fresh as that, and a wedged agent otherwise reads as an idle GPU.
+  int64 node_last_seen_unix_s = 19;
+  // "compute" | "graphics", from NVML. A desktop compositor is not a squatter.
+  string kind          = 20;
 }
 message ListProcessesResponse { repeated ProcessEntry processes = 1; }
 

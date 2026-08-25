@@ -57,6 +57,7 @@ pub async fn launch(state: SharedState, req: LaunchJobRequest) -> Result<()> {
         .spawn()
         .with_context(|| format!("spawn {program} for job {}", req.job_id))?;
 
+    let launcher_pid = child.id();
     let stdout = child.stdout.take().context("capture stdout")?;
     let stderr = child.stderr.take().context("capture stderr")?;
 
@@ -81,6 +82,7 @@ pub async fn launch(state: SharedState, req: LaunchJobRequest) -> Result<()> {
                 gpu_indices: req.gpu_indices.clone(),
                 status: status.clone(),
                 container: (!state.no_docker).then_some(container.clone()),
+                launcher_pid,
                 child: None, // ownership moves into the supervisor below
             },
         );

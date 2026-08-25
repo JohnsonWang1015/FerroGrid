@@ -240,7 +240,10 @@ ferro train --nodes 2 --gpus-per-node 1 -f python/examples/train_fsdp2.py --step
 ```bash
 ferro nodes                     # servers, health, driver, free GPU count
 ferro gpu                       # every GPU: VRAM, utilisation, temp, power, owning job
-ferro ps                        # what is running right now, per rank
+ferro ps                        # what is running right now, per rank --
+                                #   plus every other process holding a GPU
+ferro ps --by-user              # who is holding how much, where
+ferro ps --idle 6h              # VRAM held, nothing computing, for 6h+
 ferro watch                     # live dashboard: GPUs + running jobs, one screen
 ferro bench                     # measure each GPU, so the scheduler can rank hardware
 ferro plugins                   # transfer plugins the controller knows about
@@ -341,8 +344,16 @@ Two things worth knowing:
 ### Live monitoring
 
 `ferro watch` is the cluster-wide equivalent of `watch -n 1 nvidia-smi`: every
-GPU on every node with utilisation and VRAM bars, which job owns each card, and
-a row per running job with its live step, loss, throughput and NCCL error count.
+GPU on every node with utilisation and VRAM bars, who owns each card, and a row
+per running job with its live step, loss, throughput and NCCL error count.
+
+The `JOB` column names our job when we placed one and otherwise whoever else is
+on the card (`ext:alice +1 19G`), greyed while the card still has room, blue
+once it does not, and yellow when every process on it has gone idle. `-` means
+nobody. `FREE` in `ferro nodes` and the `GPUs n/m free` counts mean *placeable*
+— no job of ours **and** at least `--min-free-vram-gib` left — which is the
+same rule the scheduler applies, so the dashboard can no longer promise a card
+that placement will refuse.
 
 ```bash
 ferro watch            # refresh every 2s
@@ -353,6 +364,56 @@ ferro watch -n 1       # every second
 holds, uptime, live utilisation, VRAM, step and throughput. A `UTIL` in red
 means a rank is running but its GPUs are idle, which is what a stall or a
 starved dataloader looks like.
+
+It also lists the processes FerroGrid did **not** launch. A GPU with no rank on
+it is not necessarily a free GPU: on a shared lab box somebody's notebook,
+another scheduler's container or the desktop session hold VRAM just as
+effectively, and that is the usual answer to "why did my job not get placed".
+Those rows are greyed, carry `pid <n>` instead of a job id and the command line
+(prefixed with the container name when the process is in one) instead of a job
+name, so `kill` and `docker kill` are both one glance away:
+
+```
+JOB           USER     NAME                             NODE    AGE  RANK  GPUS  PHASE     UPTIME
+jdefce1cf2e   johnson  train_fsdp2                      lab18   1s   0/1   0     running   5s
+pid 3000      gdm      /usr/bin/gnome-shell --mode=gdm  lab18   1s   -     0     display   527h49m
+pid 41221     alice    [jupyter] python -m ipykernel    lab126  2s   -     1     external  6h02m
+```
+
+The phase says what kind of guest it is: `display` for the machine's own
+compositor (VRAM it holds, but nobody's problem), `external` for somebody
+else's compute, `idle 6h` for VRAM held with nothing computing for that long,
+and `orphan` for one of ours — see below.
+
+Idleness is measured, not guessed: agents ask NVML for the SM utilisation it
+attributes to each pid and keep the clock since it last did any work. Where the
+driver cannot attribute utilisation at all (pre-Maxwell, some vGPU setups)
+nothing is ever labelled idle — "we cannot tell" and "doing nothing" are
+different answers, and only one of them is grounds for going and asking for a
+card back. Display servers are never labelled idle either: a compositor
+holding 50 MB is idle by construction and nobody's problem. The clock lives in
+the agent, so a freshly redeployed agent reports at most its own uptime —
+`idle 7h` on a process up for 143h means "idle for as long as we have been
+watching".
+
+```bash
+ferro ps --idle 6h              # forgotten notebooks, not jobs between epochs
+ferro ps --by-user              # one row per person, biggest holder first
+```
+
+`--by-user` folds the same data per person: nodes, GPUs, VRAM, how many of
+their processes are idle, and how long the oldest has been up. On a shared
+cluster the question is rarely "which processes exist" but "whose are they, and
+can I ask for the card back".
+
+`UTIL` on those rows is the device's utilisation, not the process's — NVML
+cannot attribute SM time to a pid — so it is greyed rather than colour-coded.
+`VRAM`, however, is what that process itself holds. An `orphan` is one of
+*ours* that outlived its job record, normally a container a restarted
+controller lost track of; it is the one external row somebody has to act on.
+The scheduler already refuses GPUs with less than `--min-free-vram-gib` free,
+so these processes keep their cards out of placements whether or not anyone is
+watching.
 
 `nodes`, `gpu`, `ps`, `jobs` and `job` each take the same `-w/--watch` and
 `-n/--interval` flags if you want just one of those views:
@@ -365,9 +426,10 @@ ferro job <job-id> -w
 **The refresh rate is not the data rate.** GPU counters reach the controller
 on the agents' heartbeat (controller `--heartbeat-secs`, default 3), so
 `-n 1` redraws every second over data that changes every three. Both views
-show how stale the numbers are — an `AGE` column in `ferro nodes`, a
-`data age` figure in `ferro watch` — so a wedged agent reads as stale rather
-than as an idle GPU.
+show how stale the numbers are — an `AGE` column in `ferro nodes` and
+`ferro ps`, a `data age` figure in `ferro watch` — so a wedged agent reads as
+stale rather than as an idle GPU. That matters most for the external rows: a
+process that exited a minute ago is still on the last heartbeat.
 
 Redraws are in place: the screen is never blanked before the fetch, so `-n 1`
 does not flicker the way `watch -n 1 nvidia-smi` does. A window too short for
