@@ -58,6 +58,12 @@ See README.md for architecture, deployment and measured results.
   `/proc/stat`'s `btime` + `starttime`/100 -- USER_HZ is 100 in the userspace
   ABI whatever the kernel's tick rate is.
 
+- A queued job (`--wait`) has an empty plan, so `Job::phase()` has to special
+  case it: the per-rank vote reads "no placements" as "every rank succeeded".
+  Queue order comes from `job_order`, not from `submitted` -- two jobs
+  submitted in the same second must still have an order, and it has to agree
+  with the position each was told.
+
 - A failed rank must tear down its peers: survivors sit in a collective
   forever holding GPUs. The controller does this in `report_job_status`.
 - `torch.distributed.pipelining` hangs cross-node here even though every NCCL

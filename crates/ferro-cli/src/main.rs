@@ -221,6 +221,12 @@ struct TrainArgs {
     /// this is what stops it holding GPUs indefinitely.
     #[arg(long, value_parser = parse_duration)]
     timeout: Option<u32>,
+
+    /// Queue instead of failing when the cluster is full, and start as soon as
+    /// the GPUs come free: --wait, or --wait 2h to give up after a while.
+    #[arg(long, value_parser = parse_duration, num_args = 0..=1,
+          default_missing_value = "0", value_name = "GIVE-UP-AFTER")]
+    wait: Option<u32>,
 }
 
 /// Accepts a bare number of seconds, or a value suffixed s/m/h.
@@ -607,6 +613,8 @@ async fn train(client: &mut ControllerClient<Channel>, args: TrainArgs, json: bo
         mounts: args.mounts,
         // Whose job this is, for `ferro ps` on a shared cluster.
         timeout_s: args.timeout.unwrap_or(0),
+        queue: args.wait.is_some(),
+        queue_timeout_s: args.wait.unwrap_or(0),
         submitted_by: std::env::var("USER")
             .or_else(|_| std::env::var("LOGNAME"))
             .unwrap_or_default(),
@@ -619,6 +627,11 @@ async fn train(client: &mut ControllerClient<Channel>, args: TrainArgs, json: bo
         std::process::exit(1);
     }
     if args.follow {
+        if resp.plan.is_none() {
+            // Queued: the log stream stays silent until the controller places
+            // it, which can be hours. Say so rather than looking hung.
+            eprintln!("waiting for capacity; logs will start when the job does (Ctrl-C to stop watching)");
+        }
         stream_logs(client, &resp.job_id, true).await?;
         let final_job = client
             .get_job(GetJobRequest { job_id: resp.job_id.clone() })

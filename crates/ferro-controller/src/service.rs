@@ -95,136 +95,62 @@ impl Controller for ControllerService {
         }
 
         let nodes = self.registry.node_states().await;
-        let plan = if req.auto_place {
-            scheduler::plan_auto(
-                &nodes,
-                &req.node_filter,
-                self.master_port,
-                self.min_free_vram_b,
-                // gpus_per_node doubles as a cap in auto mode when set.
-                if req.gpus_per_node > 0 { req.gpus_per_node } else { u32::MAX },
-            )
-        } else {
-            scheduler::plan(
-                &nodes,
-                req.nodes,
-                req.gpus_per_node,
-                &req.node_filter,
-                self.master_port,
-                self.min_free_vram_b,
-            )
-        }
-        .map_err(|e| Status::failed_precondition(e.to_string()))?;
-
-        // Auto mode decides the shape, so the launch requests must follow the
-        // plan rather than what the caller asked for.
-        let nnodes = plan.placements.len() as u32;
-        let nproc = plan.placements.first().map(|p| p.gpu_indices.len() as u32).unwrap_or(0);
-
-        let job_id = format!("j{}", &uuid::Uuid::new_v4().simple().to_string()[..10]);
-        let name = if req.name.is_empty() {
-            std::path::Path::new(&req.script)
-                .file_stem()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_else(|| "job".into())
-        } else {
-            req.name.clone()
-        };
-
-        // Reserve before dispatching, so a second submission racing this one
-        // sees the GPUs as taken instead of planning onto the same devices.
-        self.registry.reserve(&plan, &job_id).await;
-
-        let (tx, _) = broadcast::channel(4096);
-        self.registry
-            .insert_job(Job {
-                job_id: job_id.clone(),
-                name,
-                submitted_by: req.submitted_by.clone(),
-                timeout_s: req.timeout_s,
-                plan: plan.clone(),
-                per_node: Default::default(),
-                submitted: now_s(),
-                logs: VecDeque::new(),
-                nccl_errors: Vec::new(),
-                metrics: Default::default(),
-                util_sum: Default::default(),
-                util_n: Default::default(),
-                tx,
-            })
-            .await;
-
-        // Pass the image through verbatim, empty included. An empty value
-        // means "whatever this node's agent is configured to use", which is
-        // what lets a cluster with mixed GPU architectures work: a Blackwell
-        // node needs a CUDA 12.8 image where an Ampere node is happy on 12.6.
-        let image = req.image.clone();
-
-        // Launch rank 0 first: it hosts the rendezvous, and starting the other
-        // ranks against a master that is not up yet just burns retry timeout.
-        let mut placements = plan.placements.clone();
-        placements.sort_by_key(|p| p.node_rank);
-
-        for p in &placements {
-            let launch = LaunchJobRequest {
-                job_id: job_id.clone(),
-                node_rank: p.node_rank,
-                nnodes,
-                nproc_per_node: nproc,
-                master_addr: plan.master_addr.clone(),
-                master_port: plan.master_port,
-                gpu_indices: p.gpu_indices.clone(),
-                image: image.clone(),
-                workdir: req.workdir.clone(),
-                script: req.script.clone(),
-                script_args: req.script_args.clone(),
-                env: req.env.clone(),
-                torchrun_args: Vec::new(),
-                mounts: req.mounts.clone(),
-            };
-
-            if let Err(e) = dispatch(&p.address, launch).await {
-                // Partial launch: tear down whatever already started so the
-                // cluster is not left with orphaned ranks holding GPUs.
-                tracing::error!(job = %job_id, node = %p.node_id, "launch failed: {e}");
-                for done in placements.iter().take_while(|q| q.node_rank < p.node_rank) {
-                    let _ = stop_on(&done.address, &job_id).await;
-                }
+        let plan = match plan_for(&nodes, &req, self.master_port, self.min_free_vram_b) {
+            Ok(plan) => plan,
+            // Nothing fits right now. With `--wait` that is a queue rather
+            // than a failure: on a shared cluster "full" is the normal state,
+            // and resubmitting by hand at 03:00 is not a scheduling policy.
+            Err(e) if req.queue => {
+                let job_id = new_job_id();
+                let deadline = match req.queue_timeout_s {
+                    0 => 0,
+                    t => now_s() + t as i64,
+                };
                 self.registry
-                    .update_job_status(JobStatus {
-                        job_id: job_id.clone(),
-                        node_id: p.node_id.clone(),
-                        node_rank: p.node_rank,
-                        phase: JobPhase::Failed as i32,
-                        exit_code: -1,
-                        message: format!("launch failed: {e}"),
-                        started_unix_s: 0,
-                        ended_unix_s: now_s(),
-                    })
+                    .insert_job(new_job(&job_id, &req, JobPlan::default(), Some(deadline)))
                     .await;
-                self.registry.release_if_done(&job_id).await;
-
+                let queue_position = self.registry.queue_position(&job_id).await;
+                tracing::info!(job = %job_id, "queued at #{queue_position}: {e}");
                 return Ok(Response::new(SubmitJobResponse {
                     job_id,
-                    accepted: false,
-                    message: format!("launch on {} failed: {e}", p.node_id),
-                    plan: Some(plan),
+                    accepted: true,
+                    message: e.to_string(),
+                    plan: None,
+                    queue_position,
                 }));
             }
-        }
+            Err(e) => return Err(Status::failed_precondition(e.to_string())),
+        };
 
-        tracing::info!(
-            job = %job_id,
-            world_size = plan.world_size,
-            master = %plan.master_addr,
-            "job launched"
-        );
-        Ok(Response::new(SubmitJobResponse {
-            job_id,
-            accepted: true,
-            message: "launched".into(),
-            plan: Some(plan),
-        }))
+        let job_id = new_job_id();
+        self.registry
+            .insert_job(new_job(&job_id, &req, plan.clone(), None))
+            .await;
+
+        match start_job(&self.registry, &req, &job_id, &plan).await {
+            Ok(()) => {
+                tracing::info!(
+                    job = %job_id,
+                    world_size = plan.world_size,
+                    master = %plan.master_addr,
+                    "job launched"
+                );
+                Ok(Response::new(SubmitJobResponse {
+                    job_id,
+                    accepted: true,
+                    message: "launched".into(),
+                    plan: Some(plan),
+                    queue_position: 0,
+                }))
+            }
+            Err(message) => Ok(Response::new(SubmitJobResponse {
+                job_id,
+                accepted: false,
+                message,
+                plan: Some(plan),
+                queue_position: 0,
+            })),
+        }
     }
 
     async fn get_job(&self, req: Request<GetJobRequest>) -> Result<Response<JobSummary>, Status> {
@@ -232,7 +158,11 @@ impl Controller for ControllerService {
         let g = self.registry.inner.lock().await;
         g.jobs
             .get(&id)
-            .map(|j| Response::new(j.to_summary()))
+            .map(|j| {
+                let mut summary = j.to_summary();
+                summary.queue_position = g.queue_position(&id);
+                Response::new(summary)
+            })
             .ok_or_else(|| Status::not_found(format!("no such job {id}")))
     }
 
@@ -247,7 +177,11 @@ impl Controller for ControllerService {
             .iter()
             .rev()
             .filter_map(|id| g.jobs.get(id))
-            .map(|j| j.to_summary())
+            .map(|j| {
+                let mut summary = j.to_summary();
+                summary.queue_position = g.queue_position(&j.job_id);
+                summary
+            })
             .collect();
         if limit > 0 {
             jobs.truncate(limit as usize);
@@ -552,6 +486,19 @@ impl Controller for ControllerService {
     ) -> Result<Response<CancelJobResponse>, Status> {
         let id = req.into_inner().job_id;
 
+        // A queued job has no ranks to stop; taking it out of the queue is the
+        // whole cancellation.
+        if self
+            .registry
+            .dequeue(&id, JobPhase::Cancelled, "cancelled while queued")
+            .await
+        {
+            return Ok(Response::new(CancelJobResponse {
+                cancelled: true,
+                message: format!("cancelled {id} before it started"),
+            }));
+        }
+
         let addrs: Vec<String> = {
             let g = self.registry.inner.lock().await;
             let Some(job) = g.jobs.get(&id) else {
@@ -682,6 +629,180 @@ impl Controller for ControllerService {
 }
 
 /// Cancel jobs that have outrun their wall-clock limit.
+/// Ask the scheduler where this job goes. Auto mode picks the shape itself,
+/// which is why the caller cannot precompute it.
+fn plan_for(
+    nodes: &[NodeState],
+    req: &SubmitJobRequest,
+    master_port: u32,
+    min_free_vram_b: u64,
+) -> Result<JobPlan, scheduler::ScheduleError> {
+    if req.auto_place {
+        scheduler::plan_auto(
+            nodes,
+            &req.node_filter,
+            master_port,
+            min_free_vram_b,
+            // gpus_per_node doubles as a cap in auto mode when set.
+            if req.gpus_per_node > 0 { req.gpus_per_node } else { u32::MAX },
+        )
+    } else {
+        scheduler::plan(
+            nodes,
+            req.nodes,
+            req.gpus_per_node,
+            &req.node_filter,
+            master_port,
+            min_free_vram_b,
+        )
+    }
+}
+
+fn new_job_id() -> String {
+    format!("j{}", &uuid::Uuid::new_v4().simple().to_string()[..10])
+}
+
+/// `queue_deadline` set means the job is queued: no plan yet, and the request
+/// is kept so the dispatcher can place it later.
+fn new_job(job_id: &str, req: &SubmitJobRequest, plan: JobPlan, queue_deadline: Option<i64>) -> Job {
+    let name = if req.name.is_empty() {
+        std::path::Path::new(&req.script)
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| "job".into())
+    } else {
+        req.name.clone()
+    };
+    let (tx, _) = broadcast::channel(4096);
+    Job {
+        job_id: job_id.to_string(),
+        name,
+        submitted_by: req.submitted_by.clone(),
+        timeout_s: req.timeout_s,
+        plan,
+        per_node: Default::default(),
+        submitted: now_s(),
+        logs: VecDeque::new(),
+        nccl_errors: Vec::new(),
+        metrics: Default::default(),
+        util_sum: Default::default(),
+        util_n: Default::default(),
+        tx,
+        queued: queue_deadline.is_some(),
+        queue_req: queue_deadline.map(|_| req.clone()),
+        queue_deadline: queue_deadline.unwrap_or(0),
+    }
+}
+
+/// Reserve the GPUs and launch every rank. Shared by `submit_job` and the
+/// queue dispatcher, so a job that waited starts exactly like one that did not.
+async fn start_job(
+    registry: &Registry,
+    req: &SubmitJobRequest,
+    job_id: &str,
+    plan: &JobPlan,
+) -> Result<(), String> {
+    // Auto mode decides the shape, so the launch requests must follow the
+    // plan rather than what the caller asked for.
+    let nnodes = plan.placements.len() as u32;
+    let nproc = plan.placements.first().map(|p| p.gpu_indices.len() as u32).unwrap_or(0);
+
+    // Reserve before dispatching, so a second submission racing this one
+    // sees the GPUs as taken instead of planning onto the same devices.
+    registry.reserve(plan, job_id).await;
+
+    // Launch rank 0 first: it hosts the rendezvous, and starting the other
+    // ranks against a master that is not up yet just burns retry timeout.
+    let mut placements = plan.placements.clone();
+    placements.sort_by_key(|p| p.node_rank);
+
+    for p in &placements {
+        let launch = LaunchJobRequest {
+            job_id: job_id.to_string(),
+            node_rank: p.node_rank,
+            nnodes,
+            nproc_per_node: nproc,
+            master_addr: plan.master_addr.clone(),
+            master_port: plan.master_port,
+            gpu_indices: p.gpu_indices.clone(),
+            // Pass the image through verbatim, empty included. An empty value
+            // means "whatever this node's agent is configured to use", which
+            // is what lets a cluster with mixed GPU architectures work: a
+            // Blackwell node needs a CUDA 12.8 image where an Ampere node is
+            // happy on 12.6.
+            image: req.image.clone(),
+            workdir: req.workdir.clone(),
+            script: req.script.clone(),
+            script_args: req.script_args.clone(),
+            env: req.env.clone(),
+            torchrun_args: Vec::new(),
+            mounts: req.mounts.clone(),
+        };
+
+        if let Err(e) = dispatch(&p.address, launch).await {
+            // Partial launch: tear down whatever already started so the
+            // cluster is not left with orphaned ranks holding GPUs.
+            tracing::error!(job = %job_id, node = %p.node_id, "launch failed: {e}");
+            for done in placements.iter().take_while(|q| q.node_rank < p.node_rank) {
+                let _ = stop_on(&done.address, job_id).await;
+            }
+            registry
+                .update_job_status(JobStatus {
+                    job_id: job_id.to_string(),
+                    node_id: p.node_id.clone(),
+                    node_rank: p.node_rank,
+                    phase: JobPhase::Failed as i32,
+                    exit_code: -1,
+                    message: format!("launch failed: {e}"),
+                    started_unix_s: 0,
+                    ended_unix_s: now_s(),
+                })
+                .await;
+            registry.release_if_done(job_id).await;
+            return Err(format!("launch on {} failed: {e}", p.node_id));
+        }
+    }
+    Ok(())
+}
+
+/// Places jobs submitted with `--wait` as the cluster frees up.
+///
+/// Deliberately FIFO and one pass per tick: fancier policies (backfill,
+/// priorities) need a fairness story this cluster has not asked for, and
+/// "whoever waited longest goes next" is the one rule nobody argues with.
+pub async fn run_queue(
+    registry: std::sync::Arc<Registry>,
+    master_port: u32,
+    min_free_vram_b: u64,
+) {
+    let mut tick = tokio::time::interval(std::time::Duration::from_secs(5));
+    loop {
+        tick.tick().await;
+        for (job_id, req, deadline) in registry.queued_jobs().await {
+            if deadline > 0 && now_s() > deadline {
+                tracing::warn!(job = %job_id, "gave up waiting for capacity");
+                registry
+                    .dequeue(&job_id, JobPhase::Failed, "gave up waiting for capacity")
+                    .await;
+                continue;
+            }
+
+            // Re-read the cluster for every job: the one placed a moment ago
+            // took GPUs the next one must not be handed as well.
+            let nodes = registry.node_states().await;
+            let Ok(plan) = plan_for(&nodes, &req, master_port, min_free_vram_b) else {
+                continue;
+            };
+
+            registry.promote(&job_id, plan.clone()).await;
+            tracing::info!(job = %job_id, world_size = plan.world_size, "capacity freed, launching");
+            if let Err(e) = start_job(&registry, &req, &job_id, &plan).await {
+                tracing::error!(job = %job_id, "queued job failed to launch: {e}");
+            }
+        }
+    }
+}
+
 pub async fn reap_expired(registry: std::sync::Arc<Registry>) {
     let mut tick = tokio::time::interval(std::time::Duration::from_secs(15));
     loop {

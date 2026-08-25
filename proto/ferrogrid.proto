@@ -153,6 +153,12 @@ message SubmitJobRequest {
   // Extra bind mounts, "HOST[:CONTAINER][:ro]". Datasets normally live on
   // shared storage outside the workspace, so they need mounting explicitly.
   repeated string mounts = 10;
+  // Queue instead of failing when nothing is free: the controller retries the
+  // placement until it fits. A shared cluster is full most of the time, and
+  // resubmitting by hand at 03:00 is not a scheduling policy.
+  bool queue             = 14;
+  // Give up queueing after this many seconds. 0 = wait indefinitely.
+  uint32 queue_timeout_s = 15;
 }
 
 message SubmitJobResponse {
@@ -160,6 +166,8 @@ message SubmitJobResponse {
   bool accepted  = 2;
   string message = 3;
   JobPlan plan   = 4;
+  // Non-zero when the job was queued instead of placed: where it sits in line.
+  uint32 queue_position = 5;
 }
 
 // The concrete placement decision the scheduler made.
@@ -210,6 +218,10 @@ message JobSummary {
   // Aggregated NCCL / distributed error lines detected in the logs.
   repeated string nccl_errors = 7;
   TrainingMetrics metrics = 8;
+  // Waiting for capacity rather than running. `plan` is empty until it is
+  // placed; position is 1-based within the queue.
+  bool queued            = 10;
+  uint32 queue_position  = 11;
 }
 
 message TrainingMetrics {

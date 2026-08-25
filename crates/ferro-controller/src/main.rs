@@ -77,6 +77,12 @@ async fn main() -> Result<()> {
     );
 
     tokio::spawn(service::reap_expired(registry.clone()));
+    // Jobs submitted with `--wait` sit here until the cluster frees up.
+    tokio::spawn(service::run_queue(
+        registry.clone(),
+        args.master_port,
+        min_free_vram_b,
+    ));
 
     tonic::transport::Server::builder()
         .add_service(ControllerServer::new(svc))

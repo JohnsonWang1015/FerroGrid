@@ -201,6 +201,19 @@ pub fn gpus(entries: &[GpuEntry], json: bool) -> String {
     out
 }
 
+/// A queued job's phase is "pending" as far as the enum goes, which says
+/// nothing useful; where it sits in line does.
+fn job_phase_cell(j: &JobSummary) -> Cell {
+    if j.queued {
+        let label = match j.queue_position {
+            0 => "queued".to_string(),
+            n => format!("queued #{n}"),
+        };
+        return Cell::new(label).fg(Color::Blue);
+    }
+    phase_cell(j.phase())
+}
+
 fn phase_cell(p: JobPhase) -> Cell {
     let c = match p {
         JobPhase::Succeeded => Color::Green,
@@ -238,7 +251,8 @@ pub fn jobs(list: &[JobSummary], json: bool) -> String {
                 serde_json::json!({
                     "job_id": j.job_id,
                     "name": j.name,
-                    "phase": j.phase().label(),
+                    "phase": if j.queued { "queued" } else { j.phase().label() },
+                    "queue_position": j.queue_position,
                     "world_size": j.plan.as_ref().map(|p| p.world_size).unwrap_or(0),
                     "submitted_unix_s": j.submitted_unix_s,
                     "step": m.step,
@@ -261,7 +275,7 @@ pub fn jobs(list: &[JobSummary], json: bool) -> String {
         t.add_row(vec![
             Cell::new(&j.job_id),
             Cell::new(&j.name),
-            phase_cell(j.phase()),
+            job_phase_cell(j),
             Cell::new(p.world_size),
             Cell::new(p.placements.len()),
             Cell::new(m.step),
@@ -319,7 +333,11 @@ pub fn job_detail(j: &JobSummary, json: bool) -> String {
     let mut out = String::new();
     let p = j.plan.clone().unwrap_or_default();
     line!(out, "Job     {}  ({})", j.job_id, j.name);
-    line!(out, "Phase   {}", j.phase().label());
+    if j.queued {
+        line!(out, "Phase   queued at #{}, waiting for capacity", j.queue_position);
+    } else {
+        line!(out, "Phase   {}", j.phase().label());
+    }
     line!(
         out,
         "Rendez  MASTER_ADDR={} MASTER_PORT={} WORLD_SIZE={}",
@@ -394,7 +412,15 @@ pub fn submit(r: &SubmitJobResponse, json: bool) -> String {
 
     let mut out = String::new();
 
-    let p = r.plan.clone().unwrap_or_default();
+    // Queued: there is no placement to report yet, only a place in line. The
+    // controller launches it when the GPUs it needs come free.
+    let Some(p) = r.plan.clone() else {
+        line!(out, "Queued {} at #{} in line", r.job_id, r.queue_position);
+        line!(out, "  nothing free yet: {}", r.message);
+        line!(out, "  ferro jobs            # where it sits in line");
+        line!(out, "  ferro cancel {}  # give up", r.job_id);
+        return out;
+    };
     line!(out, "Submitted {}", r.job_id);
     line!(
         out,
@@ -508,7 +534,7 @@ pub fn dashboard(nodes: &[NodeState], gpus: &[GpuEntry], jobs: &[JobSummary]) ->
         jt.add_row(vec![
             Cell::new(&j.job_id),
             Cell::new(&j.name),
-            phase_cell(j.phase()),
+            job_phase_cell(j),
             Cell::new(p.world_size),
             Cell::new(m.step),
             Cell::new(num(m.loss)),

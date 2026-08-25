@@ -250,6 +250,7 @@ ferro plugins                   # transfer plugins the controller knows about
 ferro fetch <plugin> <remote> <local>   # pull data onto the nodes, in parallel
 ferro push  <plugin> <local> <remote>   # send results back
 ferro train --nodes 2 --gpus-per-node 2 train.py
+ferro train --wait ... train.py # queue instead of failing when the cluster is full
 ferro jobs                      # recent jobs
 ferro job <job-id>              # placement, per-rank status, metrics, NCCL errors
 ferro logs <job-id> [-f]        # merged logs, tagged by rank and node
@@ -273,6 +274,36 @@ the limit and the GPUs return to the pool. On a shared cluster, put one on
 anything you are not watching — it is the difference between losing an
 afternoon and losing a week. A rank that *fails* is handled without it: the
 controller tears down its surviving peers immediately.
+
+### Waiting for capacity
+
+```bash
+ferro train --wait -f my_train.py            # start when the GPUs come free
+ferro train --wait 2h -f my_train.py         # ... or give up after 2h
+```
+
+Without `--wait`, a submission that does not fit fails on the spot, which on a
+shared cluster is most of the time. `--wait` puts the job in a queue instead:
+the controller retries the placement every few seconds and launches it the
+moment the GPUs it asked for come free — including GPUs freed by somebody
+else's job finishing at 03:00.
+
+```
+$ ferro train --wait --auto -f my_train.py
+Queued j9bf2c56ce2 at #1 in line
+  nothing free yet: requested 1 nodes with 1 free GPU(s) each, but only 0 node(s) qualify
+  ferro jobs            # where it sits in line
+  ferro cancel j9bf2c56ce2  # give up
+```
+
+`ferro jobs` shows queued jobs as `queued #N`; the queue is FIFO, so waiting
+longer is the only thing that improves your position. `ferro cancel` takes a
+job out of the line, and `--wait 2h` gives up on its own. A queued job holds
+nothing: it has no placement until it starts, and `--timeout` (above) only
+starts counting then.
+
+With `-f/--follow` the CLI says it is waiting and starts streaming logs when
+the job actually launches.
 
 ### Moving data: plugins
 

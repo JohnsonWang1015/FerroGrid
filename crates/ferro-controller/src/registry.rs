@@ -6,7 +6,7 @@
 
 use ferro_proto::{
     Gpu, GpuEntry, GpuOccupant, GpuProcess, JobPhase, JobPlan, JobStatus, JobSummary, LogLine,
-    NodeInfo, NodeState, TrainingMetrics,
+    NodeInfo, NodeState, SubmitJobRequest, TrainingMetrics,
 };
 use std::collections::{HashMap, HashSet};
 use tokio::sync::{broadcast, Mutex};
@@ -73,12 +73,23 @@ pub struct Job {
     pub util_sum: f64,
     pub util_n: u64,
     pub tx: broadcast::Sender<LogLine>,
+    /// Waiting for capacity: no plan yet, and the original request kept so the
+    /// dispatcher can place it once the cluster frees up.
+    pub queued: bool,
+    pub queue_req: Option<SubmitJobRequest>,
+    /// Unix seconds after which to give up queueing. 0 = wait indefinitely.
+    pub queue_deadline: i64,
 }
 
 impl Job {
     /// A job is only as good as its worst rank: any failure fails the job, and
     /// it only succeeds once every rank has succeeded.
     pub fn phase(&self) -> JobPhase {
+        // A queued job has no placements at all, which the vote below would
+        // read as "every rank succeeded".
+        if self.queued {
+            return JobPhase::Pending;
+        }
         let expected = self.plan.placements.len();
         if self.per_node.len() < expected {
             return JobPhase::Launching;
@@ -114,6 +125,10 @@ impl Job {
             submitted_unix_s: self.submitted,
             nccl_errors: self.nccl_errors.clone(),
             metrics: Some(metrics),
+            queued: self.queued,
+            // Filled in by the registry, which is the only place that knows
+            // about the other jobs in line.
+            queue_position: 0,
         }
     }
 
@@ -244,6 +259,68 @@ impl Registry {
             .collect()
     }
 
+    /// Jobs still waiting for capacity, oldest first, with the request the
+    /// dispatcher needs to place them.
+    pub async fn queued_jobs(&self) -> Vec<(String, SubmitJobRequest, i64)> {
+        let g = self.inner.lock().await;
+        let mut out: Vec<(String, SubmitJobRequest, i64)> = g
+            .jobs
+            .values()
+            .filter(|j| j.queued)
+            .filter_map(|j| {
+                j.queue_req
+                    .clone()
+                    .map(|r| (j.job_id.clone(), r, j.queue_deadline))
+            })
+            .collect();
+        // FIFO by submission order. Not by timestamp: two jobs submitted in
+        // the same second still have an order, and the queue has to agree with
+        // the position each of them was told.
+        out.sort_by_key(|(id, _, _)| g.job_order.iter().position(|j| j == id).unwrap_or(usize::MAX));
+        out
+    }
+
+    /// A queued job has been placed: it now has a plan and stops being queued.
+    pub async fn promote(&self, job_id: &str, plan: JobPlan) {
+        let mut g = self.inner.lock().await;
+        if let Some(job) = g.jobs.get_mut(job_id) {
+            job.plan = plan;
+            job.queued = false;
+            job.queue_req = None;
+            // The wall clock starts when the job starts, not when it queued.
+            job.submitted = now_s();
+        }
+    }
+
+    /// Take a job out of the queue without ever launching it. The status is
+    /// what makes it terminal -- a queued job has no ranks to report one.
+    pub async fn dequeue(&self, job_id: &str, phase: JobPhase, message: &str) -> bool {
+        let mut g = self.inner.lock().await;
+        let Some(job) = g.jobs.get_mut(job_id) else { return false };
+        if !job.queued {
+            return false;
+        }
+        job.queued = false;
+        job.queue_req = None;
+        job.per_node.insert(
+            String::new(),
+            JobStatus {
+                job_id: job_id.to_string(),
+                phase: phase as i32,
+                message: message.to_string(),
+                ended_unix_s: now_s(),
+                ..Default::default()
+            },
+        );
+        true
+    }
+
+    /// Where a job sits in the queue, 1-based. 0 when it is not queued.
+    pub async fn queue_position(&self, job_id: &str) -> u32 {
+        let g = self.inner.lock().await;
+        g.queue_position(job_id)
+    }
+
     /// Jobs past their wall-clock limit, as (job_id, agent addresses).
     ///
     /// A hung distributed job never reports failure -- every rank sits in a
@@ -255,7 +332,8 @@ impl Registry {
         let now = now_s();
         g.jobs
             .values()
-            .filter(|j| j.timeout_s > 0 && !j.phase().is_terminal())
+            // A queued job is not burning anything; its own deadline applies.
+            .filter(|j| j.timeout_s > 0 && !j.queued && !j.phase().is_terminal())
             .filter(|j| now - j.submitted > j.timeout_s as i64)
             .map(|j| {
                 (
@@ -359,6 +437,19 @@ impl RegistryInner {
             .map(|j| j.job_id.clone())
             .collect()
     }
+
+    pub fn queue_position(&self, job_id: &str) -> u32 {
+        if !self.jobs.get(job_id).map(|j| j.queued).unwrap_or(false) {
+            return 0;
+        }
+        let ahead = self
+            .job_order
+            .iter()
+            .take_while(|id| *id != job_id)
+            .filter(|id| self.jobs.get(*id).map(|j| j.queued).unwrap_or(false))
+            .count();
+        ahead as u32 + 1
+    }
 }
 
 /// Foreign processes on one GPU, folded per user.
@@ -414,6 +505,28 @@ mod tests {
         }
     }
 
+    fn job(id: &str, queued: bool, submitted: i64) -> Job {
+        let (tx, _) = broadcast::channel(4);
+        Job {
+            job_id: id.into(),
+            name: id.into(),
+            submitted_by: "tester".into(),
+            timeout_s: 0,
+            plan: JobPlan::default(),
+            per_node: Default::default(),
+            submitted,
+            logs: Default::default(),
+            nccl_errors: Vec::new(),
+            metrics: Default::default(),
+            util_sum: 0.0,
+            util_n: 0,
+            tx,
+            queued,
+            queue_req: queued.then(SubmitJobRequest::default),
+            queue_deadline: 0,
+        }
+    }
+
     #[test]
     fn a_card_somebody_else_filled_is_not_free() {
         let node = Node {
@@ -451,5 +564,38 @@ mod tests {
         // A user is as busy as their busiest process on the card.
         assert_eq!(out[0].busy_unix_s, 500);
         assert_eq!(out[1].user, "bob");
+    }
+
+    #[test]
+    fn a_queued_job_is_pending_not_succeeded() {
+        // Its plan is empty, which the per-rank vote would otherwise read as
+        // "every rank succeeded".
+        let j = job("j1", true, 10);
+        assert_eq!(j.phase(), JobPhase::Pending);
+        assert!(!j.phase().is_terminal());
+        assert!(j.to_summary().queued);
+    }
+
+    #[tokio::test]
+    async fn the_queue_is_fifo_and_cancellable() {
+        let r = Registry::new(8 << 30);
+        // Same submission second on purpose: the order still has to hold.
+        r.insert_job(job("first", true, 10)).await;
+        r.insert_job(job("second", true, 10)).await;
+        r.insert_job(job("running", false, 10)).await;
+
+        let queued: Vec<String> = r.queued_jobs().await.into_iter().map(|(id, _, _)| id).collect();
+        assert_eq!(queued, vec!["first", "second"]);
+        assert_eq!(r.queue_position("first").await, 1);
+        assert_eq!(r.queue_position("second").await, 2);
+        assert_eq!(r.queue_position("running").await, 0);
+
+        assert!(r.dequeue("second", JobPhase::Cancelled, "cancelled while queued").await);
+        // Cancelling a queued job must actually take it out of the line, or
+        // the dispatcher launches something the user has already given up on.
+        assert!(!r.dequeue("second", JobPhase::Cancelled, "again").await);
+        let g = r.inner.lock().await;
+        assert_eq!(g.jobs["second"].phase(), JobPhase::Cancelled);
+        assert_eq!(g.queue_position("first"), 1);
     }
 }
