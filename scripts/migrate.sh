@@ -31,6 +31,11 @@
 #   --no-key                do not copy the SSH private key. The new machine
 #                           can still reach nodes it already has a key for.
 #   --no-source             binaries and settings only, no checkout
+#   --proxy-jump [user@]host
+#                           reach the nodes through a jump host, for a new
+#                           machine that can see this one but not the node
+#                           network (a laptop on the VPN, say). Added to every
+#                           migrated Host block that does not already name one.
 #   --ssh-all               carry every Host block in ~/.ssh/config, not just
 #                           the ones belonging to registered nodes
 #   --yes                   do not ask before copying the private key
@@ -49,6 +54,7 @@ ASSUME_YES=0
 DRY_RUN=0
 DEST='$HOME/FerroGrid'
 CONTROLLER_OVERRIDE=""
+PROXY_JUMP=""
 POSITIONAL=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -60,6 +66,7 @@ while [[ $# -gt 0 ]]; do
         --dry-run)    DRY_RUN=1; shift ;;
         --dest)       DEST="${2:?--dest needs a directory}"; shift 2 ;;
         --controller) CONTROLLER_OVERRIDE="${2:?--controller needs HOST:PORT}"; shift 2 ;;
+        --proxy-jump) PROXY_JUMP="${2:?--proxy-jump needs [user@]host}"; shift 2 ;;
         # Print the header comment, however long it grows.
         -h|--help)    awk 'NR>1 && /^#/ {sub(/^#[[:space:]]?/, ""); print; next} NR>1 {exit}' "$0"; exit 0 ;;
         *)            POSITIONAL+=("$1"); shift ;;
@@ -152,6 +159,17 @@ if [[ $DRY_RUN -eq 0 ]]; then
     say "connecting to $TARGET (you may be prompted for a password once)"
     "${SSH[@]}" "$TARGET" true || die "cannot ssh to $TARGET"
     note "target: $("${SSH[@]}" "$TARGET" 'printf "%s, home %s" "$(id -un)" "$HOME"')"
+
+    # Whether the node network is routable from there at all. Learning this in
+    # the final verification instead means a bundle has already shipped and an
+    # ssh config has already been written for a route that does not exist.
+    if [[ -z "$PROXY_JUMP" ]] \
+       && ! "${SSH[@]}" -n "$TARGET" "timeout 5 bash -c 'cat </dev/null >/dev/tcp/$FIRST_NODE_IP/22'" 2>/dev/null; then
+        note "warning: $TARGET cannot open $FIRST_NODE_IP:22, so it has no way to"
+        note "         reach the nodes and \`ferro sync\` will not work from there."
+        note "         Re-run with --proxy-jump $(id -un)@<an address of this machine"
+        note "         it can see> to send them through here."
+    fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -235,6 +253,12 @@ emit_host() {  # <alias> <ip> <login-user>
         block="Host $alias"$'\n'"    HostName $ip"
         [[ -n "$user" ]] && block+=$'\n'"    User $user"
     fi
+    # The node network may be routable from here and not from there. A block
+    # that already routes itself somehow -- ProxyJump, ProxyCommand -- keeps
+    # what it has rather than being sent through ours as well.
+    if [[ -n "$PROXY_JUMP" ]] && ! grep -qiE '^[[:space:]]*proxy(jump|command)' <<<"$block"; then
+        block+=$'\n'"    ProxyJump $PROXY_JUMP"
+    fi
     # Only name the migrated key where the block does not already choose one:
     # a host with its own IdentityFile keeps it. `IdentitiesOnly` stops an
     # agent holding a dozen keys from exhausting MaxAuthTries before ours.
@@ -277,8 +301,11 @@ KEYNAME=""
 if [[ $WITH_KEY -eq 1 ]]; then
     # Whatever key the config points these hosts at, rather than assuming
     # id_ed25519.
+    # `|| true`: finding no key is an answer, not a failure -- without it the
+    # loop's non-zero status ends the whole script under `set -e`, and the
+    # "skipping" note below never gets to say so.
     KEY="$(ssh -G "${MIGRATED_HOSTS[0]}" 2>/dev/null | sed -n 's/^identityfile //p' \
-           | sed "s|^~|$HOME|" | while read -r k; do [[ -f "$k" ]] && echo "$k" && break; done)"
+           | sed "s|^~|$HOME|" | while read -r k; do [[ -f "$k" ]] && echo "$k" && break; done || true)"
     if [[ -z "$KEY" ]]; then
         note "no SSH private key found for these hosts; skipping (the new machine will prompt for passwords)"
     else
@@ -425,12 +452,18 @@ if [[ "$SEEN" -lt "$NODE_COUNT" ]]; then
 fi
 
 say "checking the new machine can reach the nodes over SSH"
+[[ -n "$PROXY_JUMP" ]] && note "through $PROXY_JUMP"
+SSH_FAILED=0
 while IFS=$'\t' read -r id ip user _ _; do
     alias="${ALIAS_FOR_IP[$ip]:-$id}"
     printf '    %s ... ' "$alias"
     "${SSH[@]}" -n "$TARGET" "ssh -n -o BatchMode=yes -o ConnectTimeout=10 '$alias' 'command -v rsync >/dev/null && echo ok || echo no-rsync'" 2>/dev/null \
-        || echo "unreachable (password auth, or the key was not copied)"
+        || { echo "unreachable (password auth, or the key was not copied)"; SSH_FAILED=1; }
 done <<<"$NODE_TSV"
+if [[ $SSH_FAILED -eq 1 && -z "$PROXY_JUMP" ]]; then
+    note "if the node network is not routable from $TARGET at all, re-run with"
+    note "  --proxy-jump $(id -un)@<an address of this machine it can see>"
+fi
 
 echo
 say "done"

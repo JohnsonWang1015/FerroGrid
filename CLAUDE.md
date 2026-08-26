@@ -95,6 +95,14 @@ See README.md for architecture, deployment and measured results.
 - The migration bundle contains a private key. It is removed from the target as
   soon as the install finishes; the local copy lives in a `mktemp -d` cleaned by
   the exit trap.
+- Reaching the controller and reaching the nodes are separate questions on the
+  target. A machine on the VPN only can talk to the controller (give it
+  `--controller <this machine's VPN address>`; the LAN address the script
+  otherwise guesses is unreachable there) and still have no route to the node
+  network at all, which breaks `ferro sync` and nothing else. `--proxy-jump
+  [user@]host` puts a `ProxyJump` in every migrated block that does not already
+  route itself; the script probes the first node's SSH port from the target
+  before shipping and suggests the flag when there is no route.
 
 - A failed rank must tear down its peers: survivors sit in a collective
   forever holding GPUs. The controller does this in `report_job_status`.
