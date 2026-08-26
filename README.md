@@ -233,6 +233,54 @@ ferro watch     # live dashboard
 ferro train --nodes 2 --gpus-per-node 1 -f python/examples/train_fsdp2.py --steps 10
 ```
 
+### 6. Moving to another machine
+
+Everything above lives on one workstation: the binaries, the SSH way in to
+each node, `plugins.toml`, and the controller address. One command carries the
+lot to a second machine:
+
+```bash
+./scripts/migrate.sh esl@10.0.0.5
+```
+
+It reads the node list **from the running controller** rather than from a host
+list -- the same source `ferro sync` uses -- and ships:
+
+| | |
+|---|---|
+| `ferro`, `ferro-agent`, `ferro-controller` | into `~/.local/bin` |
+| an SSH `Host` block per registered node | merged into `~/.ssh/config`, above any `Host *` |
+| your SSH private key and the nodes' `known_hosts` entries | so `ferro sync` needs no password there either |
+| `~/.config/ferrogrid/plugins.toml` | so `ferro fetch`/`push` work |
+| `FERRO_CONTROLLER` and `PATH` | sourced from `~/.config/ferrogrid/env.sh` by the login shell |
+| the checkout | `~/FerroGrid` by default (`--dest`, or `--no-source`) |
+
+Then it proves it worked from the far side: it runs `ferro nodes` **on the new
+machine** and checks every node came back, and SSHes from there to each node to
+confirm the key and `rsync` are in place. A green run means the new machine can
+actually drive the cluster, not merely that files were copied.
+
+By default the new machine is a second operator console: it talks to the
+controller still running here, and nothing on the GPU nodes changes. To hand
+the cluster over completely -- run the controller there under systemd and
+re-point every agent at it, after which the new machine needs nothing from this
+one:
+
+```bash
+./scripts/migrate.sh esl@10.0.0.5 --takeover
+```
+
+Useful flags: `--dry-run` (build the bundle, print exactly what would be sent,
+send nothing), `--no-key` (leave the private key behind; the new machine falls
+back to passwords), `--ssh-all` (carry every `Host` block in `~/.ssh/config`,
+not just the nodes'). Re-run it any time to push a new build -- managed blocks
+are replaced rather than appended, an existing FerroGrid checkout is refreshed
+in place, and anything else it finds is backed up beside itself.
+
+The private key is the one thing worth pausing over, so the script asks before
+copying it (`--yes` to skip the prompt) and deletes the staging bundle from the
+new machine once the install is done.
+
 ---
 
 ## Using the CLI

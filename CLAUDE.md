@@ -83,6 +83,19 @@ See README.md for architecture, deployment and measured results.
   throughput: it covers the node-to-switch hop only, and a 1000 Mb/s NIC with
   zero errors can still sit behind a 100 Mb/s path.
 
+- `scripts/migrate.sh` moves the whole setup to another machine. The node
+  inventory it carries is read live from the controller (`ferro --json nodes`),
+  because that registry only ever exists in the controller's memory -- there is
+  no file to copy, and a host list would go stale. It therefore refuses to run
+  with the controller down rather than migrating a guess.
+- `ssh_config` is **first-obtained-value-wins**, so the migrated block is
+  *prepended*: land it after somebody's `Host *` and its per-host `IdentityFile`
+  is silently ignored. The block also names the key explicitly only where the
+  original block did not, so a host with its own key keeps it.
+- The migration bundle contains a private key. It is removed from the target as
+  soon as the install finishes; the local copy lives in a `mktemp -d` cleaned by
+  the exit trap.
+
 - A failed rank must tear down its peers: survivors sit in a collective
   forever holding GPUs. The controller does this in `report_job_status`.
 - `torch.distributed.pipelining` hangs cross-node here even though every NCCL

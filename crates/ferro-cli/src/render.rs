@@ -147,6 +147,11 @@ pub fn nodes(nodes: &[NodeState], json: bool) -> String {
                     "cuda": i.cuda_version,
                     "cpus": i.cpu_count,
                     "gpu_error": i.gpu_error,
+                    // The rsync/ssh login and workspace root each node
+                    // reported: what `ferro sync` uses, and what a machine
+                    // taking this cluster over needs in order to reach it.
+                    "user": i.user,
+                    "workspace": i.workspace,
                 })
             })
             .collect();
