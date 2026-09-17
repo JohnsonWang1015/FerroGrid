@@ -55,10 +55,11 @@ pub async fn snapshot(state: &AgentState) -> Vec<GpuProcess> {
     // Containerised jobs are matched by container, host jobs by ancestry: the
     // torchrun workers are children of the process we spawned, but a container's
     // processes hang off containerd, not off us.
-    let (by_container, launcher_pids) = {
+    let (by_container, launcher_pids, images) = {
         let jobs = state.jobs.lock().await;
         let mut by_container = HashMap::new();
         let mut pids = HashMap::new();
+        let mut images = HashMap::new();
         for job in jobs.values() {
             if job.status.phase().is_terminal() {
                 continue;
@@ -69,8 +70,11 @@ pub async fn snapshot(state: &AgentState) -> Vec<GpuProcess> {
             if let Some(pid) = job.launcher_pid {
                 pids.insert(pid, job.job_id.clone());
             }
+            if !job.status.image.is_empty() {
+                images.insert(job.job_id.clone(), job.status.image.clone());
+            }
         }
-        (by_container, pids)
+        (by_container, pids, images)
     };
 
     let mut details: HashMap<u32, Details> = HashMap::new();
@@ -93,9 +97,15 @@ pub async fn snapshot(state: &AgentState) -> Vec<GpuProcess> {
             // A pid we have never seen starts its idle clock now: the agent
             // may have just started, and "unknown since boot" must not be
             // reported as "idle since boot".
-            let e = lookups.busy.entry(*pid).or_insert(Busy { at: now, seen: false });
+            let e = lookups.busy.entry(*pid).or_insert(Busy {
+                at: now,
+                seen: false,
+            });
             if busy {
-                *e = Busy { at: now, seen: true };
+                *e = Busy {
+                    at: now,
+                    seen: true,
+                };
             }
         }
         lookups.busy.retain(|pid, _| live.contains(pid));
@@ -118,7 +128,11 @@ pub async fn snapshot(state: &AgentState) -> Vec<GpuProcess> {
             .get(&container)
             .cloned()
             .or_else(|| parse_ferro_container(&container))
-            .or_else(|| d.ancestors.iter().find_map(|a| launcher_pids.get(a).cloned()))
+            .or_else(|| {
+                d.ancestors
+                    .iter()
+                    .find_map(|a| launcher_pids.get(a).cloned())
+            })
             .unwrap_or_default();
 
         out.push(GpuProcess {
@@ -129,11 +143,15 @@ pub async fn snapshot(state: &AgentState) -> Vec<GpuProcess> {
             command: d.command.clone(),
             started_unix_s: d.started_unix_s,
             container,
-            job_id,
+            job_id: job_id.clone(),
             kind: if p.graphics { "graphics" } else { "compute" }.into(),
-            utilization_pct: util.as_ref().and_then(|u| u.get(&p.pid).copied()).unwrap_or(0),
+            utilization_pct: util
+                .as_ref()
+                .and_then(|u| u.get(&p.pid).copied())
+                .unwrap_or(0),
             utilization_known: util.is_some(),
             busy_unix_s: lookups.busy.get(&p.pid).map(|b| b.at).unwrap_or(0),
+            image: images.get(&job_id).cloned().unwrap_or_default(),
         });
     }
     out
@@ -176,7 +194,11 @@ pub async fn describe(state: &AgentState, pid: u32) -> ProcessDetail {
             .and_then(|v| v.parse().ok())
             .unwrap_or(0);
         out.rss_b = parse_status_field(&status, "VmRSS:")
-            .and_then(|v| v.split_whitespace().next().and_then(|kb| kb.parse::<u64>().ok()))
+            .and_then(|v| {
+                v.split_whitespace()
+                    .next()
+                    .and_then(|kb| kb.parse::<u64>().ok())
+            })
             .map(|kb| kb * 1024)
             .unwrap_or(0);
     }
@@ -199,7 +221,10 @@ pub async fn describe(state: &AgentState, pid: u32) -> ProcessDetail {
         out.busy_seen = b.seen;
     }
     out.utilization_known = util.is_some();
-    out.utilization_pct = util.as_ref().and_then(|u| u.get(&pid).copied()).unwrap_or(0);
+    out.utilization_pct = util
+        .as_ref()
+        .and_then(|u| u.get(&pid).copied())
+        .unwrap_or(0);
 
     if let Some(id) = d.container_id.as_ref() {
         // One `docker ps` at most, and only when the process is in a container.
@@ -284,7 +309,14 @@ fn cmdline(pid: u32) -> String {
 /// Flag names whose value is a credential. Not exhaustive and not meant to be:
 /// it catches the shapes that actually turn up on a lab box.
 const SECRET_FLAGS: [&str; 8] = [
-    "api-key", "api_key", "apikey", "token", "password", "passwd", "secret", "credential",
+    "api-key",
+    "api_key",
+    "apikey",
+    "token",
+    "password",
+    "passwd",
+    "secret",
+    "credential",
 ];
 
 /// Blank out anything that looks like a credential in an argv.
@@ -469,7 +501,10 @@ async fn resolve_containers(lookups: &mut Lookups, details: &HashMap<u32, Detail
         .await;
     let Ok(out) = out else { return };
     if !out.status.success() {
-        tracing::debug!("docker ps failed: {}", String::from_utf8_lossy(&out.stderr).trim());
+        tracing::debug!(
+            "docker ps failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
         return;
     }
     // Rebuild rather than merge, so ids of long-dead containers do not
@@ -540,7 +575,10 @@ mod tests {
     fn credentials_do_not_leave_the_node() {
         let argv = |s: &str| s.split(' ').map(str::to_string).collect::<Vec<_>>();
         assert_eq!(
-            redact_secrets(argv("llama-server --host 0.0.0.0 --api-key sk-abc123 --port 9010")).join(" "),
+            redact_secrets(argv(
+                "llama-server --host 0.0.0.0 --api-key sk-abc123 --port 9010"
+            ))
+            .join(" "),
             "llama-server --host 0.0.0.0 --api-key <redacted> --port 9010"
         );
         assert_eq!(
@@ -562,9 +600,18 @@ mod tests {
     #[test]
     fn status_fields_come_back_trimmed() {
         let status = "Name:\tpython\nState:\tS (sleeping)\nThreads:\t12\nVmRSS:\t  4096 kB\n";
-        assert_eq!(parse_status_field(status, "State:").as_deref(), Some("S (sleeping)"));
-        assert_eq!(parse_status_field(status, "Threads:").as_deref(), Some("12"));
-        assert_eq!(parse_status_field(status, "VmRSS:").as_deref(), Some("4096 kB"));
+        assert_eq!(
+            parse_status_field(status, "State:").as_deref(),
+            Some("S (sleeping)")
+        );
+        assert_eq!(
+            parse_status_field(status, "Threads:").as_deref(),
+            Some("12")
+        );
+        assert_eq!(
+            parse_status_field(status, "VmRSS:").as_deref(),
+            Some("4096 kB")
+        );
         assert_eq!(parse_status_field(status, "Nope:"), None);
     }
 
@@ -577,24 +624,43 @@ mod tests {
     #[test]
     fn container_id_from_both_cgroup_layouts() {
         let id = "a".repeat(64);
-        assert_eq!(parse_cgroup(&format!("0::/system.slice/docker-{id}.scope")), Some(id.clone()));
-        assert_eq!(parse_cgroup(&format!("12:memory:/docker/{id}\n11:cpu:/docker/{id}")), Some(id.clone()));
-        assert_eq!(parse_cgroup(&format!("0::/kubepods/burstable/podabc/{id}")), Some(id));
-        assert_eq!(parse_cgroup("0::/user.slice/user-1000.slice/session-3.scope"), None);
+        assert_eq!(
+            parse_cgroup(&format!("0::/system.slice/docker-{id}.scope")),
+            Some(id.clone())
+        );
+        assert_eq!(
+            parse_cgroup(&format!("12:memory:/docker/{id}\n11:cpu:/docker/{id}")),
+            Some(id.clone())
+        );
+        assert_eq!(
+            parse_cgroup(&format!("0::/kubepods/burstable/podabc/{id}")),
+            Some(id)
+        );
+        assert_eq!(
+            parse_cgroup("0::/user.slice/user-1000.slice/session-3.scope"),
+            None
+        );
     }
 
     #[test]
     fn ferro_container_names_carry_their_job_id() {
-        assert_eq!(parse_ferro_container("ferro-abc123-r0").as_deref(), Some("abc123"));
+        assert_eq!(
+            parse_ferro_container("ferro-abc123-r0").as_deref(),
+            Some("abc123")
+        );
         // A job id may itself contain the separator.
-        assert_eq!(parse_ferro_container("ferro-job-r2-x-r11").as_deref(), Some("job-r2-x"));
+        assert_eq!(
+            parse_ferro_container("ferro-job-r2-x-r11").as_deref(),
+            Some("job-r2-x")
+        );
         assert_eq!(parse_ferro_container("someone-elses-container"), None);
         assert_eq!(parse_ferro_container("ferro-abc-rx"), None);
     }
 
     #[test]
     fn passwd_lookup_matches_on_uid() {
-        let passwd = "root:x:0:0:root:/root:/bin/bash\njohnson:x:1001:1001::/home/johnson:/bin/bash\n";
+        let passwd =
+            "root:x:0:0:root:/root:/bin/bash\njohnson:x:1001:1001::/home/johnson:/bin/bash\n";
         assert_eq!(lookup_passwd(passwd, 1001).as_deref(), Some("johnson"));
         assert_eq!(lookup_passwd(passwd, 4242), None);
     }
@@ -607,6 +673,9 @@ mod tests {
 
     #[test]
     fn embedded_scripts_collapse_to_one_line() {
-        assert_eq!(one_line("python -c \nimport torch\n\nx = 1\n"), "python -c import torch x = 1");
+        assert_eq!(
+            one_line("python -c \nimport torch\n\nx = 1\n"),
+            "python -c import torch x = 1"
+        );
     }
 }

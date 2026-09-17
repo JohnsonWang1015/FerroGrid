@@ -6,7 +6,7 @@
 
 use ferro_proto::{
     Gpu, GpuEntry, GpuOccupant, GpuProcess, JobPhase, JobPlan, JobStatus, JobSummary, LogLine,
-    NodeInfo, NodeState, SubmitJobRequest, TrainingMetrics,
+    NodeInfo, NodeState, NodeVerdict, SubmitJobRequest, TrainingMetrics,
 };
 use std::collections::{HashMap, HashSet};
 use tokio::sync::{broadcast, Mutex};
@@ -79,6 +79,11 @@ pub struct Job {
     pub queue_req: Option<SubmitJobRequest>,
     /// Unix seconds after which to give up queueing. 0 = wait indefinitely.
     pub queue_deadline: i64,
+    /// Latest per-node explanation from the scheduler, refreshed while queued.
+    pub node_verdicts: Vec<NodeVerdict>,
+    pub warnings: Vec<String>,
+    /// Latest aggregate scheduler message while this job is queued.
+    pub queue_message: String,
 }
 
 impl Job {
@@ -129,6 +134,9 @@ impl Job {
             // Filled in by the registry, which is the only place that knows
             // about the other jobs in line.
             queue_position: 0,
+            node_verdicts: self.node_verdicts.clone(),
+            warnings: self.warnings.clone(),
+            queue_message: self.queue_message.clone(),
         }
     }
 
@@ -158,13 +166,22 @@ pub struct Registry {
 
 impl Registry {
     pub fn new(min_free_vram_b: u64) -> Self {
-        Self { inner: Mutex::new(RegistryInner::default()), min_free_vram_b }
+        Self {
+            inner: Mutex::new(RegistryInner::default()),
+            min_free_vram_b,
+        }
     }
 
     pub async fn upsert_node(&self, info: NodeInfo) {
         let mut g = self.inner.lock().await;
         let id = info.node_id.clone();
-        g.nodes.insert(id, Node { info, last_seen: now_s() });
+        g.nodes.insert(
+            id,
+            Node {
+                info,
+                last_seen: now_s(),
+            },
+        );
     }
 
     pub async fn heartbeat(
@@ -195,7 +212,9 @@ impl Registry {
             if gpu.allocated_job_id.is_empty() {
                 continue;
             }
-            let e = per_job.entry(gpu.allocated_job_id.clone()).or_insert((0.0, 0));
+            let e = per_job
+                .entry(gpu.allocated_job_id.clone())
+                .or_insert((0.0, 0));
             e.0 += gpu.utilization_pct as f64;
             e.1 += 1;
         }
@@ -230,8 +249,11 @@ impl Registry {
 
     pub async fn node_states(&self) -> Vec<NodeState> {
         let g = self.inner.lock().await;
-        let mut v: Vec<NodeState> =
-            g.nodes.values().map(|n| n.to_state(self.min_free_vram_b)).collect();
+        let mut v: Vec<NodeState> = g
+            .nodes
+            .values()
+            .map(|n| n.to_state(self.min_free_vram_b))
+            .collect();
         v.sort_by(|a, b| node_id_of(a).cmp(node_id_of(b)));
         v
     }
@@ -276,7 +298,12 @@ impl Registry {
         // FIFO by submission order. Not by timestamp: two jobs submitted in
         // the same second still have an order, and the queue has to agree with
         // the position each of them was told.
-        out.sort_by_key(|(id, _, _)| g.job_order.iter().position(|j| j == id).unwrap_or(usize::MAX));
+        out.sort_by_key(|(id, _, _)| {
+            g.job_order
+                .iter()
+                .position(|j| j == id)
+                .unwrap_or(usize::MAX)
+        });
         out
     }
 
@@ -287,8 +314,26 @@ impl Registry {
             job.plan = plan;
             job.queued = false;
             job.queue_req = None;
+            job.queue_message.clear();
             // The wall clock starts when the job starts, not when it queued.
             job.submitted = now_s();
+        }
+    }
+
+    /// Atomically refresh everything a queued job exposes about its latest
+    /// placement attempt.
+    pub async fn update_queue_assessment(
+        &self,
+        job_id: &str,
+        verdicts: Vec<NodeVerdict>,
+        message: String,
+        warnings: Vec<String>,
+    ) {
+        let mut g = self.inner.lock().await;
+        if let Some(job) = g.jobs.get_mut(job_id).filter(|j| j.queued) {
+            job.node_verdicts = verdicts;
+            job.queue_message = message;
+            job.warnings = warnings;
         }
     }
 
@@ -296,12 +341,15 @@ impl Registry {
     /// what makes it terminal -- a queued job has no ranks to report one.
     pub async fn dequeue(&self, job_id: &str, phase: JobPhase, message: &str) -> bool {
         let mut g = self.inner.lock().await;
-        let Some(job) = g.jobs.get_mut(job_id) else { return false };
+        let Some(job) = g.jobs.get_mut(job_id) else {
+            return false;
+        };
         if !job.queued {
             return false;
         }
         job.queued = false;
         job.queue_req = None;
+        job.queue_message = message.to_string();
         job.per_node.insert(
             String::new(),
             JobStatus {
@@ -338,7 +386,11 @@ impl Registry {
             .map(|j| {
                 (
                     j.job_id.clone(),
-                    j.plan.placements.iter().map(|p| p.address.clone()).collect(),
+                    j.plan
+                        .placements
+                        .iter()
+                        .map(|p| p.address.clone())
+                        .collect(),
                 )
             })
             .collect()
@@ -358,8 +410,10 @@ impl Registry {
             };
             if crate::metrics::is_nccl_error(&line.line) && job.nccl_errors.len() < MAX_NCCL_ERRORS
             {
-                job.nccl_errors
-                    .push(format!("[rank{}/{}] {}", line.node_rank, line.node_id, line.line));
+                job.nccl_errors.push(format!(
+                    "[rank{}/{}] {}",
+                    line.node_rank, line.node_id, line.line
+                ));
             }
             if let Some(m) = crate::metrics::parse_metric_line(&line.line) {
                 crate::metrics::merge(&mut job.metrics, m);
@@ -386,7 +440,11 @@ impl Registry {
             .map(|s| s.started_unix_s)
             .unwrap_or(0);
         let merged = JobStatus {
-            started_unix_s: if status.started_unix_s > 0 { status.started_unix_s } else { started },
+            started_unix_s: if status.started_unix_s > 0 {
+                status.started_unix_s
+            } else {
+                started
+            },
             ..status
         };
         job.per_node.insert(merged.node_id.clone(), merged);
@@ -396,7 +454,11 @@ impl Registry {
     /// own allocation table, but the controller must not wait a heartbeat.
     pub async fn release_if_done(&self, job_id: &str) {
         let mut g = self.inner.lock().await;
-        let done = g.jobs.get(job_id).map(|j| j.phase().is_terminal()).unwrap_or(false);
+        let done = g
+            .jobs
+            .get(job_id)
+            .map(|j| j.phase().is_terminal())
+            .unwrap_or(false);
         if !done {
             return;
         }
@@ -459,10 +521,12 @@ fn occupants_of(procs: &[GpuProcess], index: u32, live: &HashSet<String>) -> Vec
         if live.contains(&p.job_id) {
             continue; // ours: the JOB column already names it
         }
-        let e = by_user.entry(p.user.as_str()).or_insert_with(|| GpuOccupant {
-            user: p.user.clone(),
-            ..Default::default()
-        });
+        let e = by_user
+            .entry(p.user.as_str())
+            .or_insert_with(|| GpuOccupant {
+                user: p.user.clone(),
+                ..Default::default()
+            });
         e.processes += 1;
         e.memory_used_b += p.memory_used_b;
         // The user is as busy as their busiest process here.
@@ -524,6 +588,9 @@ mod tests {
             queued,
             queue_req: queued.then(SubmitJobRequest::default),
             queue_deadline: 0,
+            node_verdicts: Vec::new(),
+            warnings: Vec::new(),
+            queue_message: String::new(),
         }
     }
 
@@ -532,9 +599,9 @@ mod tests {
         let node = Node {
             info: NodeInfo {
                 gpus: vec![
-                    gpu(0, 1 << 30, ""),        // free
-                    gpu(1, 20 << 30, ""),       // someone else's work
-                    gpu(2, 1 << 30, "jabc"),    // ours
+                    gpu(0, 1 << 30, ""),     // free
+                    gpu(1, 20 << 30, ""),    // someone else's work
+                    gpu(2, 1 << 30, "jabc"), // ours
                 ],
                 ..Default::default()
             },
@@ -552,8 +619,8 @@ mod tests {
             proc(0, "alice", 4 << 30, "", 100),
             proc(0, "alice", 2 << 30, "", 500),
             proc(0, "bob", 1 << 30, "", 0),
-            proc(0, "us", 8 << 30, "jabc", 0),   // ours: named by the JOB column
-            proc(1, "carol", 3 << 30, "", 0),    // another card
+            proc(0, "us", 8 << 30, "jabc", 0), // ours: named by the JOB column
+            proc(1, "carol", 3 << 30, "", 0),  // another card
         ];
         let out = occupants_of(&procs, 0, &live);
         assert_eq!(out.len(), 2);
@@ -584,18 +651,68 @@ mod tests {
         r.insert_job(job("second", true, 10)).await;
         r.insert_job(job("running", false, 10)).await;
 
-        let queued: Vec<String> = r.queued_jobs().await.into_iter().map(|(id, _, _)| id).collect();
+        let queued: Vec<String> = r
+            .queued_jobs()
+            .await
+            .into_iter()
+            .map(|(id, _, _)| id)
+            .collect();
         assert_eq!(queued, vec!["first", "second"]);
         assert_eq!(r.queue_position("first").await, 1);
         assert_eq!(r.queue_position("second").await, 2);
         assert_eq!(r.queue_position("running").await, 0);
 
-        assert!(r.dequeue("second", JobPhase::Cancelled, "cancelled while queued").await);
+        assert!(
+            r.dequeue("second", JobPhase::Cancelled, "cancelled while queued")
+                .await
+        );
         // Cancelling a queued job must actually take it out of the line, or
         // the dispatcher launches something the user has already given up on.
         assert!(!r.dequeue("second", JobPhase::Cancelled, "again").await);
         let g = r.inner.lock().await;
         assert_eq!(g.jobs["second"].phase(), JobPhase::Cancelled);
         assert_eq!(g.queue_position("first"), 1);
+    }
+
+    #[tokio::test]
+    async fn queued_verdicts_are_replaced_by_the_latest_attempt() {
+        let r = Registry::new(8 << 30);
+        r.insert_job(job("queued", true, 10)).await;
+        r.update_queue_assessment(
+            "queued",
+            vec![NodeVerdict {
+                node_id: "gpu-a".into(),
+                eligible: false,
+                reasons: vec!["GPU(s) allocated by FerroGrid".into()],
+                free_gpus: 0,
+                free_vram_b: 0,
+            }],
+            "only 0 free GPU(s), need 1".into(),
+            vec!["node is busy".into()],
+        )
+        .await;
+        let first = r.inner.lock().await.jobs["queued"].to_summary();
+        assert_eq!(first.node_verdicts[0].node_id, "gpu-a");
+        assert_eq!(first.queue_message, "only 0 free GPU(s), need 1");
+        assert_eq!(first.warnings, vec!["node is busy"]);
+
+        r.update_queue_assessment(
+            "queued",
+            vec![NodeVerdict {
+                node_id: "gpu-b".into(),
+                eligible: false,
+                reasons: vec!["node is unhealthy or heartbeat is stale".into()],
+                free_gpus: 2,
+                free_vram_b: 40 << 30,
+            }],
+            "only 2 free GPU(s), need 3".into(),
+            Vec::new(),
+        )
+        .await;
+        let g = r.inner.lock().await;
+        let latest = g.jobs["queued"].to_summary();
+        assert_eq!(latest.node_verdicts[0].node_id, "gpu-b");
+        assert_eq!(latest.queue_message, "only 2 free GPU(s), need 3");
+        assert!(latest.warnings.is_empty());
     }
 }

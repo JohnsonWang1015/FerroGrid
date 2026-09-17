@@ -32,6 +32,7 @@ fn now_ms() -> i64 {
 /// Spawn the job and return immediately; supervision continues in the background.
 pub async fn launch(state: SharedState, req: LaunchJobRequest) -> Result<()> {
     let container = format!("ferro-{}-r{}", req.job_id, req.node_rank);
+    let image = effective_image(&state, &req).to_string();
     let (program, argv) = build_command(&state, &req, &container);
 
     tracing::info!(job = %req.job_id, rank = req.node_rank, "launching: {program} {}", argv.join(" "));
@@ -70,6 +71,7 @@ pub async fn launch(state: SharedState, req: LaunchJobRequest) -> Result<()> {
         message: String::new(),
         started_unix_s: now_s(),
         ended_unix_s: 0,
+        image: image.clone(),
     };
 
     {
@@ -98,7 +100,7 @@ pub async fn launch(state: SharedState, req: LaunchJobRequest) -> Result<()> {
 
     report_status(&state, status).await;
 
-    tokio::spawn(supervise(state, req, child, container, tx));
+    tokio::spawn(supervise(state, req, child, container, tx, image));
     Ok(())
 }
 
@@ -170,7 +172,9 @@ async fn flush(
         return;
     }
     if client.is_none() {
-        *client = ControllerClient::connect(state.controller.clone()).await.ok();
+        *client = ControllerClient::connect(state.controller.clone())
+            .await
+            .ok();
     }
     let Some(c) = client.as_mut() else {
         batch.clear();
@@ -189,6 +193,7 @@ async fn supervise(
     mut child: tokio::process::Child,
     container: String,
     tx: mpsc::Sender<LogLine>,
+    image: String,
 ) {
     let result = child.wait().await;
     // Readers hold clones; dropping ours lets the uploader finish once they end.
@@ -211,7 +216,11 @@ async fn supervise(
             .map(|j| j.status.phase() == JobPhase::Cancelled)
             .unwrap_or(false)
     };
-    let phase = if cancelled { JobPhase::Cancelled } else { phase };
+    let phase = if cancelled {
+        JobPhase::Cancelled
+    } else {
+        phase
+    };
 
     if !state.no_docker {
         // Best-effort: the container is normally gone thanks to --rm.
@@ -230,13 +239,17 @@ async fn supervise(
         message,
         started_unix_s: 0,
         ended_unix_s: now_s(),
+        image,
     };
 
     {
         let mut jobs = state.jobs.lock().await;
         if let Some(j) = jobs.get_mut(&req.job_id) {
             let started = j.status.started_unix_s;
-            j.status = JobStatus { started_unix_s: started, ..status.clone() };
+            j.status = JobStatus {
+                started_unix_s: started,
+                ..status.clone()
+            };
             j.child = None;
         }
     }
@@ -248,7 +261,9 @@ async fn supervise(
 async fn report_status(state: &SharedState, status: JobStatus) {
     if let Ok(mut c) = ControllerClient::connect(state.controller.clone()).await {
         let _ = c
-            .report_job_status(ReportJobStatusRequest { status: Some(status) })
+            .report_job_status(ReportJobStatusRequest {
+                status: Some(status),
+            })
             .await;
     }
 }
@@ -352,7 +367,7 @@ fn build_command(
         return (prog, it.collect());
     }
 
-    let image = if req.image.is_empty() { &state.default_image } else { &req.image };
+    let image = effective_image(state, req);
     let devices = req
         .gpu_indices
         .iter()
@@ -412,10 +427,26 @@ fn build_command(
         argv.push(format!("{k}={v}"));
     }
 
-    argv.push(image.clone());
+    argv.push(image.to_string());
     argv.extend(torchrun);
 
     ("docker".to_string(), argv)
+}
+
+/// Resolve the image once at launch time. An agent running without Docker has
+/// no image to report because it executes torchrun directly on the host.
+fn effective_image<'a>(state: &'a SharedState, req: &'a LaunchJobRequest) -> &'a str {
+    resolve_image(&req.image, &state.default_image, state.no_docker)
+}
+
+fn resolve_image<'a>(requested: &'a str, default: &'a str, no_docker: bool) -> &'a str {
+    if no_docker {
+        ""
+    } else if requested.is_empty() {
+        default
+    } else {
+        requested
+    }
 }
 
 // Avoid pulling in the whole `libc` crate for two calls.
@@ -425,5 +456,21 @@ extern "C" {
     #[link_name = "getgid"]
     fn c_getgid() -> u32;
 }
-unsafe fn libc_getuid() -> u32 { c_getuid() }
-unsafe fn libc_getgid() -> u32 { c_getgid() }
+unsafe fn libc_getuid() -> u32 {
+    c_getuid()
+}
+unsafe fn libc_getgid() -> u32 {
+    c_getgid()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_image;
+
+    #[test]
+    fn reports_the_effective_docker_image() {
+        assert_eq!(resolve_image("", "node/default:tag", false), "node/default:tag");
+        assert_eq!(resolve_image("requested:tag", "node/default:tag", false), "requested:tag");
+        assert_eq!(resolve_image("requested:tag", "node/default:tag", true), "");
+    }
+}

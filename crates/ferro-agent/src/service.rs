@@ -7,7 +7,7 @@ use ferro_proto::{
     BenchmarkRequest, BenchmarkResponse, DescribeProcessRequest, ExecPluginRequest,
     ExecPluginResponse, GetNodeInfoRequest, LaunchJobRequest, LaunchJobResponse, NetProbeRequest,
     NetProbeResponse, NetSinkRequest, NetSinkResponse, NodeInfo, PingRequest, PingResponse,
-    ProcessDetail, StopJobRequest, StopJobResponse,
+    Gpu, ProcessDetail, StopJobRequest, StopJobResponse,
 };
 use tonic::{Request, Response, Status};
 
@@ -35,7 +35,9 @@ impl NodeAgent for AgentService {
         req: Request<DescribeProcessRequest>,
     ) -> Result<Response<ProcessDetail>, Status> {
         let pid = req.into_inner().pid;
-        Ok(Response::new(crate::procs::describe(&self.state, pid).await))
+        Ok(Response::new(
+            crate::procs::describe(&self.state, pid).await,
+        ))
     }
 
     async fn launch_job(
@@ -50,6 +52,18 @@ impl NodeAgent for AgentService {
                 req.nproc_per_node,
                 req.gpu_indices.len()
             )));
+        }
+
+        if !req.gpu_uuids.is_empty() {
+            match check_gpu_uuids(&req, &self.state.gpu_snapshot().await) {
+                Ok(()) => {}
+                Err(GpuUuidError::Shape(message)) => {
+                    return Err(Status::invalid_argument(message))
+                }
+                Err(GpuUuidError::Mismatch(message)) => {
+                    return Err(Status::failed_precondition(message))
+                }
+            }
         }
 
         // Re-validate the controller's placement locally. The controller's view
@@ -182,6 +196,84 @@ impl NodeAgent for AgentService {
         Ok(Response::new(PingResponse {
             agent_version: crate::AGENT_VERSION.to_string(),
         }))
+    }
+}
+
+#[derive(Debug)]
+enum GpuUuidError {
+    Shape(String),
+    Mismatch(String),
+}
+
+fn check_gpu_uuids(req: &LaunchJobRequest, snapshot: &[Gpu]) -> Result<(), GpuUuidError> {
+    if req.gpu_uuids.is_empty() {
+        return Ok(());
+    }
+    if req.gpu_uuids.len() != req.gpu_indices.len() {
+        return Err(GpuUuidError::Shape(format!(
+            "{} GPU UUID(s) supplied for {} GPU index(es)",
+            req.gpu_uuids.len(),
+            req.gpu_indices.len()
+        )));
+    }
+    for (index, expected_uuid) in req.gpu_indices.iter().zip(&req.gpu_uuids) {
+        let Some(actual) = snapshot.iter().find(|gpu| gpu.index == *index) else {
+            return Err(GpuUuidError::Mismatch(format!(
+                "GPU {index} is not present in the agent's NVML snapshot"
+            )));
+        };
+        if actual.uuid != *expected_uuid {
+            return Err(GpuUuidError::Mismatch(format!(
+                "GPU {index} UUID changed: controller has `{expected_uuid}`, agent has `{}`",
+                actual.uuid
+            )));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request(indices: &[u32], uuids: &[&str]) -> LaunchJobRequest {
+        LaunchJobRequest {
+            gpu_indices: indices.to_vec(),
+            gpu_uuids: uuids.iter().map(|uuid| (*uuid).to_string()).collect(),
+            ..Default::default()
+        }
+    }
+
+    fn gpu(index: u32, uuid: &str) -> Gpu {
+        Gpu {
+            index,
+            uuid: uuid.into(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn gpu_uuid_check_accepts_the_controller_snapshot() {
+        assert!(check_gpu_uuids(
+            &request(&[0, 1], &["uuid-0", "uuid-1"]),
+            &[gpu(0, "uuid-0"), gpu(1, "uuid-1")]
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn gpu_uuid_check_rejects_a_changed_device() {
+        let error = check_gpu_uuids(
+            &request(&[0], &["old-uuid"]),
+            &[gpu(0, "new-uuid")],
+        )
+        .unwrap_err();
+        assert!(matches!(error, GpuUuidError::Mismatch(message) if message.contains("UUID changed")));
+    }
+
+    #[test]
+    fn gpu_uuid_check_keeps_old_clients_compatible() {
+        assert!(check_gpu_uuids(&request(&[0], &[]), &[gpu(0, "uuid-0")]).is_ok());
     }
 }
 

@@ -11,10 +11,19 @@ use std::io::Write;
 use tonic::transport::Channel;
 
 #[derive(Parser, Debug)]
-#[command(name = "ferro", version, about = "FerroGrid multi-server GPU training CLI")]
+#[command(
+    name = "ferro",
+    version,
+    about = "FerroGrid multi-server GPU training CLI"
+)]
 struct Cli {
     /// Controller endpoint.
-    #[arg(long, global = true, env = "FERRO_CONTROLLER", default_value = "http://127.0.0.1:7070")]
+    #[arg(
+        long,
+        global = true,
+        env = "FERRO_CONTROLLER",
+        default_value = "http://127.0.0.1:7070"
+    )]
     controller: String,
 
     /// Emit JSON instead of tables.
@@ -204,6 +213,10 @@ struct TrainArgs {
     #[arg(long)]
     image: Option<String>,
 
+    /// Docker image override for one node, repeatable: --image-for gpu-a=repo/image:tag
+    #[arg(long = "image-for", value_parser = parse_kv)]
+    image_for: Vec<(String, String)>,
+
     /// Directory bind-mounted into the container and used as the working
     /// directory. Relative to the agent's workspace root; defaults to it.
     #[arg(long)]
@@ -293,12 +306,18 @@ async fn main() -> Result<()> {
             .await?;
         }
         Cmd::Watch { interval } => {
-            let w = WatchArgs { watch: true, interval };
+            let w = WatchArgs {
+                watch: true,
+                interval,
+            };
             repeat(w, false, || async {
                 let mut c = client.clone();
                 let nodes = c.list_nodes(ListNodesRequest {}).await?.into_inner();
                 let gpus = c.list_gpus(ListGpusRequest {}).await?.into_inner();
-                let jobs = c.list_jobs(ListJobsRequest { limit: 8 }).await?.into_inner();
+                let jobs = c
+                    .list_jobs(ListJobsRequest { limit: 8 })
+                    .await?
+                    .into_inner();
                 Ok(render::dashboard(&nodes.nodes, &gpus.gpus, &jobs.jobs))
             })
             .await?;
@@ -306,18 +325,33 @@ async fn main() -> Result<()> {
         // One pid in full, rather than everything in a table. Read fresh off
         // the node: the table's copy is a heartbeat old and its command is
         // trimmed to fit.
-        Cmd::Ps { pid: Some(pid), watch, .. } => {
+        Cmd::Ps {
+            pid: Some(pid),
+            watch,
+            ..
+        } => {
             repeat(watch, cli.json, || async {
                 let mut c = client.clone();
-                let r = c.describe_process(DescribeProcessRequest { pid }).await?.into_inner();
+                let r = c
+                    .describe_process(DescribeProcessRequest { pid })
+                    .await?
+                    .into_inner();
                 Ok(render::process_detail(pid, &r.matches, cli.json))
             })
             .await?;
         }
-        Cmd::Ps { idle, by_user, watch, .. } => {
+        Cmd::Ps {
+            idle,
+            by_user,
+            watch,
+            ..
+        } => {
             repeat(watch, cli.json, || async {
                 let mut c = client.clone();
-                let r = c.list_processes(ListProcessesRequest {}).await?.into_inner();
+                let r = c
+                    .list_processes(ListProcessesRequest {})
+                    .await?
+                    .into_inner();
                 let procs = render::only_idle(r.processes, idle);
                 Ok(if by_user {
                     render::processes_by_user(&procs, cli.json)
@@ -327,27 +361,50 @@ async fn main() -> Result<()> {
             })
             .await?;
         }
-        Cmd::Net { node_filter, seconds, both_ways } => {
+        Cmd::Net {
+            node_filter,
+            seconds,
+            both_ways,
+        } => {
             // Pairs are measured one at a time so they do not measure each
             // other, so this takes a while and should say so.
-            let n = if node_filter.is_empty() { 0 } else { node_filter.len() };
+            let n = if node_filter.is_empty() {
+                0
+            } else {
+                node_filter.len()
+            };
             eprintln!(
                 "measuring {} pair(s) at {seconds}s each, one at a time...",
-                if n > 1 { format!("{}", n * (n - 1) / 2) } else { "all".into() }
+                if n > 1 {
+                    format!("{}", n * (n - 1) / 2)
+                } else {
+                    "all".into()
+                }
             );
             let r = client
-                .measure_network(MeasureNetworkRequest { node_filter, seconds, both_ways })
+                .measure_network(MeasureNetworkRequest {
+                    node_filter,
+                    seconds,
+                    both_ways,
+                })
                 .await?
                 .into_inner();
             print!("{}", render::network(&r.pairs, cli.json));
         }
         Cmd::Plugins => {
-            let r = client.list_plugins(ListPluginsRequest {}).await?.into_inner();
+            let r = client
+                .list_plugins(ListPluginsRequest {})
+                .await?
+                .into_inner();
             print!("{}", render::plugins(&r.plugins, cli.json));
         }
         // Bind the action before destructuring, so the match arm can move `a`.
         ref c @ (Cmd::Fetch(ref a) | Cmd::Push(ref a)) => {
-            let action = if matches!(c, Cmd::Fetch(_)) { "fetch" } else { "push" };
+            let action = if matches!(c, Cmd::Fetch(_)) {
+                "fetch"
+            } else {
+                "push"
+            };
             eprintln!("{action}: {} <-> {} via {}", a.remote, a.local, a.plugin);
             let r = client
                 .run_plugin(RunPluginRequest {
@@ -385,7 +442,9 @@ async fn main() -> Result<()> {
             repeat(watch, cli.json, || async {
                 let mut c = client.clone();
                 let r = c
-                    .get_job(GetJobRequest { job_id: job_id.clone() })
+                    .get_job(GetJobRequest {
+                        job_id: job_id.clone(),
+                    })
                     .await?
                     .into_inner();
                 Ok(render::job_detail(&r, cli.json))
@@ -403,12 +462,20 @@ async fn main() -> Result<()> {
             println!("{}", r.message);
         }
         Cmd::Sync(args) => {
-            let nodes = client.list_nodes(ListNodesRequest {}).await?.into_inner().nodes;
+            let nodes = client
+                .list_nodes(ListNodesRequest {})
+                .await?
+                .into_inner()
+                .nodes;
             sync_project(&nodes, &args)?;
         }
         Cmd::Train(args) => {
             if args.sync {
-                let nodes = client.list_nodes(ListNodesRequest {}).await?.into_inner().nodes;
+                let nodes = client
+                    .list_nodes(ListNodesRequest {})
+                    .await?
+                    .into_inner()
+                    .nodes;
                 sync_project(
                     &nodes,
                     &SyncArgs {
@@ -428,9 +495,24 @@ async fn main() -> Result<()> {
 /// Everything that should never be shipped to a training node: build output,
 /// virtualenvs, caches, and the dataset if it happens to live in the project.
 const SYNC_EXCLUDES: &[&str] = &[
-    ".git", "target", ".venv", "venv", "__pycache__", "*.pyc", ".mypy_cache",
-    ".pytest_cache", ".ruff_cache", "node_modules", ".cargo-container-registry",
-    "*.nii", "*.nii.gz", "*.dcm", "*.pt", "*.pth", "*.ckpt", "*.safetensors",
+    ".git",
+    "target",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "*.pyc",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    "node_modules",
+    ".cargo-container-registry",
+    "*.nii",
+    "*.nii.gz",
+    "*.dcm",
+    "*.pt",
+    "*.pth",
+    "*.ckpt",
+    "*.safetensors",
 ];
 
 /// rsync the project to each node's workspace.
@@ -461,7 +543,11 @@ fn sync_project(nodes: &[NodeState], args: &SyncArgs) -> Result<()> {
 
     for n in targets {
         let Some(i) = n.info.as_ref() else { continue };
-        let host = i.address.rsplit_once(':').map(|(h, _)| h).unwrap_or(&i.address);
+        let host = i
+            .address
+            .rsplit_once(':')
+            .map(|(h, _)| h)
+            .unwrap_or(&i.address);
         if i.workspace.is_empty() || i.user.is_empty() {
             eprintln!(
                 "  {} is running an agent too old to report its workspace; \
@@ -478,8 +564,10 @@ fn sync_project(nodes: &[NodeState], args: &SyncArgs) -> Result<()> {
         cmd.arg("-az");
         // --mkpath needs rsync >= 3.2.3 and Ubuntu 20.04 ships 3.1.3, so
         // create the workspace through the remote shell instead.
-        cmd.arg("--rsync-path")
-            .arg(format!("mkdir -p '{}' && rsync", i.workspace.trim_end_matches('/')));
+        cmd.arg("--rsync-path").arg(format!(
+            "mkdir -p '{}' && rsync",
+            i.workspace.trim_end_matches('/')
+        ));
         if args.delete {
             cmd.arg("--delete");
         }
@@ -622,7 +710,6 @@ impl Screen {
         let _ = out.write_all(buf.as_bytes());
         let _ = out.flush();
     }
-
 }
 
 impl Drop for Screen {
@@ -647,9 +734,14 @@ async fn train(client: &mut ControllerClient<Channel>, args: TrainArgs, json: bo
         nodes: args.nodes,
         // In auto mode this is a cap; 1 is the flag default, which would cap
         // every auto job to a single GPU, so treat "not set" as unlimited.
-        gpus_per_node: if args.auto && args.gpus_per_node == 1 { 0 } else { args.gpus_per_node },
+        gpus_per_node: if args.auto && args.gpus_per_node == 1 {
+            0
+        } else {
+            args.gpus_per_node
+        },
         auto_place: args.auto,
         image: args.image.unwrap_or_default(),
+        node_images: args.image_for.into_iter().collect(),
         workdir,
         env,
         name: args.name.unwrap_or_default(),
@@ -674,11 +766,15 @@ async fn train(client: &mut ControllerClient<Channel>, args: TrainArgs, json: bo
         if resp.plan.is_none() {
             // Queued: the log stream stays silent until the controller places
             // it, which can be hours. Say so rather than looking hung.
-            eprintln!("waiting for capacity; logs will start when the job does (Ctrl-C to stop watching)");
+            eprintln!(
+                "waiting for capacity; logs will start when the job does (Ctrl-C to stop watching)"
+            );
         }
         stream_logs(client, &resp.job_id, true).await?;
         let final_job = client
-            .get_job(GetJobRequest { job_id: resp.job_id.clone() })
+            .get_job(GetJobRequest {
+                job_id: resp.job_id.clone(),
+            })
             .await?
             .into_inner();
         println!();
@@ -696,7 +792,10 @@ async fn stream_logs(
     follow: bool,
 ) -> Result<()> {
     let mut stream = client
-        .stream_logs(LogRequest { job_id: job_id.to_string(), follow })
+        .stream_logs(LogRequest {
+            job_id: job_id.to_string(),
+            follow,
+        })
         .await?
         .into_inner();
 

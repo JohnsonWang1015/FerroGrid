@@ -97,7 +97,11 @@ fn age_cell(last_seen: i64) -> Cell {
 
 fn bar(pct: u32, width: usize) -> String {
     let filled = (pct as usize * width / 100).min(width);
-    format!("{}{}", "\u{2588}".repeat(filled), "\u{2591}".repeat(width - filled))
+    format!(
+        "{}{}",
+        "\u{2588}".repeat(filled),
+        "\u{2591}".repeat(width - filled)
+    )
 }
 
 /// Negotiated link speed, flagged when it is behind the rest of the cluster.
@@ -162,7 +166,10 @@ pub fn nodes(nodes: &[NodeState], json: bool) -> String {
         return "No nodes registered. Start ferro-agent on your servers.\n".into();
     }
 
-    let mut t = table(&["NODE", "ADDRESS", "NCCL IP", "LINK", "STATUS", "AGE", "GPUS", "FREE", "DRIVER", "CUDA", "CPU"]);
+    let mut t = table(&[
+        "NODE", "ADDRESS", "NCCL IP", "LINK", "STATUS", "AGE", "GPUS", "FREE", "DRIVER", "CUDA",
+        "CPU",
+    ]);
     // The fastest link present is the yardstick: one node at a tenth of what
     // its neighbours negotiated is the interesting case, and it is invisible
     // everywhere else.
@@ -194,7 +201,12 @@ pub fn nodes(nodes: &[NodeState], json: bool) -> String {
     for n in nodes {
         if let Some(i) = &n.info {
             if !i.gpu_error.is_empty() {
-                line!(out, "  ! {}: GPU detection failed: {}", i.node_id, i.gpu_error);
+                line!(
+                    out,
+                    "  ! {}: GPU detection failed: {}",
+                    i.node_id,
+                    i.gpu_error
+                );
             }
         }
     }
@@ -231,7 +243,17 @@ pub fn gpus(entries: &[GpuEntry], json: bool) -> String {
         return "No GPUs reported yet.\n".into();
     }
 
-    let mut t = table(&["NODE", "IDX", "NAME", "VRAM USED / TOTAL", "UTIL", "TEMP", "POWER", "CC", "JOB"]);
+    let mut t = table(&[
+        "NODE",
+        "IDX",
+        "NAME",
+        "VRAM USED / TOTAL",
+        "UTIL",
+        "TEMP",
+        "POWER",
+        "CC",
+        "JOB",
+    ]);
     for e in entries {
         let g = e.gpu.clone().unwrap_or_default();
         let util = Cell::new(format!("{}%", g.utilization_pct)).fg(match g.utilization_pct {
@@ -243,10 +265,18 @@ pub fn gpus(entries: &[GpuEntry], json: bool) -> String {
             Cell::new(&e.node_id),
             Cell::new(g.index),
             Cell::new(&g.name),
-            Cell::new(format!("{} / {}", fmt_gib(g.memory_used_b), fmt_gib(g.memory_total_b))),
+            Cell::new(format!(
+                "{} / {}",
+                fmt_gib(g.memory_used_b),
+                fmt_gib(g.memory_total_b)
+            )),
             util,
             Cell::new(format!("{}C", g.temperature_c)),
-            Cell::new(format!("{}/{}W", g.power_usage_mw / 1000, g.power_limit_mw / 1000)),
+            Cell::new(format!(
+                "{}/{}W",
+                g.power_usage_mw / 1000,
+                g.power_limit_mw / 1000
+            )),
             Cell::new(&g.cuda_capability),
             owner_cell(&g, &e.occupants, e.schedulable),
         ]);
@@ -291,7 +321,11 @@ fn ts(unix: i64) -> String {
         return "-".into();
     }
     chrono::DateTime::from_timestamp(unix, 0)
-        .map(|d| d.with_timezone(&chrono::Local).format("%H:%M:%S").to_string())
+        .map(|d| {
+            d.with_timezone(&chrono::Local)
+                .format("%H:%M:%S")
+                .to_string()
+        })
         .unwrap_or_else(|| "-".into())
 }
 
@@ -300,6 +334,34 @@ fn num(v: f64) -> String {
         "-".into()
     } else {
         format!("{v:.2}")
+    }
+}
+
+fn verdict_json(v: &NodeVerdict) -> serde_json::Value {
+    serde_json::json!({
+        "node_id": v.node_id,
+        "eligible": v.eligible,
+        "reasons": v.reasons,
+        "free_gpus": v.free_gpus,
+        "free_vram_b": v.free_vram_b,
+    })
+}
+
+fn verdict_text(v: &NodeVerdict) -> String {
+    if v.reasons.is_empty() {
+        format!("{}: eligible ({} free GPU(s))", v.node_id, v.free_gpus)
+    } else {
+        format!("{}: {}", v.node_id, v.reasons.join("; "))
+    }
+}
+
+fn append_verdicts(out: &mut String, verdicts: &[NodeVerdict]) {
+    if verdicts.is_empty() {
+        return;
+    }
+    line!(out, "  node verdicts:");
+    for verdict in verdicts {
+        line!(out, "    {}", verdict_text(verdict));
     }
 }
 
@@ -314,11 +376,14 @@ pub fn jobs(list: &[JobSummary], json: bool) -> String {
                     "name": j.name,
                     "phase": if j.queued { "queued" } else { j.phase().label() },
                     "queue_position": j.queue_position,
+                    "queue_message": j.queue_message,
                     "world_size": j.plan.as_ref().map(|p| p.world_size).unwrap_or(0),
                     "submitted_unix_s": j.submitted_unix_s,
                     "step": m.step,
                     "samples_per_s": m.samples_per_s,
                     "nccl_errors": j.nccl_errors.len(),
+                    "node_verdicts": j.node_verdicts.iter().map(verdict_json).collect::<Vec<_>>(),
+                    "warnings": j.warnings,
                 })
             })
             .collect();
@@ -329,7 +394,17 @@ pub fn jobs(list: &[JobSummary], json: bool) -> String {
         return "No jobs submitted yet.\n".into();
     }
 
-    let mut t = table(&["JOB ID", "NAME", "PHASE", "WORLD", "NODES", "STEP", "SAMPLES/S", "NCCL ERR", "SUBMITTED"]);
+    let mut t = table(&[
+        "JOB ID",
+        "NAME",
+        "PHASE",
+        "WORLD",
+        "NODES",
+        "STEP",
+        "SAMPLES/S",
+        "NCCL ERR",
+        "SUBMITTED",
+    ]);
     for j in list {
         let p = j.plan.clone().unwrap_or_default();
         let m = j.metrics.clone().unwrap_or_default();
@@ -351,6 +426,9 @@ pub fn jobs(list: &[JobSummary], json: bool) -> String {
     }
     let mut out = String::new();
     line!(out, "{t}");
+    for j in list.iter().filter(|j| j.queued && !j.queue_message.is_empty()) {
+        line!(out, "{} waiting: {}", j.job_id, j.queue_message);
+    }
     out
 }
 
@@ -362,6 +440,9 @@ pub fn job_detail(j: &JobSummary, json: bool) -> String {
             "job_id": j.job_id,
             "name": j.name,
             "phase": j.phase().label(),
+            "queued": j.queued,
+            "queue_position": j.queue_position,
+            "queue_message": j.queue_message,
             "master_addr": p.master_addr,
             "master_port": p.master_port,
             "world_size": p.world_size,
@@ -388,6 +469,8 @@ pub fn job_detail(j: &JobSummary, json: bool) -> String {
                 "avg_gpu_util_pct": m.avg_gpu_util_pct,
             },
             "nccl_errors": j.nccl_errors,
+            "node_verdicts": j.node_verdicts.iter().map(verdict_json).collect::<Vec<_>>(),
+            "warnings": j.warnings,
         }));
     }
 
@@ -395,10 +478,18 @@ pub fn job_detail(j: &JobSummary, json: bool) -> String {
     let p = j.plan.clone().unwrap_or_default();
     line!(out, "Job     {}  ({})", j.job_id, j.name);
     if j.queued {
-        line!(out, "Phase   queued at #{}, waiting for capacity", j.queue_position);
+        line!(
+            out,
+            "Phase   queued at #{}, waiting for capacity",
+            j.queue_position
+        );
+        if !j.queue_message.is_empty() {
+            line!(out, "Reason  {}", j.queue_message);
+        }
     } else {
         line!(out, "Phase   {}", j.phase().label());
     }
+    append_verdicts(&mut out, &j.node_verdicts);
     line!(
         out,
         "Rendez  MASTER_ADDR={} MASTER_PORT={} WORLD_SIZE={}",
@@ -408,16 +499,27 @@ pub fn job_detail(j: &JobSummary, json: bool) -> String {
     );
     line!(out);
 
-    let mut t = table(&["RANK", "NODE", "GPUS", "PHASE", "EXIT", "STARTED", "ENDED", "MESSAGE"]);
+    let mut t = table(&[
+        "RANK", "NODE", "GPUS", "PHASE", "EXIT", "STARTED", "ENDED", "MESSAGE",
+    ]);
     for pl in &p.placements {
         let st = j.per_node.iter().find(|s| s.node_id == pl.node_id);
-        let gpus = pl.gpu_indices.iter().map(|g| g.to_string()).collect::<Vec<_>>().join(",");
+        let gpus = pl
+            .gpu_indices
+            .iter()
+            .map(|g| g.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
         t.add_row(vec![
             Cell::new(pl.node_rank),
             Cell::new(&pl.node_id),
             Cell::new(gpus),
-            st.map(|s| phase_cell(s.phase())).unwrap_or_else(|| Cell::new("pending").fg(Color::Grey)),
-            Cell::new(st.map(|s| s.exit_code.to_string()).unwrap_or_else(|| "-".into())),
+            st.map(|s| phase_cell(s.phase()))
+                .unwrap_or_else(|| Cell::new("pending").fg(Color::Grey)),
+            Cell::new(
+                st.map(|s| s.exit_code.to_string())
+                    .unwrap_or_else(|| "-".into()),
+            ),
             Cell::new(ts(st.map(|s| s.started_unix_s).unwrap_or(0))),
             Cell::new(ts(st.map(|s| s.ended_unix_s).unwrap_or(0))),
             Cell::new(st.map(|s| s.message.clone()).unwrap_or_default()),
@@ -426,7 +528,15 @@ pub fn job_detail(j: &JobSummary, json: bool) -> String {
     line!(out, "{t}");
 
     let m = j.metrics.clone().unwrap_or_default();
-    let mut mt = table(&["STEP", "LOSS", "SAMPLES/S", "TOKENS/S", "STEP MS", "PEAK VRAM GB", "AVG GPU UTIL"]);
+    let mut mt = table(&[
+        "STEP",
+        "LOSS",
+        "SAMPLES/S",
+        "TOKENS/S",
+        "STEP MS",
+        "PEAK VRAM GB",
+        "AVG GPU UTIL",
+    ]);
     mt.add_row(vec![
         Cell::new(m.step),
         Cell::new(num(m.loss)),
@@ -439,10 +549,17 @@ pub fn job_detail(j: &JobSummary, json: bool) -> String {
     line!(out, "{mt}");
 
     if !j.nccl_errors.is_empty() {
-        line!(out, "\nNCCL / distributed errors ({}):", j.nccl_errors.len());
+        line!(
+            out,
+            "\nNCCL / distributed errors ({}):",
+            j.nccl_errors.len()
+        );
         for e in j.nccl_errors.iter().take(20) {
             line!(out, "  {e}");
         }
+    }
+    for warning in &j.warnings {
+        line!(out, "Warning: {warning}");
     }
     out
 }
@@ -462,12 +579,20 @@ pub fn submit(r: &SubmitJobResponse, json: bool) -> String {
                 "node_rank": pl.node_rank,
                 "gpu_indices": pl.gpu_indices,
             })).collect::<Vec<_>>(),
+            "node_verdicts": r.node_verdicts.iter().map(verdict_json).collect::<Vec<_>>(),
+            "warnings": r.warnings,
         }));
     }
 
     if !r.accepted {
         // A rejection is not a view; it belongs on stderr next to the exit code.
         eprintln!("submit failed: {}", r.message);
+        for verdict in &r.node_verdicts {
+            eprintln!("  {}", verdict_text(verdict));
+        }
+        for warning in &r.warnings {
+            eprintln!("  warning: {warning}");
+        }
         return String::new();
     }
 
@@ -478,6 +603,10 @@ pub fn submit(r: &SubmitJobResponse, json: bool) -> String {
     let Some(p) = r.plan.clone() else {
         line!(out, "Queued {} at #{} in line", r.job_id, r.queue_position);
         line!(out, "  nothing free yet: {}", r.message);
+        append_verdicts(&mut out, &r.node_verdicts);
+        for warning in &r.warnings {
+            line!(out, "  warning: {warning}");
+        }
         line!(out, "  ferro jobs            # where it sits in line");
         line!(out, "  ferro cancel {}  # give up", r.job_id);
         return out;
@@ -496,8 +625,15 @@ pub fn submit(r: &SubmitJobResponse, json: bool) -> String {
             "  NODE_RANK={}  node={}  gpus=[{}]",
             pl.node_rank,
             pl.node_id,
-            pl.gpu_indices.iter().map(|g| g.to_string()).collect::<Vec<_>>().join(",")
+            pl.gpu_indices
+                .iter()
+                .map(|g| g.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
         );
+    }
+    for warning in &r.warnings {
+        line!(out, "  warning: {warning}");
     }
     out
 }
@@ -521,8 +657,16 @@ pub fn dashboard(nodes: &[NodeState], gpus: &[GpuEntry], jobs: &[JobSummary]) ->
         .collect();
 
     let free = gpus.iter().filter(|e| e.schedulable).count();
-    let used_b: u64 = gpus.iter().filter_map(|e| e.gpu.as_ref()).map(|g| g.memory_used_b).sum();
-    let total_b: u64 = gpus.iter().filter_map(|e| e.gpu.as_ref()).map(|g| g.memory_total_b).sum();
+    let used_b: u64 = gpus
+        .iter()
+        .filter_map(|e| e.gpu.as_ref())
+        .map(|g| g.memory_used_b)
+        .sum();
+    let total_b: u64 = gpus
+        .iter()
+        .filter_map(|e| e.gpu.as_ref())
+        .map(|g| g.memory_total_b)
+        .sum();
 
     // The screen can redraw faster than the agents report, so say how old the
     // numbers are -- otherwise a wedged agent looks like an idle GPU.
@@ -546,7 +690,9 @@ pub fn dashboard(nodes: &[NodeState], gpus: &[GpuEntry], jobs: &[JobSummary]) ->
     }
     line!(out);
 
-    let mut t = table(&["NODE", "IDX", "GPU", "UTIL", "", "VRAM", "TEMP", "POWER", "JOB"]);
+    let mut t = table(&[
+        "NODE", "IDX", "GPU", "UTIL", "", "VRAM", "TEMP", "POWER", "JOB",
+    ]);
     for e in gpus {
         let g = e.gpu.clone().unwrap_or_default();
         let util = g.utilization_pct;
@@ -588,7 +734,10 @@ pub fn dashboard(nodes: &[NodeState], gpus: &[GpuEntry], jobs: &[JobSummary]) ->
     }
 
     line!(out);
-    let mut jt = table(&["JOB", "NAME", "PHASE", "WORLD", "STEP", "LOSS", "TOKENS/S", "STEP MS", "VRAM GB", "NCCL ERR"]);
+    let mut jt = table(&[
+        "JOB", "NAME", "PHASE", "WORLD", "STEP", "LOSS", "TOKENS/S", "STEP MS", "VRAM GB",
+        "NCCL ERR",
+    ]);
     for j in live {
         let m = j.metrics.clone().unwrap_or_default();
         let p = j.plan.clone().unwrap_or_default();
@@ -647,6 +796,7 @@ pub fn processes(procs: &[ProcessEntry], json: bool) -> String {
                     "user": p.user,
                     "runs_as": p.runs_as,
                     "name": p.name,
+                    "image": p.image,
                     "node_id": p.node_id,
                     "node_last_seen_unix_s": p.node_last_seen_unix_s,
                     "node_rank": p.node_rank,
@@ -672,7 +822,10 @@ pub fn processes(procs: &[ProcessEntry], json: bool) -> String {
 
     // AGE is how long ago the node last reported: every other number on the row
     // is that old, and a wedged agent looks exactly like an idle GPU without it.
-    let mut t = table(&["JOB", "USER", "NAME", "NODE", "AGE", "RANK", "GPUS", "PHASE", "UPTIME", "UTIL", "VRAM", "STEP", "TOKENS/S"]);
+    let mut t = table(&[
+        "JOB", "USER", "NAME", "IMAGE", "NODE", "AGE", "RANK", "GPUS", "PHASE", "UPTIME", "UTIL",
+        "VRAM", "STEP", "TOKENS/S",
+    ]);
     for p in procs {
         let m = p.metrics.clone().unwrap_or_default();
         let util = if p.external && p.proc_util_known {
@@ -703,6 +856,7 @@ pub fn processes(procs: &[ProcessEntry], json: bool) -> String {
             } else {
                 Cell::new(&p.name)
             },
+            Cell::new(if p.image.is_empty() { "-" } else { &p.image }),
             Cell::new(&p.node_id),
             age_cell(p.node_last_seen_unix_s),
             if p.external {
@@ -710,7 +864,13 @@ pub fn processes(procs: &[ProcessEntry], json: bool) -> String {
             } else {
                 Cell::new(format!("{}/{}", p.node_rank, p.world_size.max(1)))
             },
-            Cell::new(p.gpu_indices.iter().map(|g| g.to_string()).collect::<Vec<_>>().join(",")),
+            Cell::new(
+                p.gpu_indices
+                    .iter()
+                    .map(|g| g.to_string())
+                    .collect::<Vec<_>>()
+                    .join(","),
+            ),
             if p.external {
                 // An orphan is one of ours that outlived its job record --
                 // usually a container a restarted controller lost track of,
@@ -741,8 +901,16 @@ pub fn processes(procs: &[ProcessEntry], json: bool) -> String {
                 },
             }),
             Cell::new(format!("{:.1}G", p.vram_used_gb)),
-            if p.external { Cell::new("-") } else { Cell::new(m.step) },
-            if p.external { Cell::new("-") } else { Cell::new(num(m.tokens_per_s)) },
+            if p.external {
+                Cell::new("-")
+            } else {
+                Cell::new(m.step)
+            },
+            if p.external {
+                Cell::new("-")
+            } else {
+                Cell::new(num(m.tokens_per_s))
+            },
         ]);
     }
     let ranks = procs.iter().filter(|p| !p.external).count();
@@ -777,7 +945,10 @@ fn owner_cell(g: &Gpu, occupants: &[GpuOccupant], schedulable: bool) -> Cell {
     let label = format!(
         "ext:{}{more} {:.0}G",
         if top.user.is_empty() { "?" } else { &top.user },
-        occupants.iter().map(|o| o.memory_used_b as f64 / (1u64 << 30) as f64).sum::<f64>()
+        occupants
+            .iter()
+            .map(|o| o.memory_used_b as f64 / (1u64 << 30) as f64)
+            .sum::<f64>()
     );
     // Idle is the actionable case: somebody is holding the card, not using
     // it. A card with room left is greyed -- the compositor's 80 MB is worth
@@ -856,9 +1027,22 @@ pub fn processes_by_user(procs: &[ProcessEntry], json: bool) -> String {
 
     // Biggest holder first: that is who you go and talk to.
     let mut rows: Vec<(&String, &Tally)> = by_user.iter().collect();
-    rows.sort_by(|a, b| b.1.vram_gb.partial_cmp(&a.1.vram_gb).unwrap_or(std::cmp::Ordering::Equal));
+    rows.sort_by(|a, b| {
+        b.1.vram_gb
+            .partial_cmp(&a.1.vram_gb)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
-    let mut t = table(&["USER", "NODES", "GPUS", "VRAM", "PROCS", "VIA FERRO", "IDLE", "OLDEST"]);
+    let mut t = table(&[
+        "USER",
+        "NODES",
+        "GPUS",
+        "VRAM",
+        "PROCS",
+        "VIA FERRO",
+        "IDLE",
+        "OLDEST",
+    ]);
     for (user, v) in &rows {
         t.add_row(vec![
             Cell::new(user).fg(Color::Blue),
@@ -866,7 +1050,11 @@ pub fn processes_by_user(procs: &[ProcessEntry], json: bool) -> String {
             Cell::new(v.gpus),
             Cell::new(format!("{:.1}G", v.vram_gb)),
             Cell::new(v.procs),
-            if v.ours > 0 { Cell::new(v.ours).fg(Color::Green) } else { Cell::new("-").fg(Color::Grey) },
+            if v.ours > 0 {
+                Cell::new(v.ours).fg(Color::Green)
+            } else {
+                Cell::new("-").fg(Color::Grey)
+            },
             if v.idle_procs > 0 {
                 Cell::new(v.idle_procs).fg(Color::Yellow)
             } else {
@@ -934,7 +1122,10 @@ pub fn process_detail(pid: u32, matches: &[ProcessDetail], json: bool) -> String
         // one of them being unreachable looks the same from here.
         let mut out = String::new();
         line!(out, "No process {pid} on any reporting node.");
-        line!(out, "It may have exited, or be on a node whose agent is not reporting.");
+        line!(
+            out,
+            "It may have exited, or be on a node whose agent is not reporting."
+        );
         return out;
     }
 
@@ -949,11 +1140,20 @@ pub fn process_detail(pid: u32, matches: &[ProcessDetail], json: bool) -> String
         line!(
             out,
             "  process    {}, {} thread(s), RSS {}",
-            if d.state.is_empty() { "?".into() } else { d.state.clone() },
+            if d.state.is_empty() {
+                "?".into()
+            } else {
+                d.state.clone()
+            },
             d.threads,
             fmt_bytes(d.rss_b)
         );
-        line!(out, "  started    {}  ({} ago)", stamp(d.started_unix_s), elapsed(d.started_unix_s));
+        line!(
+            out,
+            "  started    {}  ({} ago)",
+            stamp(d.started_unix_s),
+            elapsed(d.started_unix_s)
+        );
         // Only meaningful for a process on a GPU: "idle" here is about SM
         // time, not about whether the process is doing anything at all.
         if !d.gpus.is_empty() {
@@ -965,13 +1165,20 @@ pub fn process_detail(pid: u32, matches: &[ProcessDetail], json: bool) -> String
                 out,
                 "  gpu {:<6} {} holding {}, card at {}%",
                 g.index,
-                if g.name.is_empty() { "GPU".into() } else { g.name.clone() },
+                if g.name.is_empty() {
+                    "GPU".into()
+                } else {
+                    g.name.clone()
+                },
                 fmt_gib(g.memory_used_b),
                 g.device_util_pct
             );
         }
         if d.gpus.is_empty() {
-            line!(out, "  gpu        none -- this process is not holding a GPU");
+            line!(
+                out,
+                "  gpu        none -- this process is not holding a GPU"
+            );
         }
 
         if !d.container.is_empty() || !d.container_id.is_empty() {
@@ -982,12 +1189,23 @@ pub fn process_detail(pid: u32, matches: &[ProcessDetail], json: bool) -> String
             line!(out, "  cwd        {}", d.cwd);
         }
         if d.ppid > 0 {
-            line!(out, "  parent     {} {}", d.ppid, shorten(&d.parent_command, 60));
+            line!(
+                out,
+                "  parent     {} {}",
+                d.ppid,
+                shorten(&d.parent_command, 60)
+            );
         }
         if d.job_id.is_empty() {
             line!(out, "  job        -- not launched by FerroGrid");
         } else {
-            line!(out, "  job        {}  (ferro job {} / ferro logs {})", d.job_id, d.job_id, d.job_id);
+            line!(
+                out,
+                "  job        {}  (ferro job {} / ferro logs {})",
+                d.job_id,
+                d.job_id,
+                d.job_id
+            );
         }
         line!(out, "  command    {}", short_or(&d.command, "?"));
         line!(out, "  stop it    {}", stop_hint(d));
@@ -996,11 +1214,19 @@ pub fn process_detail(pid: u32, matches: &[ProcessDetail], json: bool) -> String
 }
 
 fn short_or(s: &str, fallback: &str) -> String {
-    if s.is_empty() { fallback.to_string() } else { s.to_string() }
+    if s.is_empty() {
+        fallback.to_string()
+    } else {
+        s.to_string()
+    }
 }
 
 fn who_is(d: &ProcessDetail) -> String {
-    if d.user.is_empty() { format!("uid {}", d.uid) } else { d.user.clone() }
+    if d.user.is_empty() {
+        format!("uid {}", d.uid)
+    } else {
+        d.user.clone()
+    }
 }
 
 /// Name the account only when it adds something the name does not.
@@ -1028,7 +1254,10 @@ fn activity(d: &ProcessDetail) -> String {
     } else {
         // Never caught working, which is only as strong a claim as the agent
         // is old: it starts every pid's clock the first time it sees it.
-        format!("idle {idle} -- nothing seen since watching began at {}", stamp(d.busy_unix_s))
+        format!(
+            "idle {idle} -- nothing seen since watching began at {}",
+            stamp(d.busy_unix_s)
+        )
     }
 }
 
@@ -1042,7 +1271,12 @@ fn stop_hint(d: &ProcessDetail) -> String {
     if !d.container.is_empty() {
         return format!("docker kill {} -- on {}", d.container, d.node_id);
     }
-    format!("kill {} on {} -- needs {} or root", d.pid, d.node_id, who_is(d))
+    format!(
+        "kill {} on {} -- needs {} or root",
+        d.pid,
+        d.node_id,
+        who_is(d)
+    )
 }
 
 /// How long a process has been holding VRAM without computing, when the/// How long a process has been holding VRAM without computing, when the
@@ -1088,7 +1322,11 @@ fn external_phase(p: &ProcessEntry) -> &'static str {
 /// Command line for an external process, prefixed with its container when it
 /// has one -- `docker kill <name>` and `kill <pid>` are different fixes.
 fn describe(p: &ProcessEntry) -> String {
-    let cmd = if p.command.is_empty() { "?" } else { p.command.as_str() };
+    let cmd = if p.command.is_empty() {
+        "?"
+    } else {
+        p.command.as_str()
+    };
     let cmd = shorten(cmd, 64);
     if p.container.is_empty() {
         cmd
@@ -1107,13 +1345,16 @@ fn shorten(cmd: &str, max: usize) -> String {
         None => (cmd, ""),
     };
     let head = head.rsplit('/').next().unwrap_or(head);
-    let short = if rest.is_empty() { head.to_string() } else { format!("{head} {rest}") };
+    let short = if rest.is_empty() {
+        head.to_string()
+    } else {
+        format!("{head} {rest}")
+    };
     if short.chars().count() <= max {
         return short;
     }
     format!("{}...", short.chars().take(max).collect::<String>())
 }
-
 
 /// `ferro net`: what a cross-node job would actually get.
 ///
@@ -1142,11 +1383,19 @@ pub fn network(pairs: &[NetPair], json: bool) -> String {
 
     // Worst first: that is the one that decides what multi-node costs.
     let mut rows: Vec<&NetPair> = pairs.iter().collect();
-    rows.sort_by(|a, b| a.mbps.partial_cmp(&b.mbps).unwrap_or(std::cmp::Ordering::Equal));
+    rows.sort_by(|a, b| {
+        a.mbps
+            .partial_cmp(&b.mbps)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     let mut t = table(&["FROM", "TO", "MEASURED", "LINK", "OF LINK", "NOTE"]);
     for p in &rows {
-        let pct = if p.link_mbps > 0 { p.mbps / p.link_mbps as f64 * 100.0 } else { 0.0 };
+        let pct = if p.link_mbps > 0 {
+            p.mbps / p.link_mbps as f64 * 100.0
+        } else {
+            0.0
+        };
         t.add_row(vec![
             Cell::new(&p.from_node),
             Cell::new(&p.to_node),
@@ -1164,7 +1413,11 @@ pub fn network(pairs: &[NetPair], json: bool) -> String {
             // a duplex mismatch, a busy uplink, or a slow path through a
             // bridge rather than the interface NCCL was pinned to.
             if p.link_mbps > 0 && p.error.is_empty() {
-                Cell::new(format!("{pct:.0}%")).fg(if pct < 60.0 { Color::Yellow } else { Color::Green })
+                Cell::new(format!("{pct:.0}%")).fg(if pct < 60.0 {
+                    Color::Yellow
+                } else {
+                    Color::Green
+                })
             } else {
                 Cell::new("-").fg(Color::Grey)
             },
@@ -1231,8 +1484,16 @@ pub fn benchmarks(results: &[GpuBenchmark], json: bool) -> String {
                 Cell::new("-").fg(Color::Grey)
             },
             if r.tflops > 0.0 {
-                Cell::new(format!("{:.0}%  {}", rel * 100.0, bar((rel * 100.0) as u32, 10)))
-                    .fg(if rel > 0.85 { Color::Green } else { Color::Yellow })
+                Cell::new(format!(
+                    "{:.0}%  {}",
+                    rel * 100.0,
+                    bar((rel * 100.0) as u32, 10)
+                ))
+                .fg(if rel > 0.85 {
+                    Color::Green
+                } else {
+                    Color::Yellow
+                })
             } else {
                 Cell::new("-").fg(Color::Grey)
             },
@@ -1245,7 +1506,10 @@ pub fn benchmarks(results: &[GpuBenchmark], json: bool) -> String {
     }
     let mut out = String::new();
     line!(out, "{t}");
-    line!(out, "Scores are cached on each node and used to rank placements.");
+    line!(
+        out,
+        "Scores are cached on each node and used to rank placements."
+    );
     out
 }
 
@@ -1324,11 +1588,27 @@ pub fn transfer(results: &[PluginResult], json: bool) -> String {
     // transfer's progress bars are noise, a failure's last lines are the reason.
     for r in results.iter().filter(|r| r.exit_code != 0) {
         line!(out, "\n--- {} ---", r.node_id);
-        for l in r.error.lines().rev().take(12).collect::<Vec<_>>().iter().rev() {
+        for l in r
+            .error
+            .lines()
+            .rev()
+            .take(12)
+            .collect::<Vec<_>>()
+            .iter()
+            .rev()
+        {
             line!(out, "  {l}");
         }
         if r.error.trim().is_empty() {
-            for l in r.output.lines().rev().take(8).collect::<Vec<_>>().iter().rev() {
+            for l in r
+                .output
+                .lines()
+                .rev()
+                .take(8)
+                .collect::<Vec<_>>()
+                .iter()
+                .rev()
+            {
                 line!(out, "  {l}");
             }
         }
@@ -1345,8 +1625,14 @@ mod tests {
 
     #[test]
     fn commands_lose_their_interpreter_path_first() {
-        assert_eq!(shorten("/opt/conda/envs/x/bin/python train.py --lr 3e-4", 64), "python train.py --lr 3e-4");
-        assert_eq!(shorten("./gpu_loop /work/poly.cado", 64), "gpu_loop /work/poly.cado");
+        assert_eq!(
+            shorten("/opt/conda/envs/x/bin/python train.py --lr 3e-4", 64),
+            "python train.py --lr 3e-4"
+        );
+        assert_eq!(
+            shorten("./gpu_loop /work/poly.cado", 64),
+            "gpu_loop /work/poly.cado"
+        );
         assert_eq!(shorten("nvidia-smi", 64), "nvidia-smi");
     }
 

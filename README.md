@@ -347,10 +347,11 @@ Queued j9bf2c56ce2 at #1 in line
 ```
 
 `ferro jobs` shows queued jobs as `queued #N`; the queue is FIFO, so waiting
-longer is the only thing that improves your position. `ferro cancel` takes a
-job out of the line, and `--wait 2h` gives up on its own. A queued job holds
-nothing: it has no placement until it starts, and `--timeout` (above) only
-starts counting then.
+longer is the only thing that improves your position. It also shows the latest
+capacity reason from the most recent scheduling attempt; `ferro job <job-id>`
+includes the per-node verdicts. `ferro cancel` takes a job out of the line, and
+`--wait 2h` gives up on its own. A queued job holds nothing: it has no placement
+until it starts, and `--timeout` (above) only starts counting then.
 
 With `-f/--follow` the CLI says it is waiting and starts streaming logs when
 the job actually launches.
@@ -631,6 +632,7 @@ forwarded verbatim to the script.
 | `--gpus-per-node K` | GPUs per server → `torchrun --nproc_per_node` |
 | `--follow` / `-f` | stream logs, exit non-zero if the job fails |
 | `--image` | override the Docker image |
+| `--image-for NODE=IMAGE` | override the image on one selected node (repeatable; the node must be selected) |
 | `--node ID` | restrict placement (repeatable) |
 | `--env K=V` | extra environment, e.g. `--env NCCL_DEBUG=INFO` (repeatable) |
 | `--workdir` | working directory, relative to the agent workspace |
@@ -654,9 +656,11 @@ heartbeat (default 3s). A node with no usable NVML still registers, and
 `ferro nodes` shows why it has no GPUs instead of the agent crashing. Agents
 re-register automatically after a controller restart.
 
-**Scheduling.** First-fit over healthy nodes, preferring the most free VRAM,
-ties broken by node id so placement is reproducible. Rank 0 goes to the first
-chosen node and its NCCL IP becomes `MASTER_ADDR`.
+**Scheduling.** The controller considers healthy, filtered nodes with enough
+free VRAM, then prefers the same GPU model across ranks. For multi-node jobs it
+also prefers the combination with the fastest negotiated links before measured
+GPU throughput; model consistency is a preference, not a gate. Rank 0 goes to
+the first chosen node and its NCCL IP becomes `MASTER_ADDR`.
 
 A GPU counts as free only when *both* no FerroGrid job holds it **and** it has
 at least `--min-free-vram-gib` (default 8) actually free. FerroGrid shares

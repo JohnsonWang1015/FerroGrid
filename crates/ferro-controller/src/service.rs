@@ -5,7 +5,7 @@ use crate::scheduler;
 use ferro_proto::controller_server::Controller;
 use ferro_proto::node_agent_client::NodeAgentClient;
 use ferro_proto::*;
-use std::collections::VecDeque;
+use std::collections::{BTreeSet, VecDeque};
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -95,36 +95,98 @@ impl Controller for ControllerService {
         }
 
         let nodes = self.registry.node_states().await;
-        let plan = match plan_for(&nodes, &req, self.master_port, self.min_free_vram_b) {
+        let (plan_result, node_verdicts) =
+            plan_for(&nodes, &req, self.master_port, self.min_free_vram_b);
+
+        // This is a request-shape error, not a temporary capacity miss. Keep
+        // it outside the queue path so --wait cannot retry it forever.
+        if let Err(message) = validate_image_override_request(&req) {
+            return Ok(Response::new(SubmitJobResponse {
+                job_id: String::new(),
+                accepted: false,
+                message,
+                plan: None,
+                queue_position: 0,
+                node_verdicts,
+                warnings: Vec::new(),
+            }));
+        }
+
+        let plan = match plan_result {
             Ok(plan) => plan,
             // Nothing fits right now. With `--wait` that is a queue rather
             // than a failure: on a shared cluster "full" is the normal state,
             // and resubmitting by hand at 03:00 is not a scheduling policy.
-            Err(e) if req.queue => {
+            Err(e) if req.queue && retryable_schedule_error(&e) => {
                 let job_id = new_job_id();
                 let deadline = match req.queue_timeout_s {
                     0 => 0,
                     t => now_s() + t as i64,
                 };
+                let message = e.to_string();
                 self.registry
-                    .insert_job(new_job(&job_id, &req, JobPlan::default(), Some(deadline)))
+                    .insert_job(new_job(
+                        &job_id,
+                        &req,
+                        JobPlan::default(),
+                        node_verdicts.clone(),
+                        Vec::new(),
+                        message.clone(),
+                        Some(deadline),
+                    ))
                     .await;
                 let queue_position = self.registry.queue_position(&job_id).await;
-                tracing::info!(job = %job_id, "queued at #{queue_position}: {e}");
+                tracing::info!(job = %job_id, "queued at #{queue_position}: {message}");
                 return Ok(Response::new(SubmitJobResponse {
                     job_id,
                     accepted: true,
-                    message: e.to_string(),
+                    message,
                     plan: None,
                     queue_position,
+                    node_verdicts,
+                    warnings: Vec::new(),
                 }));
             }
-            Err(e) => return Err(Status::failed_precondition(e.to_string())),
+            // A typed response keeps the per-node ledger available to the CLI
+            // instead of collapsing it into a gRPC status string.
+            Err(e) => {
+                return Ok(Response::new(SubmitJobResponse {
+                    job_id: String::new(),
+                    accepted: false,
+                    message: e.to_string(),
+                    plan: None,
+                    queue_position: 0,
+                    node_verdicts,
+                    warnings: Vec::new(),
+                }))
+            }
         };
+
+        if let Err(message) = validate_image_overrides(&req, &plan) {
+            return Ok(Response::new(SubmitJobResponse {
+                job_id: String::new(),
+                accepted: false,
+                message,
+                plan: Some(plan),
+                queue_position: 0,
+                node_verdicts,
+                warnings: Vec::new(),
+            }));
+        }
+
+        let warnings = compatibility_warnings(&nodes, &plan);
 
         let job_id = new_job_id();
         self.registry
-            .insert_job(new_job(&job_id, &req, plan.clone(), None))
+            .insert_job(new_job(
+                &job_id,
+                &req,
+                plan.clone(),
+                node_verdicts.clone(),
+                warnings.clone(),
+                String::new(),
+                None,
+            ))
             .await;
 
         match start_job(&self.registry, &req, &job_id, &plan).await {
@@ -135,12 +197,19 @@ impl Controller for ControllerService {
                     master = %plan.master_addr,
                     "job launched"
                 );
+                let message = if warnings.is_empty() {
+                    "launched".to_string()
+                } else {
+                    format!("launched with warnings: {}", warnings.join("; "))
+                };
                 Ok(Response::new(SubmitJobResponse {
                     job_id,
                     accepted: true,
-                    message: "launched".into(),
+                    message,
                     plan: Some(plan),
                     queue_position: 0,
+                    node_verdicts,
+                    warnings,
                 }))
             }
             Err(message) => Ok(Response::new(SubmitJobResponse {
@@ -149,6 +218,8 @@ impl Controller for ControllerService {
                 message,
                 plan: Some(plan),
                 queue_position: 0,
+                node_verdicts,
+                warnings,
             })),
         }
     }
@@ -227,7 +298,23 @@ impl Controller for ControllerService {
                     phase: st.map(|s| s.phase).unwrap_or(JobPhase::Pending as i32),
                     started_unix_s: st.map(|s| s.started_unix_s).unwrap_or(0),
                     world_size: job.plan.world_size,
-                    image: String::new(),
+                    image: st
+                        .map(|s| s.image.clone())
+                        .filter(|image| !image.is_empty())
+                        .or_else(|| {
+                            g.nodes.get(&p.node_id).and_then(|n| {
+                                n.info
+                                    .processes
+                                    .iter()
+                                    .find(|process| {
+                                        process.job_id == job.job_id
+                                            && p.gpu_indices.contains(&process.gpu_index)
+                                    })
+                                    .map(|process| process.image.clone())
+                                    .filter(|image| !image.is_empty())
+                            })
+                        })
+                        .unwrap_or_default(),
                     user: job.submitted_by.clone(),
                     // The container runs as the agent's own account, which is
                     // not necessarily whoever submitted the job.
@@ -305,7 +392,7 @@ impl Controller for ControllerService {
                     phase: JobPhase::Unspecified as i32,
                     started_unix_s: first.started_unix_s,
                     world_size: 0,
-                    image: String::new(),
+                    image: first.image.clone(),
                     user: first.user.clone(),
                     runs_as: String::new(),
                     metrics: None,
@@ -599,7 +686,11 @@ impl Controller for ControllerService {
             let Some(job) = g.jobs.get(&id) else {
                 return Err(Status::not_found(format!("no such job {id}")));
             };
-            job.plan.placements.iter().map(|p| p.address.clone()).collect()
+            job.plan
+                .placements
+                .iter()
+                .map(|p| p.address.clone())
+                .collect()
         };
 
         let mut errs = Vec::new();
@@ -612,7 +703,11 @@ impl Controller for ControllerService {
 
         Ok(Response::new(CancelJobResponse {
             cancelled: errs.is_empty(),
-            message: if errs.is_empty() { format!("cancelled {id}") } else { errs.join("; ") },
+            message: if errs.is_empty() {
+                format!("cancelled {id}")
+            } else {
+                errs.join("; ")
+            },
         }))
     }
 
@@ -630,7 +725,10 @@ impl Controller for ControllerService {
             };
             // Subscribe before releasing the lock so no line slips through
             // between replaying the backlog and attaching to the live feed.
-            (job.logs.iter().cloned().collect::<Vec<_>>(), job.tx.subscribe())
+            (
+                job.logs.iter().cloned().collect::<Vec<_>>(),
+                job.tx.subscribe(),
+            )
         };
 
         let (tx, out_rx) = tokio::sync::mpsc::channel(256);
@@ -659,7 +757,9 @@ impl Controller for ControllerService {
             }
         });
 
-        Ok(Response::new(Box::pin(ReceiverStream::new(out_rx)) as LogStream))
+        Ok(Response::new(
+            Box::pin(ReceiverStream::new(out_rx)) as LogStream
+        ))
     }
 
     async fn report_logs(
@@ -775,15 +875,22 @@ fn plan_for(
     req: &SubmitJobRequest,
     master_port: u32,
     min_free_vram_b: u64,
-) -> Result<JobPlan, scheduler::ScheduleError> {
-    if req.auto_place {
+) -> (Result<JobPlan, scheduler::ScheduleError>, Vec<NodeVerdict>) {
+    let gpus_per_node = if req.auto_place { 1 } else { req.gpus_per_node };
+    let verdicts =
+        scheduler::node_verdicts(nodes, gpus_per_node, &req.node_filter, min_free_vram_b);
+    let plan = if req.auto_place {
         scheduler::plan_auto(
             nodes,
             &req.node_filter,
             master_port,
             min_free_vram_b,
             // gpus_per_node doubles as a cap in auto mode when set.
-            if req.gpus_per_node > 0 { req.gpus_per_node } else { u32::MAX },
+            if req.gpus_per_node > 0 {
+                req.gpus_per_node
+            } else {
+                u32::MAX
+            },
         )
     } else {
         scheduler::plan(
@@ -794,7 +901,94 @@ fn plan_for(
             master_port,
             min_free_vram_b,
         )
+    };
+    (plan, verdicts)
+}
+
+fn retryable_schedule_error(error: &scheduler::ScheduleError) -> bool {
+    matches!(
+        error,
+        scheduler::ScheduleError::NoNodes | scheduler::ScheduleError::NotEnoughNodes { .. }
+    )
+}
+
+fn validate_image_override_request(req: &SubmitJobRequest) -> Result<(), String> {
+    for node_id in req.node_images.keys() {
+        if node_id.is_empty() {
+            return Err("image override node id must not be empty".into());
+        }
+        if !req.node_filter.is_empty() && !req.node_filter.contains(node_id) {
+            return Err(format!(
+                "image override for node `{node_id}` is outside the node filter"
+            ));
+        }
     }
+    Ok(())
+}
+
+fn validate_image_overrides(req: &SubmitJobRequest, plan: &JobPlan) -> Result<(), String> {
+    for node_id in req.node_images.keys() {
+        if !plan.placements.iter().any(|p| p.node_id == *node_id) {
+            return Err(format!(
+                "image override for node `{node_id}` does not apply to the selected placement"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Compatibility is diagnostic only. The container runtime's own
+/// `NVIDIA_REQUIRE_CUDA` label remains authoritative for image support, so the
+/// controller deliberately does not infer CUDA requirements from image tags.
+fn compatibility_warnings(nodes: &[NodeState], plan: &JobPlan) -> Vec<String> {
+    let mut capabilities = BTreeSet::new();
+    let mut warnings = Vec::new();
+
+    for placement in &plan.placements {
+        let Some(info) = nodes
+            .iter()
+            .find(|node| {
+                node.info
+                    .as_ref()
+                    .map(|i| i.node_id == placement.node_id)
+                    .unwrap_or(false)
+            })
+            .and_then(|node| node.info.as_ref())
+        else {
+            continue;
+        };
+
+        if let Some(major) = info
+            .driver_version
+            .split('.')
+            .next()
+            .and_then(|major| major.parse::<u32>().ok())
+        {
+            if major < 525 {
+                warnings.push(format!(
+                    "node {} reports driver {} (< 525)",
+                    info.node_id, info.driver_version
+                ));
+            }
+        }
+        for index in &placement.gpu_indices {
+            if let Some(gpu) = info.gpus.iter().find(|gpu| gpu.index == *index) {
+                if !gpu.cuda_capability.is_empty() {
+                    capabilities.insert(gpu.cuda_capability.clone());
+                }
+            }
+        }
+    }
+
+    if capabilities.len() > 1 {
+        warnings.push(format!(
+            "selected GPUs have mixed compute capabilities: {}",
+            capabilities.iter().cloned().collect::<Vec<_>>().join(", ")
+        ));
+    }
+    warnings.sort_unstable();
+    warnings.dedup();
+    warnings
 }
 
 fn new_job_id() -> String {
@@ -803,7 +997,15 @@ fn new_job_id() -> String {
 
 /// `queue_deadline` set means the job is queued: no plan yet, and the request
 /// is kept so the dispatcher can place it later.
-fn new_job(job_id: &str, req: &SubmitJobRequest, plan: JobPlan, queue_deadline: Option<i64>) -> Job {
+fn new_job(
+    job_id: &str,
+    req: &SubmitJobRequest,
+    plan: JobPlan,
+    node_verdicts: Vec<NodeVerdict>,
+    warnings: Vec<String>,
+    queue_message: String,
+    queue_deadline: Option<i64>,
+) -> Job {
     let name = if req.name.is_empty() {
         std::path::Path::new(&req.script)
             .file_stem()
@@ -830,6 +1032,9 @@ fn new_job(job_id: &str, req: &SubmitJobRequest, plan: JobPlan, queue_deadline: 
         queued: queue_deadline.is_some(),
         queue_req: queue_deadline.map(|_| req.clone()),
         queue_deadline: queue_deadline.unwrap_or(0),
+        node_verdicts,
+        warnings,
+        queue_message,
     }
 }
 
@@ -844,7 +1049,11 @@ async fn start_job(
     // Auto mode decides the shape, so the launch requests must follow the
     // plan rather than what the caller asked for.
     let nnodes = plan.placements.len() as u32;
-    let nproc = plan.placements.first().map(|p| p.gpu_indices.len() as u32).unwrap_or(0);
+    let nproc = plan
+        .placements
+        .first()
+        .map(|p| p.gpu_indices.len() as u32)
+        .unwrap_or(0);
 
     // Reserve before dispatching, so a second submission racing this one
     // sees the GPUs as taken instead of planning onto the same devices.
@@ -864,12 +1073,17 @@ async fn start_job(
             master_addr: plan.master_addr.clone(),
             master_port: plan.master_port,
             gpu_indices: p.gpu_indices.clone(),
+            gpu_uuids: p.gpu_uuids.clone(),
             // Pass the image through verbatim, empty included. An empty value
             // means "whatever this node's agent is configured to use", which
             // is what lets a cluster with mixed GPU architectures work: a
             // Blackwell node needs a CUDA 12.8 image where an Ampere node is
             // happy on 12.6.
-            image: req.image.clone(),
+            image: req
+                .node_images
+                .get(&p.node_id)
+                .cloned()
+                .unwrap_or_else(|| req.image.clone()),
             workdir: req.workdir.clone(),
             script: req.script.clone(),
             script_args: req.script_args.clone(),
@@ -895,6 +1109,7 @@ async fn start_job(
                     message: format!("launch failed: {e}"),
                     started_unix_s: 0,
                     ended_unix_s: now_s(),
+                    ..Default::default()
                 })
                 .await;
             registry.release_if_done(job_id).await;
@@ -909,11 +1124,7 @@ async fn start_job(
 /// Deliberately FIFO and one pass per tick: fancier policies (backfill,
 /// priorities) need a fairness story this cluster has not asked for, and
 /// "whoever waited longest goes next" is the one rule nobody argues with.
-pub async fn run_queue(
-    registry: std::sync::Arc<Registry>,
-    master_port: u32,
-    min_free_vram_b: u64,
-) {
+pub async fn run_queue(registry: std::sync::Arc<Registry>, master_port: u32, min_free_vram_b: u64) {
     let mut tick = tokio::time::interval(std::time::Duration::from_secs(5));
     loop {
         tick.tick().await;
@@ -929,10 +1140,44 @@ pub async fn run_queue(
             // Re-read the cluster for every job: the one placed a moment ago
             // took GPUs the next one must not be handed as well.
             let nodes = registry.node_states().await;
-            let Ok(plan) = plan_for(&nodes, &req, master_port, min_free_vram_b) else {
-                continue;
-            };
+            let (plan_result, verdicts) = plan_for(&nodes, &req, master_port, min_free_vram_b);
+            let plan = match plan_result {
+                Ok(plan) => {
+                    if let Err(message) = validate_image_overrides(&req, &plan) {
+                        registry
+                            .update_queue_assessment(
+                                &job_id,
+                                verdicts,
+                                message.clone(),
+                                Vec::new(),
+                            )
+                            .await;
+                        registry.dequeue(&job_id, JobPhase::Failed, &message).await;
+                        continue;
+                    }
 
+                    let warnings = compatibility_warnings(&nodes, &plan);
+                    registry
+                        .update_queue_assessment(&job_id, verdicts, String::new(), warnings)
+                        .await;
+                    plan
+                }
+                Err(e) => {
+                    let message = e.to_string();
+                    registry
+                        .update_queue_assessment(
+                            &job_id,
+                            verdicts,
+                            message.clone(),
+                            Vec::new(),
+                        )
+                        .await;
+                    if !retryable_schedule_error(&e) {
+                        registry.dequeue(&job_id, JobPhase::Failed, &message).await;
+                    }
+                    continue;
+                }
+            };
             registry.promote(&job_id, plan.clone()).await;
             tracing::info!(job = %job_id, world_size = plan.world_size, "capacity freed, launching");
             if let Err(e) = start_job(&registry, &req, &job_id, &plan).await {
@@ -979,7 +1224,10 @@ async fn dispatch(addr: &str, req: LaunchJobRequest) -> Result<(), String> {
     let mut client = NodeAgentClient::connect(endpoint(addr))
         .await
         .map_err(|e| format!("connect: {e}"))?;
-    let resp = client.launch_job(req).await.map_err(|e| format!("{}", e.message()))?;
+    let resp = client
+        .launch_job(req)
+        .await
+        .map_err(|e| format!("{}", e.message()))?;
     let resp = resp.into_inner();
     if resp.launched {
         Ok(())
@@ -1016,8 +1264,109 @@ async fn stop_on(addr: &str, job_id: &str) -> Result<(), String> {
         .await
         .map_err(|e| format!("connect: {e}"))?;
     client
-        .stop_job(StopJobRequest { job_id: job_id.to_string() })
+        .stop_job(StopJobRequest {
+            job_id: job_id.to_string(),
+        })
         .await
         .map_err(|e| format!("{}", e.message()))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn node(id: &str, driver: &str, cuda: &str, capability: &str) -> NodeState {
+        NodeState {
+            info: Some(NodeInfo {
+                node_id: id.into(),
+                driver_version: driver.into(),
+                cuda_version: cuda.into(),
+                gpus: vec![Gpu {
+                    index: 0,
+                    uuid: format!("{id}-uuid"),
+                    name: "GPU".into(),
+                    cuda_capability: capability.into(),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }),
+            healthy: true,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn compatibility_differences_are_warnings_not_gates() {
+        let nodes = vec![
+            node("old", "524.99.01", "12.4", "8.9"),
+            node("new", "535.10.00", "12.6", "9.0"),
+        ];
+        let plan = JobPlan {
+            placements: vec![
+                JobPlacement {
+                    node_id: "old".into(),
+                    gpu_indices: vec![0],
+                    ..Default::default()
+                },
+                JobPlacement {
+                    node_id: "new".into(),
+                    gpu_indices: vec![0],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let warnings = compatibility_warnings(&nodes, &plan);
+        assert!(warnings.iter().any(|w| w.contains("driver 524.99.01")));
+        assert!(warnings
+            .iter()
+            .any(|w| w.contains("mixed compute capabilities")));
+        assert!(!warnings
+            .iter()
+            .any(|w| w.contains("different maximum CUDA support")));
+    }
+
+    #[test]
+    fn image_override_must_apply_to_a_selected_node() {
+        let req = SubmitJobRequest {
+            node_images: [("gpu-a".to_string(), "repo/image:tag".to_string())]
+                .into_iter()
+                .collect(),
+            ..Default::default()
+        };
+        let plan = JobPlan {
+            placements: vec![JobPlacement {
+                node_id: "gpu-a".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        assert!(validate_image_overrides(&req, &plan).is_ok());
+
+        let other = JobPlan {
+            placements: vec![JobPlacement {
+                node_id: "gpu-b".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        assert!(validate_image_overrides(&req, &other)
+            .unwrap_err()
+            .contains("does not apply"));
+    }
+
+    #[test]
+    fn only_capacity_errors_are_retryable() {
+        assert!(retryable_schedule_error(&scheduler::ScheduleError::NoNodes));
+        assert!(retryable_schedule_error(
+            &scheduler::ScheduleError::NotEnoughNodes {
+                requested: 1,
+                per_node: 1,
+                available: 0,
+            }
+        ));
+        assert!(!retryable_schedule_error(&scheduler::ScheduleError::BadShape));
+    }
 }

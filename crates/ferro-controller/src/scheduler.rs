@@ -21,15 +21,19 @@
 //!   one with the higher benchmarked TFLOP/s wins. Names are a poor proxy:
 //!   `ferro bench` measures what the hardware actually does today.
 
+use ferro_proto::NodeVerdict;
 use ferro_proto::{JobPlacement, JobPlan, NodeState};
-
 
 #[derive(Debug, thiserror::Error)]
 pub enum ScheduleError {
     #[error("no nodes are registered")]
     NoNodes,
     #[error("requested {requested} nodes with {per_node} free GPU(s) each, but only {available} node(s) qualify")]
-    NotEnoughNodes { requested: u32, per_node: u32, available: usize },
+    NotEnoughNodes {
+        requested: u32,
+        per_node: u32,
+        available: usize,
+    },
     #[error("nodes must be >= 1 and gpus_per_node must be >= 1")]
     BadShape,
 }
@@ -60,9 +64,16 @@ fn free_gpus(node: &NodeState, min_free_b: u64) -> Vec<&ferro_proto::Gpu> {
     v
 }
 
-/// The largest set of `want` identical GPUs on this node, or the best mixed
-/// set if no single model has enough.
-fn pick_homogeneous(node: &NodeState, want: usize, min_free_b: u64) -> Vec<u32> {
+#[derive(Clone, Debug)]
+struct GpuSelection {
+    model: Option<String>,
+    indices: Vec<u32>,
+    score: f64,
+    free_vram_b: u64,
+}
+
+/// Every homogeneous set of `want` cards this node can offer.
+fn homogeneous_options(node: &NodeState, want: usize, min_free_b: u64) -> Vec<GpuSelection> {
     let free = free_gpus(node, min_free_b);
     if free.len() < want {
         return Vec::new();
@@ -73,25 +84,54 @@ fn pick_homogeneous(node: &NodeState, want: usize, min_free_b: u64) -> Vec<u32> 
         by_model.entry(g.name.as_str()).or_default().push(g);
     }
 
-    // Among models with enough cards, take the fastest.
-    let best = by_model
-        .values()
-        .filter(|v| v.len() >= want)
-        .max_by(|a, b| {
-            score(a[..want].iter().copied())
-                .partial_cmp(&score(b[..want].iter().copied()))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+    // HashMap iteration is deliberately unordered; model names make ties
+    // deterministic while the cards in each group already follow free_gpus'
+    // benchmark/VRAM order.
+    let mut models: Vec<&str> = by_model.keys().copied().collect();
+    models.sort_unstable();
+    models
+        .into_iter()
+        .filter_map(|model| {
+            let cards = by_model.get(model)?;
+            (cards.len() >= want).then(|| selection(cards, Some(model.to_string()), want))
+        })
+        .collect()
+}
 
-    let chosen: Vec<&ferro_proto::Gpu> = match best {
-        Some(v) => v[..want].to_vec(),
-        // Nothing homogeneous is big enough: fall back to the fastest mix.
-        None => free[..want].to_vec(),
-    };
+fn selection(cards: &[&ferro_proto::Gpu], model: Option<String>, want: usize) -> GpuSelection {
+    let chosen = &cards[..want];
+    let mut indices: Vec<u32> = chosen.iter().map(|g| g.index).collect();
+    indices.sort_unstable();
+    GpuSelection {
+        model,
+        indices,
+        score: score(chosen.iter().copied()),
+        free_vram_b: chosen.iter().map(|g| gpu_free_bytes(g)).sum(),
+    }
+}
 
-    let mut idx: Vec<u32> = chosen.iter().map(|g| g.index).collect();
-    idx.sort_unstable();
-    idx
+fn compare_selection(a: &GpuSelection, b: &GpuSelection) -> std::cmp::Ordering {
+    b.score
+        .partial_cmp(&a.score)
+        .unwrap_or(std::cmp::Ordering::Equal)
+        .then_with(|| b.free_vram_b.cmp(&a.free_vram_b))
+        .then_with(|| a.model.cmp(&b.model))
+        .then_with(|| a.indices.cmp(&b.indices))
+}
+
+/// The fastest homogeneous set, or the fastest mixed set if no model has
+/// enough cards on this node.
+fn best_selection(node: &NodeState, want: usize, min_free_b: u64) -> Option<GpuSelection> {
+    let mut options = homogeneous_options(node, want, min_free_b);
+    if options.is_empty() {
+        let free = free_gpus(node, min_free_b);
+        if free.len() < want {
+            return None;
+        }
+        return Some(selection(&free, None, want));
+    }
+    options.sort_by(compare_selection);
+    options.into_iter().next()
 }
 
 /// Total measured throughput of a GPU set. Unbenchmarked cards score by free
@@ -108,31 +148,333 @@ fn score<'a>(gpus: impl Iterator<Item = &'a ferro_proto::Gpu>) -> f64 {
     .sum()
 }
 
-fn node_score(node: &NodeState, want: usize, min_free_b: u64) -> f64 {
-    let free = free_gpus(node, min_free_b);
-    if free.len() < want {
-        return f64::MIN;
-    }
-    score(free[..want].iter().copied())
-}
+/// Explain every scheduling filter without changing the placement policy.
+/// `eligible` means this node can satisfy the requested per-node shape; the
+/// caller still needs enough eligible nodes to satisfy `want_nodes`.
+pub fn node_verdicts(
+    nodes: &[NodeState],
+    gpus_per_node: u32,
+    node_filter: &[String],
+    min_free_vram_b: u64,
+) -> Vec<NodeVerdict> {
+    nodes
+        .iter()
+        .map(|node| {
+            let node_id = node_id(node).to_string();
+            let mut reasons = Vec::new();
+            let mut free_gpus = 0u32;
+            let mut free_vram_b = 0u64;
 
-fn free_gpu_indices(node: &NodeState, min_free_b: u64) -> Vec<u32> {
-    let mut idx: Vec<u32> = free_gpus(node, min_free_b).iter().map(|g| g.index).collect();
-    idx.sort_unstable();
-    idx
-}
+            if !node.healthy {
+                reasons.push("node is unhealthy or heartbeat is stale".to_string());
+            }
 
-fn free_vram_bytes(node: &NodeState, min_free_b: u64) -> u64 {
-    node.info
-        .as_ref()
-        .map(|i| {
-            i.gpus
-                .iter()
-                .filter(|g| g.allocated_job_id.is_empty() && gpu_free_bytes(g) >= min_free_b)
-                .map(gpu_free_bytes)
-                .sum()
+            let in_filter = node_filter.is_empty() || node_filter.iter().any(|id| id == &node_id);
+            if !in_filter {
+                reasons.push("node is not in the requested node filter".to_string());
+            }
+
+            if gpus_per_node == 0 {
+                reasons.push("gpus_per_node must be at least 1".to_string());
+            }
+
+            match node.info.as_ref() {
+                None => reasons.push("node has no info".to_string()),
+                Some(info) => {
+                    let allocated = info
+                        .gpus
+                        .iter()
+                        .filter(|g| !g.allocated_job_id.is_empty())
+                        .count();
+                    let below_vram = info
+                        .gpus
+                        .iter()
+                        .filter(|g| {
+                            g.allocated_job_id.is_empty() && gpu_free_bytes(g) < min_free_vram_b
+                        })
+                        .count();
+                    free_gpus = info
+                        .gpus
+                        .iter()
+                        .filter(|g| {
+                            g.allocated_job_id.is_empty() && gpu_free_bytes(g) >= min_free_vram_b
+                        })
+                        .count() as u32;
+                    free_vram_b = info
+                        .gpus
+                        .iter()
+                        .filter(|g| {
+                            g.allocated_job_id.is_empty() && gpu_free_bytes(g) >= min_free_vram_b
+                        })
+                        .map(gpu_free_bytes)
+                        .sum();
+
+                    if gpus_per_node > 0 && free_gpus < gpus_per_node {
+                        if allocated > 0 {
+                            reasons.push(format!("{allocated} GPU(s) allocated by FerroGrid"));
+                        }
+                        if below_vram > 0 {
+                            reasons
+                                .push(format!("{below_vram} GPU(s) below the free VRAM threshold"));
+                        }
+                        reasons.push(format!(
+                            "only {free_gpus} free GPU(s), need {gpus_per_node}"
+                        ));
+                    }
+                }
+            }
+
+            NodeVerdict {
+                node_id,
+                eligible: reasons.is_empty(),
+                reasons,
+                free_gpus,
+                free_vram_b,
+            }
         })
-        .unwrap_or(0)
+        .collect()
+}
+
+struct Candidate<'a> {
+    node: &'a NodeState,
+    local: GpuSelection,
+    options: Vec<GpuSelection>,
+}
+
+fn link_mbps(node: &NodeState) -> u32 {
+    node.info.as_ref().map(|i| i.link_mbps).unwrap_or(0)
+}
+
+fn candidate_nodes<'a>(
+    nodes: &'a [NodeState],
+    node_filter: &[String],
+    gpus_per_node: usize,
+    min_free_b: u64,
+) -> Vec<Candidate<'a>> {
+    nodes
+        .iter()
+        .filter(|n| n.healthy)
+        .filter(|n| {
+            node_filter.is_empty()
+                || n.info
+                    .as_ref()
+                    .map(|i| node_filter.contains(&i.node_id))
+                    .unwrap_or(false)
+        })
+        .filter_map(|node| {
+            let local = best_selection(node, gpus_per_node, min_free_b)?;
+            Some(Candidate {
+                node,
+                local,
+                options: homogeneous_options(node, gpus_per_node, min_free_b),
+            })
+        })
+        .collect()
+}
+
+/// Sort one node choice from best to worst. For a multi-node job, the
+/// negotiated link is considered before GPU throughput because the slowest
+/// interconnect becomes the collective's ceiling.
+fn node_choice_order(
+    a_node: &NodeState,
+    a_selection: &GpuSelection,
+    b_node: &NodeState,
+    b_selection: &GpuSelection,
+    network_first: bool,
+) -> std::cmp::Ordering {
+    let network = if network_first {
+        link_mbps(b_node).cmp(&link_mbps(a_node))
+    } else {
+        std::cmp::Ordering::Equal
+    };
+    network
+        .then_with(|| {
+            b_selection
+                .score
+                .partial_cmp(&a_selection.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .then_with(|| b_selection.free_vram_b.cmp(&a_selection.free_vram_b))
+        .then_with(|| node_id(a_node).cmp(node_id(b_node)))
+}
+
+fn selection_for_model<'a>(candidate: &'a Candidate<'a>, model: &str) -> Option<&'a GpuSelection> {
+    candidate
+        .options
+        .iter()
+        .find(|selection| selection.model.as_deref() == Some(model))
+}
+
+struct PlacementChoice {
+    target_model: Option<String>,
+    selected: Vec<(usize, GpuSelection)>,
+}
+
+/// Build one candidate set. A target model is a preference, never a
+/// requirement: if fewer than `want` nodes can provide it, the remaining
+/// nodes use their local best selection.
+fn placement_choice(
+    candidates: &[Candidate<'_>],
+    want: usize,
+    target_model: Option<&str>,
+    network_first: bool,
+) -> PlacementChoice {
+    let mut selected = Vec::with_capacity(want);
+    let mut matching: Vec<usize> = target_model
+        .map(|model| {
+            candidates
+                .iter()
+                .enumerate()
+                .filter(|(_, candidate)| selection_for_model(candidate, model).is_some())
+                .map(|(index, _)| index)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if let Some(model) = target_model {
+        matching.sort_by(|a, b| {
+            node_choice_order(
+                candidates[*a].node,
+                selection_for_model(&candidates[*a], model).expect("matching model"),
+                candidates[*b].node,
+                selection_for_model(&candidates[*b], model).expect("matching model"),
+                network_first,
+            )
+        });
+        for index in matching.into_iter().take(want) {
+            selected.push((
+                index,
+                selection_for_model(&candidates[index], model)
+                    .expect("matching model")
+                    .clone(),
+            ));
+        }
+    }
+
+    let mut remaining: Vec<usize> = (0..candidates.len())
+        .filter(|index| !selected.iter().any(|(chosen, _)| chosen == index))
+        .collect();
+    remaining.sort_by(|a, b| {
+        node_choice_order(
+            candidates[*a].node,
+            &candidates[*a].local,
+            candidates[*b].node,
+            &candidates[*b].local,
+            network_first,
+        )
+    });
+    for index in remaining
+        .into_iter()
+        .take(want.saturating_sub(selected.len()))
+    {
+        selected.push((index, candidates[index].local.clone()));
+    }
+
+    // Rank order should describe the same preference as node selection, even
+    // when a target-model group was assembled before the fallback nodes.
+    selected.sort_by(|(a, a_selection), (b, b_selection)| {
+        node_choice_order(
+            candidates[*a].node,
+            a_selection,
+            candidates[*b].node,
+            b_selection,
+            network_first,
+        )
+    });
+
+    PlacementChoice {
+        target_model: target_model.map(str::to_string),
+        selected,
+    }
+}
+
+fn choice_order(
+    a: &PlacementChoice,
+    b: &PlacementChoice,
+    candidates: &[Candidate<'_>],
+    network_first: bool,
+) -> std::cmp::Ordering {
+    let matches = |choice: &PlacementChoice| {
+        choice
+            .target_model
+            .as_deref()
+            .map(|model| {
+                choice
+                    .selected
+                    .iter()
+                    .filter(|(_, selection)| selection.model.as_deref() == Some(model))
+                    .count()
+            })
+            .unwrap_or(0)
+    };
+    let order = matches(a).cmp(&matches(b));
+    if order != std::cmp::Ordering::Equal {
+        return order;
+    }
+
+    if network_first {
+        let min_link = |choice: &PlacementChoice| {
+            choice
+                .selected
+                .iter()
+                .map(|(index, _)| link_mbps(candidates[*index].node))
+                .min()
+                .unwrap_or(0)
+        };
+        let order = min_link(a).cmp(&min_link(b));
+        if order != std::cmp::Ordering::Equal {
+            return order;
+        }
+        let total_link = |choice: &PlacementChoice| {
+            choice
+                .selected
+                .iter()
+                .map(|(index, _)| link_mbps(candidates[*index].node) as u64)
+                .sum::<u64>()
+        };
+        let order = total_link(a).cmp(&total_link(b));
+        if order != std::cmp::Ordering::Equal {
+            return order;
+        }
+    }
+
+    let total_score = |choice: &PlacementChoice| {
+        choice
+            .selected
+            .iter()
+            .map(|(_, selection)| selection.score)
+            .sum::<f64>()
+    };
+    let order = total_score(a)
+        .partial_cmp(&total_score(b))
+        .unwrap_or(std::cmp::Ordering::Equal);
+    if order != std::cmp::Ordering::Equal {
+        return order;
+    }
+
+    let total_vram = |choice: &PlacementChoice| {
+        choice
+            .selected
+            .iter()
+            .map(|(_, selection)| selection.free_vram_b)
+            .sum::<u64>()
+    };
+    let order = total_vram(a).cmp(&total_vram(b));
+    if order != std::cmp::Ordering::Equal {
+        return order;
+    }
+
+    // Prefer the lexicographically smaller node set for reproducibility.
+    let ids = |choice: &PlacementChoice| {
+        let mut ids: Vec<&str> = choice
+            .selected
+            .iter()
+            .map(|(index, _)| node_id(candidates[*index].node))
+            .collect();
+        ids.sort_unstable();
+        ids
+    };
+    ids(b).cmp(&ids(a))
 }
 
 /// Choose a shape as well as a placement.
@@ -166,7 +508,11 @@ pub fn plan_auto(
         return Err(if nodes.is_empty() {
             ScheduleError::NoNodes
         } else {
-            ScheduleError::NotEnoughNodes { requested: 1, per_node: 1, available: 0 }
+            ScheduleError::NotEnoughNodes {
+                requested: 1,
+                per_node: 1,
+                available: 0,
+            }
         });
     }
 
@@ -174,11 +520,14 @@ pub fn plan_auto(
     let mut best: Option<(&NodeState, usize, f64)> = None;
     for n in &candidates {
         let free = free_gpus(n, min_free_vram_b);
-        let mut counts: std::collections::HashMap<&str, Vec<&ferro_proto::Gpu>> = Default::default();
+        let mut counts: std::collections::HashMap<&str, Vec<&ferro_proto::Gpu>> =
+            Default::default();
         for g in &free {
             counts.entry(g.name.as_str()).or_default().push(g);
         }
-        let Some(group) = counts.values().max_by_key(|v| v.len()) else { continue };
+        let Some(group) = counts.values().max_by_key(|v| v.len()) else {
+            continue;
+        };
         let take = group.len().min(max_gpus.max(1) as usize);
         let sc = score(group[..take].iter().copied());
         // More GPUs wins; equal counts are broken by measured throughput.
@@ -192,8 +541,19 @@ pub fn plan_auto(
     }
 
     let (node, take, _) = best.ok_or(ScheduleError::NoNodes)?;
-    let node_id = node.info.as_ref().map(|i| i.node_id.clone()).unwrap_or_default();
-    plan(nodes, 1, take as u32, &[node_id], master_port, min_free_vram_b)
+    let node_id = node
+        .info
+        .as_ref()
+        .map(|i| i.node_id.clone())
+        .unwrap_or_default();
+    plan(
+        nodes,
+        1,
+        take as u32,
+        &[node_id],
+        master_port,
+        min_free_vram_b,
+    )
 }
 
 pub fn plan(
@@ -211,18 +571,7 @@ pub fn plan(
         return Err(ScheduleError::NoNodes);
     }
 
-    let mut candidates: Vec<&NodeState> = nodes
-        .iter()
-        .filter(|n| n.healthy)
-        .filter(|n| {
-            node_filter.is_empty()
-                || n.info
-                    .as_ref()
-                    .map(|i| node_filter.contains(&i.node_id))
-                    .unwrap_or(false)
-        })
-        .filter(|n| free_gpu_indices(n, min_free_vram_b).len() as u32 >= gpus_per_node)
-        .collect();
+    let candidates = candidate_nodes(nodes, node_filter, gpus_per_node as usize, min_free_vram_b);
 
     if (candidates.len() as u32) < want_nodes {
         return Err(ScheduleError::NotEnoughNodes {
@@ -232,51 +581,73 @@ pub fn plan(
         });
     }
 
-    // Most free VRAM first; node_id breaks ties so placement is deterministic
-    // across runs, which makes debugging a flaky job much easier.
-    // Fastest measured node first, then most free VRAM, then node id so the
-    // placement is reproducible across runs.
-    candidates.sort_by(|a, b| {
-        node_score(b, gpus_per_node as usize, min_free_vram_b)
-            .partial_cmp(&node_score(a, gpus_per_node as usize, min_free_vram_b))
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| {
-                free_vram_bytes(b, min_free_vram_b).cmp(&free_vram_bytes(a, min_free_vram_b))
-            })
-            .then_with(|| node_id(a).cmp(node_id(b)))
-    });
-    candidates.truncate(want_nodes as usize);
+    let network_first = want_nodes > 1;
+    let mut target_models: Vec<String> = candidates
+        .iter()
+        .flat_map(|candidate| candidate.options.iter())
+        .filter_map(|selection| selection.model.clone())
+        .collect();
+    target_models.sort_unstable();
+    target_models.dedup();
 
-    let placements: Vec<JobPlacement> = candidates
+    // The baseline is the old local policy. Each target-model choice then
+    // gets a chance to keep the selected cards identical across nodes.
+    let mut choices = vec![placement_choice(
+        &candidates,
+        want_nodes as usize,
+        None,
+        network_first,
+    )];
+    for model in &target_models {
+        choices.push(placement_choice(
+            &candidates,
+            want_nodes as usize,
+            Some(model),
+            network_first,
+        ));
+    }
+    let choice = choices
+        .into_iter()
+        .max_by(|a, b| choice_order(a, b, &candidates, network_first))
+        .expect("baseline placement choice");
+
+    let placements: Vec<JobPlacement> = choice
+        .selected
         .iter()
         .enumerate()
-        .map(|(rank, node)| {
+        .map(|(rank, (candidate_index, selection))| {
+            let node = candidates[*candidate_index].node;
             let info = node.info.as_ref().expect("filtered above");
-            // Prefer identical cards within a node: a collective runs at the
-            // pace of its slowest member.
-            let chosen: Vec<u32> = pick_homogeneous(node, gpus_per_node as usize, min_free_vram_b);
-            let uuids = chosen
+            let uuids = selection
+                .indices
                 .iter()
                 .filter_map(|idx| {
-                    info.gpus.iter().find(|g| g.index == *idx).map(|g| g.uuid.clone())
+                    info.gpus
+                        .iter()
+                        .find(|g| g.index == *idx)
+                        .map(|g| g.uuid.clone())
                 })
                 .collect();
             JobPlacement {
                 node_id: info.node_id.clone(),
                 address: info.address.clone(),
                 node_rank: rank as u32,
-                gpu_indices: chosen,
+                gpu_indices: selection.indices.clone(),
                 gpu_uuids: uuids,
             }
         })
         .collect();
 
-    let master_addr = candidates[0]
+    let master_addr = candidates[choice.selected[0].0]
+        .node
         .info
         .as_ref()
         .map(|i| {
             if i.nccl_address.is_empty() {
-                i.address.rsplit_once(':').map(|(h, _)| h.to_string()).unwrap_or_default()
+                i.address
+                    .rsplit_once(':')
+                    .map(|(h, _)| h.to_string())
+                    .unwrap_or_default()
             } else {
                 i.nccl_address.clone()
             }
@@ -347,9 +718,10 @@ mod tests {
 
     #[test]
     fn skips_allocated_gpus() {
-        let nodes = vec![
-            node("a", &[(0, 20 << 30, "busy"), (1, 20 << 30, ""), (2, 20 << 30, "")]),
-        ];
+        let nodes = vec![node(
+            "a",
+            &[(0, 20 << 30, "busy"), (1, 20 << 30, ""), (2, 20 << 30, "")],
+        )];
         let p = plan(&nodes, 1, 2, &[], 29500, TEST_MIN).unwrap();
         assert_eq!(p.placements[0].gpu_indices, vec![1, 2]);
     }
@@ -367,7 +739,10 @@ mod tests {
     fn unhealthy_nodes_are_not_scheduled() {
         let mut n = node("a", &[(0, 20 << 30, ""), (1, 20 << 30, "")]);
         n.healthy = false;
-        assert!(matches!(plan(&[n], 1, 2, &[], 29500, TEST_MIN), Err(ScheduleError::NotEnoughNodes { .. })));
+        assert!(matches!(
+            plan(&[n], 1, 2, &[], 29500, TEST_MIN),
+            Err(ScheduleError::NotEnoughNodes { .. })
+        ));
     }
 
     #[test]
@@ -468,9 +843,78 @@ mod tests {
     }
 
     #[test]
+    fn prefers_the_same_gpu_model_across_nodes() {
+        let nodes = vec![
+            node_mixed("5090-a", &[(0, 40 << 30, "", "RTX 5090", 130.0)]),
+            node_mixed("4090", &[(0, 40 << 30, "", "RTX 4090", 100.0)]),
+            node_mixed("5090-b", &[(0, 40 << 30, "", "RTX 5090", 90.0)]),
+        ];
+        let p = plan(&nodes, 2, 1, &[], 29500, TEST_MIN).unwrap();
+        let chosen: Vec<&str> = p.placements.iter().map(|p| p.node_id.as_str()).collect();
+        assert_eq!(chosen, vec!["5090-a", "5090-b"]);
+    }
+
+    #[test]
+    fn mixed_gpu_models_are_still_schedulable_when_no_pair_matches() {
+        let nodes = vec![
+            node_mixed("5090", &[(0, 40 << 30, "", "RTX 5090", 130.0)]),
+            node_mixed("4090", &[(0, 40 << 30, "", "RTX 4090", 100.0)]),
+        ];
+        let p = plan(&nodes, 2, 1, &[], 29500, TEST_MIN).unwrap();
+        assert_eq!(p.placements.len(), 2);
+    }
+
+    #[test]
+    fn prefers_a_fast_network_combination_over_faster_gpu_scores() {
+        let mut slow_link = node_mixed("slow-link", &[(0, 40 << 30, "", "RTX 5090", 200.0)]);
+        let mut fast_a = node_mixed("fast-a", &[(0, 40 << 30, "", "RTX 4090", 100.0)]);
+        let mut fast_b = node_mixed("fast-b", &[(0, 40 << 30, "", "RTX A6000", 90.0)]);
+        slow_link.info.as_mut().unwrap().link_mbps = 100;
+        fast_a.info.as_mut().unwrap().link_mbps = 1_000;
+        fast_b.info.as_mut().unwrap().link_mbps = 1_000;
+
+        let p = plan(&[slow_link, fast_a, fast_b], 2, 1, &[], 29500, TEST_MIN).unwrap();
+        let chosen: Vec<&str> = p.placements.iter().map(|p| p.node_id.as_str()).collect();
+        assert_eq!(chosen, vec!["fast-a", "fast-b"]);
+    }
+
+    #[test]
+    fn node_verdicts_keep_the_reason_each_filter_found() {
+        let mut unhealthy = node("unhealthy", &[(0, 20 << 30, "")]);
+        unhealthy.healthy = false;
+        let filtered = node("filtered", &[(0, 20 << 30, "")]);
+        let held = node("held", &[(0, 20 << 30, "job-a")]);
+        let low_vram = node("low-vram", &[(0, 1 << 30, "")]);
+
+        let verdicts = node_verdicts(
+            &[unhealthy, filtered, held, low_vram],
+            1,
+            &["filtered".to_string()],
+            TEST_MIN,
+        );
+
+        assert!(verdicts[0].reasons.iter().any(|r| r.contains("unhealthy")));
+        assert!(verdicts[1].eligible);
+        assert!(verdicts[2]
+            .reasons
+            .iter()
+            .any(|r| r.contains("allocated by FerroGrid")));
+        assert!(verdicts[3]
+            .reasons
+            .iter()
+            .any(|r| r.contains("free VRAM threshold")));
+    }
+
+    #[test]
     fn auto_keeps_the_job_on_one_node() {
         let nodes = vec![
-            node_mixed("a", &[(0, 40 << 30, "", "RTX 4090", 80.0), (1, 40 << 30, "", "RTX 4090", 80.0)]),
+            node_mixed(
+                "a",
+                &[
+                    (0, 40 << 30, "", "RTX 4090", 80.0),
+                    (1, 40 << 30, "", "RTX 4090", 80.0),
+                ],
+            ),
             node_mixed("b", &[(0, 40 << 30, "", "RTX 4090", 80.0)]),
         ];
         let p = plan_auto(&nodes, &[], 29500, TEST_MIN, u32::MAX).unwrap();
@@ -485,15 +929,21 @@ mod tests {
         // alike. Both offer a 2-GPU homogeneous job, and 'pair' benchmarks
         // faster, so it should win.
         let nodes = vec![
-            node_mixed("mixed", &[
-                (0, 40 << 30, "", "RTX A6000", 50.0),
-                (1, 40 << 30, "", "RTX 4090", 60.0),
-                (2, 40 << 30, "", "RTX 4090", 60.0),
-            ]),
-            node_mixed("pair", &[
-                (0, 40 << 30, "", "RTX 5090", 130.0),
-                (1, 40 << 30, "", "RTX 5090", 130.0),
-            ]),
+            node_mixed(
+                "mixed",
+                &[
+                    (0, 40 << 30, "", "RTX A6000", 50.0),
+                    (1, 40 << 30, "", "RTX 4090", 60.0),
+                    (2, 40 << 30, "", "RTX 4090", 60.0),
+                ],
+            ),
+            node_mixed(
+                "pair",
+                &[
+                    (0, 40 << 30, "", "RTX 5090", 130.0),
+                    (1, 40 << 30, "", "RTX 5090", 130.0),
+                ],
+            ),
         ];
         let p = plan_auto(&nodes, &[], 29500, TEST_MIN, u32::MAX).unwrap();
         assert_eq!(p.placements[0].node_id, "pair");
@@ -502,11 +952,14 @@ mod tests {
 
     #[test]
     fn auto_respects_a_gpu_cap() {
-        let nodes = vec![node_mixed("a", &[
-            (0, 40 << 30, "", "RTX 4090", 80.0),
-            (1, 40 << 30, "", "RTX 4090", 80.0),
-            (2, 40 << 30, "", "RTX 4090", 80.0),
-        ])];
+        let nodes = vec![node_mixed(
+            "a",
+            &[
+                (0, 40 << 30, "", "RTX 4090", 80.0),
+                (1, 40 << 30, "", "RTX 4090", 80.0),
+                (2, 40 << 30, "", "RTX 4090", 80.0),
+            ],
+        )];
         let p = plan_auto(&nodes, &[], 29500, TEST_MIN, 2).unwrap();
         assert_eq!(p.world_size, 2);
     }

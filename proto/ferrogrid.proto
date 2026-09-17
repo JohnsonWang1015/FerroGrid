@@ -50,6 +50,8 @@ message GpuProcess {
   // Last time the agent saw this process doing work. `now - busy_unix_s` is
   // how long it has been sitting on its VRAM doing nothing. 0 = unknown.
   int64 busy_unix_s      = 12;
+  // Effective image for a FerroGrid-launched process; empty for foreign work.
+  string image            = 13;
 }
 
 // Foreign processes on one GPU, folded per user: the JOB column needs "who
@@ -164,6 +166,19 @@ message SubmitJobRequest {
   bool queue             = 14;
   // Give up queueing after this many seconds. 0 = wait indefinitely.
   uint32 queue_timeout_s = 15;
+  // Per-node image overrides. These win over `image` for the matching node.
+  map<string, string> node_images = 16;
+}
+
+// Why a node was or was not considered for a placement attempt. The ledger is
+// intentionally per node: an aggregate "N nodes available" number cannot tell
+// an operator whether to fix a stale agent, free a GPU, or change a filter.
+message NodeVerdict {
+  string node_id       = 1;
+  bool eligible         = 2;
+  repeated string reasons = 3;
+  uint32 free_gpus      = 4;
+  uint64 free_vram_b    = 5;
 }
 
 message SubmitJobResponse {
@@ -173,6 +188,8 @@ message SubmitJobResponse {
   JobPlan plan   = 4;
   // Non-zero when the job was queued instead of placed: where it sits in line.
   uint32 queue_position = 5;
+  repeated NodeVerdict node_verdicts = 6;
+  repeated string warnings = 7;
 }
 
 // The concrete placement decision the scheduler made.
@@ -210,6 +227,8 @@ message JobStatus {
   string message      = 6;
   int64 started_unix_s = 7;
   int64 ended_unix_s   = 8;
+  // The image the agent actually launched after applying its node default.
+  string image         = 9;
 }
 
 message JobSummary {
@@ -227,6 +246,10 @@ message JobSummary {
   // placed; position is 1-based within the queue.
   bool queued            = 10;
   uint32 queue_position  = 11;
+  // The latest scheduler assessment; especially useful while queued.
+  repeated NodeVerdict node_verdicts = 12;
+  repeated string warnings = 13;
+  string queue_message = 14;
 }
 
 message TrainingMetrics {
@@ -487,6 +510,9 @@ message LaunchJobRequest {
   repeated string torchrun_args = 13;
   // Extra bind mounts, "HOST[:CONTAINER][:ro]".
   repeated string mounts = 14;
+  // UUIDs corresponding by position to gpu_indices, for the agent's NVML
+  // re-check. Empty keeps compatibility with older controllers.
+  repeated string gpu_uuids = 15;
 }
 
 message LaunchJobResponse { bool launched = 1; string message = 2; }
