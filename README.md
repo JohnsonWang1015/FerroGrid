@@ -59,7 +59,8 @@ Requires [uv](https://docs.astral.sh/uv/) and a Rust toolchain
 | `crates/ferro-proto` | gRPC contract (`proto/ferrogrid.proto`) and generated code |
 | `crates/ferro-gpu` | NVML wrapper: model, VRAM, utilisation, temperature, power |
 | `crates/ferro-agent` | Per-server agent: reports GPUs, launches/supervises torchrun |
-| `crates/ferro-controller` | Registry, GPU scheduler, job orchestration, log/metric collection |
+| `crates/ferro-sched` | Scheduling core: queue and placement policies. Pure and synchronous, so the same policies run offline |
+| `crates/ferro-controller` | Registry, admission, job orchestration, log/metric collection |
 | `crates/ferro-cli` | The `ferro` command |
 | `python/examples/train_fsdp2.py` | FSDP2 reference model (synthetic data) |
 | `python/ferro_mojo.py` | Mojo kernel loader, autograd wrapper, PyTorch fallback |
@@ -1374,9 +1375,10 @@ Phase 1 is deliberately small. Known gaps, in rough priority order:
 
 - Controller state is in memory: node registrations self-heal after a restart,
   job history does not.
-- No queueing — a job that cannot be placed is rejected rather than held.
+- Queue policy is FIFO only; no priority, aging or fair sharing yet. Without
+  `--wait`, a job that cannot be placed is still rejected rather than held.
 - No authentication or TLS on the gRPC endpoints; run it on a trusted network.
-- No multi-tenant fair sharing, quotas or preemption.
+- No quotas, preemption or per-user accounting.
 - Elastic/fault-tolerant training is not wired up; a rank failure fails the job.
 - `--gpus-per-node` is uniform across nodes, as torchrun expects.
 
