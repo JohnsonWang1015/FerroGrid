@@ -5,6 +5,104 @@ specification (§91). Newest entry first.
 
 ---
 
+## Phase 5 — Persistence
+
+**Phase:** 5 — SQLite state, event log
+**Status:** ✅ Complete. Gate met.
+
+### Implemented
+
+- **`crates/ferro-controller/src/store.rs`** — SQLite with WAL, `synchronous=NORMAL`,
+  `PRAGMA user_version` for schema versioning. A database from a future version
+  makes the controller refuse to start rather than write something it cannot
+  read back.
+- **Durable:** job records, queue membership and the original request, `job_order`,
+  the plan, the placement explanation, per-rank statuses, GPU benchmarks,
+  network measurements, events.
+  **Ephemeral:** node registrations, GPU lists, utilisation, `allocated_job_id`,
+  the 20k-line log ring, queue verdicts. The dividing line is "can a heartbeat
+  rebuild it?" — see [`persistence.md`](persistence.md).
+- **Write-behind through a channel.** Registry methods queue a small `Change`
+  under the lock — a non-blocking send on an unbounded channel — and a writer
+  thread applies batches in one transaction. No disk I/O ever happens under the
+  registry lock (§79).
+- **One synchronous exception:** `submit_job` flushes before answering
+  `accepted: true`. A flush marker travels the same channel, so it cannot
+  overtake the writes it is waiting for, and the reply is sent after the commit.
+- **Event log** (§22) — all fourteen kinds, write-behind, with a 2000-entry
+  in-memory ring so `ferro events` works under `--no-state`. The ring is seeded
+  from the table at startup.
+- **`ferro events`** with `--job`, `--kind`, `--limit`, `--json` and the shared
+  watch flags.
+- **`--state <PATH>` / `--no-state`** on the controller, defaulting to
+  `$XDG_STATE_HOME/ferrogrid/controller.db`.
+
+### Tests
+
+| Check | Result |
+|---|---|
+| `cargo test --workspace` | **220 passed, 0 failed** (was 199; +8 persistence, +13 events) |
+| `cargo fmt --check` / `clippy -D warnings` | ✅ clean |
+| Pre-existing tests modified | **none** |
+| `ferro-sched` purity | ✅ gained no dependencies |
+
+### Verified live, not just in unit tests
+
+A controller was started against a state file, two jobs queued, then **killed
+with SIGTERM** — which the controller does not catch, so it had no chance to
+shut down cleanly. Both jobs came back with priority, project and queue order
+intact. That is the synchronous-flush-on-submit decision earning its place:
+write-behind alone would have lost them.
+
+Restart also showed `CONTROLLER_RECOVERED  restored 2 job(s)` where a fresh
+start says `CONTROLLER_STARTED`, and the event history survived in the ring.
+
+### A bug found while testing the event log
+
+A terminal job's event detail was taken from whichever report completed the
+picture, which is not always the rank that ended. A rank can fail before its
+peer has reported anything; the peer's *start* is then what flips the job to
+failed, and `JOB_FAILED` was labelled with the peer's progress message —
+`gpu-b says Running` instead of `exit 137`. The fix reads the detail off a rank
+actually in that phase, lowest `node_rank` first, because `per_node` is a
+`HashMap` and without the ordering the same failure would print differently
+between runs.
+
+### An effect that came for free
+
+Restoring jobs closed half of §21's reconciliation without any code written for
+it. Before, an agent's heartbeat reporting a job the controller did not
+recognise was discarded. Now the job is restored, so the heartbeat applies: a
+job that finished while the controller was down is correctly recorded as
+finished. What remains for Phase 6 is the case where *the agent no longer knows
+about the job either* — nothing reports, and the job stays `Running` forever.
+
+### Known limitations
+
+1. **No reconciliation.** Loading is not reconciling. A job that was running at
+   shutdown loads as running and stays that way until a heartbeat says
+   otherwise, or forever if none comes. This is deliberate: Phase 6.
+2. **Logs are still not persisted.** `ferro logs` loses history on a restart,
+   and the audit's finding that logs are dropped outright while the controller
+   is unreachable is untouched.
+3. **Write-behind loses its tail on a crash** for everything except job
+   submission. Status updates, benchmarks and events queued in the last
+   milliseconds go with the process.
+4. **`rusqlite` is vendored (`bundled`)**, which adds a C compile to the build.
+   The portable build container (`rust:1-bullseye`) already has a compiler, so
+   `scripts/build.sh portable` needed no change — but it is now a build-time
+   dependency worth knowing about.
+5. **Queue verdicts and warnings are not persisted**, so a restored queued job
+   shows no explanation until the next queue tick regenerates one, up to five
+   seconds later.
+
+### Next
+
+Phase 6 — recovery: reconcile the loaded state against what the agents report,
+in both directions, and handle the job nobody claims any more.
+
+---
+
 ## Phase 4 — Evaluation
 
 **Phase:** 4 — Simulator, workload generator, experiment runner
