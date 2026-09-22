@@ -5,6 +5,131 @@ specification (§91). Newest entry first.
 
 ---
 
+## Phase 3 — Placement Algorithms
+
+**Phase:** 3 — Named placement strategies, measured topology, explainability
+**Status:** ✅ Complete. Gate met.
+
+### Implemented
+
+**Four new placement strategies**, alongside the existing `performance`, all
+selectable with `--placement-policy`:
+
+| Strategy | Prefers | The failure mode it addresses |
+|---|---|---|
+| `first-fit` | first node in id order, lowest indices | none — it is the baseline the others must beat |
+| `best-fit` | the node with least left over | cluster fragmentation: six free GPUs, nowhere to put four |
+| `vram` | roomiest cards, judged by the *worst* one | a job OOMing because it was given the tightest fit |
+| `topology` | the set whose slowest **measured** hop is fastest | a collective running at the pace of an untested wire |
+
+They share feasibility and plan construction (`placement/engine.rs`) and differ
+only in two comparators, so a bug in "what is possible" is fixed once rather
+than five times, while each algorithm stays readable on its own.
+
+**`ferro net` results are now kept.** Audit finding §5.3 is closed: measured
+pairwise throughput reaches the scheduler through `NetworkSnapshot` on the
+scheduling context instead of being printed and discarded.
+
+**A shared scoring vocabulary** (`placement/score.rs`, §13). Every strategy
+reports the same five axes — compute, vram, homogeneity, network, load — each
+0..1, plus a weighted total with configurable weights. Selection and
+description are deliberately separate: strategies disagree about what to
+optimise, but must not disagree about how to describe what they chose, or
+switching strategy would produce incomparable numbers.
+
+**`ferro explain <job>`** (§46) shows both decisions and the arithmetic behind
+each, with `--json`.
+
+### Files changed
+
+```
+NEW  crates/ferro-sched/src/topology.rs              NetworkSnapshot
+NEW  crates/ferro-sched/src/placement/engine.rs      shared feasibility + assembly
+NEW  crates/ferro-sched/src/placement/score.rs       the five-axis vocabulary
+NEW  crates/ferro-sched/src/placement/{first_fit,best_fit,vram,topology}.rs
+NEW  crates/ferro-sched/tests/strategies_differ.rs   cross-strategy comparison
+MOD  crates/ferro-sched/src/{lib,placement/mod}.rs
+MOD  crates/ferro-controller/src/{registry,service,main}.rs
+MOD  crates/ferro-cli/src/{main,render}.rs           `ferro explain`
+MOD  proto/ferrogrid.proto                           PlacementExplanation
+MOD  README.md
+```
+
+### Tests
+
+| Check | Result |
+|---|---|
+| `cargo test --workspace` | **154 passed, 0 failed** (was 103) |
+| `uv run --all-extras pytest -q` | **19 passed** |
+| `cargo fmt --check` / `clippy -D warnings` | ✅ clean |
+
+Every strategy has determinism tests and tests asserting it picks what its own
+documentation claims. `strategies_differ.rs` drives all five over one
+deliberately awkward cluster and asserts they **disagree** — five strategies
+that always agreed would be five names for one policy, and the placement
+comparison in Phase 4 would measure nothing.
+
+### Demonstrated end to end
+
+A real controller and agent against this machine's single RTX 3060:
+
+```
+Where: placement policy `performance`
+  rank 0 -> local-gpu GPU [0]
+
+  compute                    1.00
+  vram                       1.00
+  homogeneity                1.00
+  load                       1.00
+                          --------
+  placement score            1.00
+
+  Reasons:
+  - no GPU here has been benchmarked; ranked by free VRAM instead
+  - 5.9 GiB free on the tightest card
+  - all 1 GPUs are NVIDIA GeForce RTX 3060 Laptop GPU
+  - single node, so no network hop to cross
+```
+
+Note what it does *not* claim: the network axis is absent rather than scored
+1.0, and the compute reason says plainly that nothing has been benchmarked.
+
+### A bug the tests found
+
+The first implementation let an expired network measurement fall all the way
+back to the negotiated link speed. That meant **forgetting made a link look
+faster**: a pair measured at 90 Mb/s would quietly become a 1000 Mb/s candidate
+a day later, and the scheduler would then pick exactly the path `ferro net` had
+been run to expose. Stale evidence is now capped by what was last actually
+seen — weaker than fresh evidence, but not weaker than none.
+
+### Known limitations
+
+1. **No `cost` strategy that *selects* by the weighted total.** The scoring
+   framework and its weights exist and every decision is scored by them, but no
+   policy currently maximises the total; each picks by its own rule. That is a
+   small addition on top of the subset search `topology` already uses.
+2. **`topology` searches node subsets exhaustively** below 200,000 combinations
+   and degrades to per-node ranking above it. Fine for any cluster this is
+   meant for; the fallback is not itself topology-aware.
+3. **Auto mode is uniform across the new strategies** — one node, as many GPUs
+   as it can place, capped — rather than each strategy defining its own. Only
+   `performance` retains the original "largest identical-model group" rule.
+4. **The score is computed against the cluster as it was at placement time** and
+   then frozen on the job. That is deliberate — it explains the decision that
+   was made — but it means `ferro explain` on an old job describes an old
+   cluster.
+5. **Fragmentation is not yet measured** (§47), so the best-fit-versus-first-fit
+   argument is still theoretical. That number arrives with the Phase 4 metrics.
+
+### Next
+
+Phase 4 — evaluation: `crates/ferro-sim`, the workload generator, and the
+experiment runner. The scheduler core is now importable, pure, deterministic and
+policy-plural in both dimensions, which is everything a simulator needs.
+
+---
+
 ## Phase 2 — OS Scheduling Algorithms
 
 **Phase:** 2 — Priority, aging, fair share, SJF

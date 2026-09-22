@@ -290,7 +290,7 @@ policy deterministic under repeated identical input.
 
 ---
 
-### Phase 3 — Placement algorithms
+### Phase 3 — Placement algorithms ✅ *complete*
 
 Refactor the existing composite policy into named, selectable strategies:
 `first-fit`, `best-fit`, `vram-aware`, `performance-aware` (today's behaviour),
