@@ -17,15 +17,17 @@
 
 pub mod placement;
 pub mod queue;
+pub mod topology;
 
 pub use placement::{
-    node_verdicts, PerformancePlacement, PlacementDecision, PlacementPolicy, PlacementRequest,
-    Shape,
+    node_verdicts, BestFit, FirstFit, PerformancePlacement, PlacementDecision, PlacementPolicy,
+    PlacementRequest, PlacementScore, PlacementWeights, Shape, TopologyAware, VramAware,
 };
 pub use queue::{
     jain_index, QueueContext, QueuePolicy, QueueRanking, QueuedJob, UsageSnapshot, UserUsage,
     DEFAULT_PRIORITY, MAX_PRIORITY,
 };
+pub use topology::{LinkMeasurement, NetworkSnapshot};
 
 /// Why a placement could not be made.
 ///
@@ -64,6 +66,12 @@ pub struct SchedulerConfig {
     pub master_port: u32,
     /// A GPU needs at least this much free VRAM before it may be placed on.
     pub min_free_vram_b: u64,
+    /// Network measurements older than this are treated as unknown. 0 disables
+    /// the expiry. Scheduling on a week-old probe as though it were current is
+    /// the mistake the data-age convention exists to prevent.
+    pub network_max_age_s: i64,
+    /// How the axes of a placement score are weighed against each other.
+    pub placement_weights: placement::PlacementWeights,
 }
 
 /// Everything a policy is allowed to look at.
@@ -78,12 +86,27 @@ pub struct SchedulingContext<'a> {
     /// decisions replay identically in the simulator and in tests.
     pub now: i64,
     pub nodes: &'a [ferro_proto::NodeState],
+    /// What `ferro net` measured between the nodes. Empty until somebody has
+    /// run it, which is why every consumer has to cope with not knowing.
+    pub network: &'a NetworkSnapshot,
     pub config: &'a SchedulerConfig,
 }
 
 impl<'a> SchedulingContext<'a> {
+    /// A context with no network measurements: the cluster as it looks before
+    /// anyone has run `ferro net`.
     pub fn new(now: i64, nodes: &'a [ferro_proto::NodeState], config: &'a SchedulerConfig) -> Self {
-        Self { now, nodes, config }
+        Self {
+            now,
+            nodes,
+            network: NetworkSnapshot::none(),
+            config,
+        }
+    }
+
+    pub fn with_network(mut self, network: &'a NetworkSnapshot) -> Self {
+        self.network = network;
+        self
     }
 }
 
@@ -126,20 +149,28 @@ pub fn queue_policy(
 
 /// Build a placement policy by name.
 pub fn placement_policy(name: &str) -> Result<std::sync::Arc<dyn PlacementPolicy>, UnknownPolicy> {
-    match name {
-        "performance" => Ok(std::sync::Arc::new(placement::PerformancePlacement)),
-        _ => Err(UnknownPolicy {
-            kind: "placement",
-            given: name.to_string(),
-            known: PLACEMENT_POLICIES,
-        }),
-    }
+    let policy: std::sync::Arc<dyn PlacementPolicy> = match name {
+        "performance" => std::sync::Arc::new(placement::PerformancePlacement),
+        "first-fit" => std::sync::Arc::new(placement::FirstFit),
+        "best-fit" => std::sync::Arc::new(placement::BestFit),
+        "vram" => std::sync::Arc::new(placement::VramAware),
+        "topology" => std::sync::Arc::new(placement::TopologyAware),
+        _ => {
+            return Err(UnknownPolicy {
+                kind: "placement",
+                given: name.to_string(),
+                known: PLACEMENT_POLICIES,
+            })
+        }
+    };
+    Ok(policy)
 }
 
 /// Every queue policy this build knows, for `--help` and error messages.
 pub const QUEUE_POLICIES: &[&str] = &["fifo", "priority", "aging", "fair-share", "sjf"];
 /// Every placement policy this build knows.
-pub const PLACEMENT_POLICIES: &[&str] = &["performance"];
+pub const PLACEMENT_POLICIES: &[&str] =
+    &["performance", "first-fit", "best-fit", "vram", "topology"];
 
 #[derive(Debug, thiserror::Error)]
 #[error("unknown {kind} policy `{given}` (known: {})", known.join(", "))]

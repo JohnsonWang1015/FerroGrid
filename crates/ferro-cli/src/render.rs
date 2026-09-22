@@ -551,6 +551,119 @@ fn request_shape(j: &JobSummary) -> String {
     }
 }
 
+/// Why the scheduler did what it did with one job.
+///
+/// Two questions, answered separately because they were decided separately:
+/// *when* this job runs, which the queue policy settled, and *where*, which
+/// the placement policy settled. A scheduler nobody can interrogate is one
+/// nobody should be asked to trust with a shared cluster.
+pub fn explain(j: &JobSummary, json: bool) -> String {
+    if json {
+        return dump(&serde_json::json!({
+            "job_id": j.job_id,
+            "name": j.name,
+            "phase": if j.queued { "queued" } else { j.phase().label() },
+            "queue": j.queue_score.as_ref().map(|s| serde_json::json!({
+                "policy": s.policy,
+                "position": j.queue_position,
+                "priority": j.priority,
+                "total": s.total,
+                "components": s.components.iter()
+                    .map(|c| serde_json::json!({"name": c.name, "value": c.value}))
+                    .collect::<Vec<_>>(),
+            })),
+            "placement": j.placement.as_ref().map(|p| serde_json::json!({
+                "policy": p.policy,
+                "total": p.total,
+                "components": p.components.iter()
+                    .map(|c| serde_json::json!({"name": c.name, "value": c.value}))
+                    .collect::<Vec<_>>(),
+                "reasons": p.reasons,
+                "placements": j.plan.as_ref().map(|plan| plan.placements.iter()
+                    .map(|pl| serde_json::json!({
+                        "node_id": pl.node_id,
+                        "node_rank": pl.node_rank,
+                        "gpu_indices": pl.gpu_indices,
+                    }))
+                    .collect::<Vec<_>>()).unwrap_or_default(),
+            })),
+        }));
+    }
+
+    let mut out = String::new();
+    line!(out, "{} ({})", j.job_id, short_or(&j.name, "unnamed"));
+    line!(
+        out,
+        "  submitted by {} priority {}",
+        short_or(&j.submitted_by, "unknown"),
+        j.priority
+    );
+    line!(out, "");
+
+    match j.queue_score.as_ref() {
+        Some(s) => {
+            line!(out, "When: queue policy `{}`", s.policy);
+            line!(out, "  position {} in line", j.queue_position);
+            for c in &s.components {
+                line!(out, "  {:<22} {:>+8.2}", c.name, c.value);
+            }
+            line!(out, "  {:<22} {:>9}", "", "--------");
+            line!(out, "  {:<22} {:>8.2}", "queue score", s.total);
+            if !j.queue_message.is_empty() {
+                line!(out, "  waiting because: {}", j.queue_message);
+            }
+        }
+        None if j.queued => {
+            line!(
+                out,
+                "When: queued, but the controller has not ranked it yet"
+            );
+        }
+        None => {
+            line!(out, "When: not queued -- it was placed on submission");
+        }
+    }
+    line!(out, "");
+
+    let Some(p) = j.placement.as_ref() else {
+        line!(out, "Where: no placement was made");
+        // A job rejected before placement has verdicts and nothing else; they
+        // are the only explanation there is, so show them rather than nothing.
+        append_verdicts(&mut out, &j.node_verdicts);
+        return out;
+    };
+
+    line!(out, "Where: placement policy `{}`", p.policy);
+    if let Some(plan) = j.plan.as_ref() {
+        for pl in &plan.placements {
+            line!(
+                out,
+                "  rank {} -> {} GPU {:?}",
+                pl.node_rank,
+                pl.node_id,
+                pl.gpu_indices
+            );
+        }
+    }
+    line!(out, "");
+    for c in &p.components {
+        line!(out, "  {:<22} {:>8.2}", c.name, c.value);
+    }
+    line!(out, "  {:<22} {:>9}", "", "--------");
+    line!(out, "  {:<22} {:>8.2}", "placement score", p.total);
+    if !p.reasons.is_empty() {
+        line!(out, "");
+        line!(out, "  Reasons:");
+        for r in &p.reasons {
+            line!(out, "  - {r}");
+        }
+    }
+    for w in &j.warnings {
+        line!(out, "  warning: {w}");
+    }
+    out
+}
+
 pub fn job_detail(j: &JobSummary, json: bool) -> String {
     if json {
         let m = j.metrics.unwrap_or_default();

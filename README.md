@@ -659,6 +659,66 @@ ferro-controller --queue-policy aging --aging-interval-secs 60 --aging-increment
 | `fair-share` | weighted priority + waiting − the submitter's GPU-seconds | evens out between users over time |
 | `sjf` | shortest `--estimated-duration` first | lowest mean wait when estimates exist. A job with **no** estimate is ordered last rather than guessed at, so long and unestimated jobs can starve — offered for experiments, not as a default |
 
+### Choosing where it runs
+
+Placement answers the other half. It is chosen the same way:
+
+```bash
+ferro-controller --placement-policy topology
+```
+
+| Policy | Prefers | Use it when |
+|---|---|---|
+| `performance` (default) | measured TFLOP/s, identical GPU models, negotiated link first for multi-node jobs | the general case |
+| `first-fit` | the first node in id order, lowest card indices | you want the cheapest possible decision as a baseline |
+| `best-fit` | the node with least left over | the cluster fragments and large jobs cannot find room |
+| `vram` | the roomiest cards, judged by the *worst* one | other people share the GPUs and jobs OOM |
+| `topology` | the set whose slowest measured hop is fastest | jobs span nodes and the fabric is uneven |
+
+`topology` uses what `ferro net` measured, falling back to the negotiated link
+speed where nothing has been measured. Those are different claims -- a NIC that
+negotiated 1000 Mb/s can still sit behind a 100 Mb/s path -- so run `ferro net`
+before relying on it. Measurements older than `--network-max-age-secs` (default
+one day) stop counting as current, but a stale measurement is never *upgraded*
+back to the optimistic negotiated speed: forgetting must not make a slow link
+look fast.
+
+`ferro explain <job>` shows both decisions and the arithmetic behind each:
+
+```
+j4f21a0c9e3 (adni-swin)
+  submitted by alice priority 70
+
+When: queue policy `aging`
+  position 1 in line
+  base priority            +10.00
+  aging bonus              +90.00
+                          --------
+  queue score              100.00
+
+Where: placement policy `topology`
+  rank 0 -> gpu-a GPU [0, 1]
+  rank 1 -> gpu-b GPU [0, 1]
+
+  compute                    0.91
+  vram                       0.84
+  homogeneity                1.00
+  network                    0.73
+  load                       1.00
+                          --------
+  placement score            0.88
+
+  Reasons:
+  - 158.4 TFLOP/s measured across the set
+  - 21.3 GiB free on the tightest card
+  - all 4 GPUs are NVIDIA GeForce RTX 4090
+  - slowest measured hop 940 Mb/s
+```
+
+An axis that does not apply is absent rather than scored 1.0: a single-node job
+has no network hop, and claiming a perfect score for one would be inventing a
+measurement.
+
 `ferro queue` shows the resulting order and the arithmetic behind it:
 
 ```
@@ -1408,8 +1468,9 @@ Phase 1 is deliberately small. Known gaps, in rough priority order:
 - Controller state is in memory: node registrations self-heal after a restart,
   job history does not.
 - Without `--wait`, a job that cannot be placed is still rejected rather than
-  held. Queue policy is selectable (`fifo`, `priority`, `aging`, `fair-share`,
-  `sjf`); placement is not yet.
+  held. Both queue policy (`fifo`, `priority`, `aging`, `fair-share`, `sjf`) and
+  placement policy (`performance`, `first-fit`, `best-fit`, `vram`, `topology`)
+  are selectable at controller startup, but not while it runs.
 - No authentication or TLS on the gRPC endpoints; run it on a trusted network.
 - Fair share tracks GPU-seconds per user, but there are no quotas, no
   preemption and no `ferro usage` report yet.

@@ -6,10 +6,12 @@
 
 use ferro_proto::{
     Gpu, GpuEntry, GpuOccupant, GpuProcess, JobPhase, JobPlan, JobStatus, JobSummary, LogLine,
-    NodeInfo, NodeState, NodeVerdict, QueueScore, ScoreComponent, SubmitJobRequest,
-    TrainingMetrics,
+    NodeInfo, NodeState, NodeVerdict, PlacementExplanation, QueueScore, ScoreComponent,
+    SubmitJobRequest, TrainingMetrics,
 };
-use ferro_sched::{QueueContext, QueuePolicy, QueueRanking, QueuedJob, UsageSnapshot, UserUsage};
+use ferro_sched::{
+    NetworkSnapshot, QueueContext, QueuePolicy, QueueRanking, QueuedJob, UsageSnapshot, UserUsage,
+};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex};
@@ -94,6 +96,9 @@ pub struct Job {
     pub warnings: Vec<String>,
     /// Latest aggregate scheduler message while this job is queued.
     pub queue_message: String,
+    /// Why the scheduler chose these GPUs. Set when the job gets a plan, so a
+    /// decision can still be explained long after the cluster has moved on.
+    pub placement: Option<PlacementExplanation>,
 }
 
 impl Job {
@@ -150,6 +155,7 @@ impl Job {
             priority: self.priority,
             project: self.project.clone(),
             estimated_duration_s: self.estimated_duration_s.unwrap_or(0),
+            placement: self.placement.clone(),
             // Filled in by the registry, which is the only place that can run
             // the queue policy over the whole waiting list.
             queue_score: None,
@@ -211,6 +217,10 @@ pub struct RegistryInner {
     pub jobs: HashMap<String, Job>,
     /// Submission order, so `ferro jobs` lists newest first.
     pub job_order: Vec<String>,
+    /// What `ferro net` measured between nodes, kept so the scheduler can see
+    /// it. Heartbeats replace the GPU list wholesale, and these survive that
+    /// the same way the benchmark scores do.
+    pub net: NetworkSnapshot,
     /// Decides which queued job runs next. Lives here rather than beside the
     /// dispatcher so that the position a user is quoted and the order they are
     /// actually served in are computed by the same object -- they are the same
@@ -225,6 +235,7 @@ impl Default for RegistryInner {
             nodes: HashMap::new(),
             jobs: HashMap::new(),
             job_order: Vec::new(),
+            net: NetworkSnapshot::default(),
             queue_policy: Arc::new(ferro_sched::queue::Fifo),
         }
     }
@@ -310,6 +321,27 @@ impl Registry {
         true
     }
 
+    /// Remember what `ferro net` measured, so a placement decision can prefer
+    /// a path somebody has actually tested over one that merely negotiated a
+    /// fast link speed.
+    pub async fn record_network(&self, pairs: &[ferro_proto::NetPair]) {
+        let mut g = self.inner.lock().await;
+        let now = now_s();
+        for pair in pairs {
+            // A failed probe reports 0 Mb/s. Recording that would make an
+            // unreachable pair look like the slowest link rather than an
+            // untested one, and the scheduler would then rank it.
+            if pair.error.is_empty() {
+                g.net.record(&pair.from_node, &pair.to_node, pair.mbps, now);
+            }
+        }
+    }
+
+    /// The measurements as they stand, for handing to a placement policy.
+    pub async fn network_snapshot(&self) -> NetworkSnapshot {
+        self.inner.lock().await.net.clone()
+    }
+
     /// Remember measured throughput so the scheduler keeps seeing it after the
     /// next heartbeat replaces the GPU list.
     pub async fn record_benchmarks(&self, results: &[ferro_proto::GpuBenchmark]) {
@@ -388,10 +420,16 @@ impl Registry {
     }
 
     /// A queued job has been placed: it now has a plan and stops being queued.
-    pub async fn promote(&self, job_id: &str, plan: JobPlan) {
+    pub async fn promote(
+        &self,
+        job_id: &str,
+        plan: JobPlan,
+        placement: Option<PlacementExplanation>,
+    ) {
         let mut g = self.inner.lock().await;
         if let Some(job) = g.jobs.get_mut(job_id) {
             job.plan = plan;
+            job.placement = placement;
             job.queued = false;
             job.queue_req = None;
             job.queue_message.clear();
@@ -830,6 +868,7 @@ mod tests {
             node_verdicts: Vec::new(),
             warnings: Vec::new(),
             queue_message: String::new(),
+            placement: None,
         }
     }
 

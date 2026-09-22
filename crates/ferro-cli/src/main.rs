@@ -139,6 +139,8 @@ enum Cmd {
         #[arg(short, long)]
         follow: bool,
     },
+    /// Show why the scheduler made the decisions it made about one job.
+    Explain { job_id: String },
     /// Show the jobs waiting for capacity, in the order they will be served.
     Queue {
         #[command(flatten)]
@@ -486,6 +488,15 @@ async fn main() -> Result<()> {
         }
         Cmd::Logs { job_id, follow } => {
             stream_logs(&mut client, &job_id, follow).await?;
+        }
+        Cmd::Explain { job_id } => {
+            let r = client
+                .get_job(GetJobRequest {
+                    job_id: job_id.clone(),
+                })
+                .await?
+                .into_inner();
+            print!("{}", render::explain(&r, cli.json));
         }
         Cmd::Queue { watch } => {
             repeat(watch, cli.json, || async {

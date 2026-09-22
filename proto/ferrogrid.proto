@@ -269,6 +269,23 @@ message JobSummary {
   uint32 estimated_duration_s  = 17;
   // Why this job sits where it sits. Present only while queued.
   QueueScore queue_score       = 18;
+  // Why the scheduler chose these GPUs. Present once the job has a plan.
+  PlacementExplanation placement = 19;
+}
+
+// What a placement is worth, in the vocabulary every strategy shares, so that
+// switching strategy produces comparable numbers rather than incomparable ones.
+message PlacementExplanation {
+  string policy = 1;
+  // Each axis in 0..1, best at 1. An axis that did not apply is absent rather
+  // than reported as 1.0 -- a single-node job has no network hop to rate, and
+  // claiming a perfect score for it would be inventing a measurement.
+  repeated ScoreComponent components = 2;
+  // Weighted mean of the components present.
+  double total = 3;
+  // The things worth saying in words: which GPU models, how much headroom,
+  // whether anybody has measured the link.
+  repeated string reasons = 4;
 }
 
 // A queue policy's assessment of one job, kept in the shape it was computed

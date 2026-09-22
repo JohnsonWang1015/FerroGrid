@@ -65,6 +65,32 @@ struct Args {
     /// Where a job runs, once it has been chosen to run.
     #[arg(long, default_value = "performance", value_name = "POLICY")]
     placement_policy: String,
+
+    /// Ignore `ferro net` measurements older than this when placing. 0 keeps
+    /// them forever. The default is a day: a link that was 940 Mb/s last week
+    /// is not evidence about the link today.
+    #[arg(long, default_value_t = 86_400, value_name = "SECONDS")]
+    network_max_age_secs: i64,
+
+    /// Weight on measured GPU throughput when scoring a placement.
+    #[arg(long, default_value_t = 1.0, value_name = "W")]
+    weight_compute: f64,
+
+    /// Weight on free VRAM headroom on the tightest chosen card.
+    #[arg(long, default_value_t = 0.5, value_name = "W")]
+    weight_vram: f64,
+
+    /// Weight on the chosen GPUs all being the same model.
+    #[arg(long, default_value_t = 1.0, value_name = "W")]
+    weight_homogeneity: f64,
+
+    /// Weight on the slowest hop between the chosen nodes.
+    #[arg(long, default_value_t = 1.0, value_name = "W")]
+    weight_network: f64,
+
+    /// Weight on how little of the chosen nodes was already spoken for.
+    #[arg(long, default_value_t = 0.25, value_name = "W")]
+    weight_load: f64,
 }
 
 #[tokio::main]
@@ -111,6 +137,14 @@ async fn main() -> Result<()> {
     let sched = ferro_sched::SchedulerConfig {
         master_port: args.master_port,
         min_free_vram_b,
+        network_max_age_s: args.network_max_age_secs,
+        placement_weights: ferro_sched::PlacementWeights {
+            compute: args.weight_compute,
+            vram: args.weight_vram,
+            homogeneity: args.weight_homogeneity,
+            network: args.weight_network,
+            load: args.weight_load,
+        },
     };
 
     let svc = service::ControllerService {

@@ -101,8 +101,15 @@ impl Controller for ControllerService {
         }
 
         let nodes = self.registry.node_states().await;
-        let (plan_result, node_verdicts) =
-            plan_for(&nodes, &req, &*self.placement, &self.sched, now_s());
+        let network = self.registry.network_snapshot().await;
+        let (plan_result, node_verdicts) = plan_for(
+            &nodes,
+            &network,
+            &req,
+            &*self.placement,
+            &self.sched,
+            now_s(),
+        );
 
         // This is a request-shape error, not a temporary capacity miss. Keep
         // it outside the queue path so --wait cannot retry it forever.
@@ -118,8 +125,12 @@ impl Controller for ControllerService {
             }));
         }
 
+        let placement;
         let plan = match plan_result {
-            Ok(decision) => decision.plan,
+            Ok(decision) => {
+                placement = Some(explain(&decision));
+                decision.plan
+            }
             // Nothing fits right now. With `--wait` that is a queue rather
             // than a failure: on a shared cluster "full" is the normal state,
             // and resubmitting by hand at 03:00 is not a scheduling policy.
@@ -183,17 +194,19 @@ impl Controller for ControllerService {
         let warnings = compatibility_warnings(&nodes, &plan);
 
         let job_id = new_job_id();
-        self.registry
-            .insert_job(new_job(
-                &job_id,
-                &req,
-                plan.clone(),
-                node_verdicts.clone(),
-                warnings.clone(),
-                String::new(),
-                None,
-            ))
-            .await;
+        let mut job = new_job(
+            &job_id,
+            &req,
+            plan.clone(),
+            node_verdicts.clone(),
+            warnings.clone(),
+            String::new(),
+            None,
+        );
+        // Keep the reasoning with the job, so the decision can still be
+        // explained after the cluster has moved on from the state that made it.
+        job.placement = placement;
+        self.registry.insert_job(job).await;
 
         match start_job(&self.registry, &req, &job_id, &plan).await {
             Ok(()) => {
@@ -514,6 +527,11 @@ impl Controller for ControllerService {
                 pairs.push(pair);
             }
         }
+        // Keep them. Measuring the fabric and then throwing the answer away
+        // left topology-aware placement resting on the negotiated link speed,
+        // which only describes the node-to-switch hop.
+        self.registry.record_network(&pairs).await;
+
         Ok(Response::new(MeasureNetworkResponse { pairs }))
     }
 
@@ -878,6 +896,7 @@ async fn describe_on(addr: &str, pid: u32) -> Result<ProcessDetail, String> {
 /// useful thing to show a user whose job did not fit.
 fn plan_for(
     nodes: &[NodeState],
+    network: &ferro_sched::NetworkSnapshot,
     req: &SubmitJobRequest,
     placement: &dyn PlacementPolicy,
     sched: &SchedulerConfig,
@@ -912,7 +931,7 @@ fn plan_for(
         shape,
         node_filter: req.node_filter.clone(),
     };
-    let ctx = SchedulingContext::new(now, nodes, sched);
+    let ctx = SchedulingContext::new(now, nodes, sched).with_network(network);
     (placement.place(&request, &ctx), verdicts)
 }
 
@@ -1001,6 +1020,24 @@ fn compatibility_warnings(nodes: &[NodeState], plan: &JobPlan) -> Vec<String> {
     warnings
 }
 
+/// Turn a scheduler score into the shape the wire and the CLI use.
+fn explain(decision: &PlacementDecision) -> PlacementExplanation {
+    PlacementExplanation {
+        policy: decision.policy.to_string(),
+        components: decision
+            .score
+            .components
+            .iter()
+            .map(|(name, value)| ScoreComponent {
+                name: (*name).to_string(),
+                value: *value,
+            })
+            .collect(),
+        total: decision.score.total,
+        reasons: decision.score.reasons.clone(),
+    }
+}
+
 fn new_job_id() -> String {
     format!("j{}", &uuid::Uuid::new_v4().simple().to_string()[..10])
 }
@@ -1053,6 +1090,7 @@ fn new_job(
         node_verdicts,
         warnings,
         queue_message,
+        placement: None,
     }
 }
 
@@ -1180,10 +1218,12 @@ pub async fn run_queue(
             // Re-read the cluster for every job: the one placed a moment ago
             // took GPUs the next one must not be handed as well.
             let nodes = registry.node_states().await;
-            let (plan_result, verdicts) = plan_for(&nodes, &req, &*placement, &sched, now_s());
-            let (plan, verdicts) = match plan_result {
+            let network = registry.network_snapshot().await;
+            let (plan_result, verdicts) =
+                plan_for(&nodes, &network, &req, &*placement, &sched, now_s());
+            let (plan, verdicts, explanation) = match plan_result {
                 Ok(decision) => {
-                    let plan = decision.plan;
+                    let plan = decision.plan.clone();
                     if let Err(message) = validate_image_overrides(&req, &plan) {
                         registry
                             .update_queue_assessment(&job_id, verdicts, message.clone(), Vec::new())
@@ -1192,11 +1232,12 @@ pub async fn run_queue(
                         continue;
                     }
 
+                    let explanation = explain(&decision);
                     let warnings = compatibility_warnings(&nodes, &plan);
                     registry
                         .update_queue_assessment(&job_id, verdicts.clone(), String::new(), warnings)
                         .await;
-                    (plan, verdicts)
+                    (plan, verdicts, Some(explanation))
                 }
                 Err(e) => {
                     let message = e.to_string();
@@ -1221,7 +1262,7 @@ pub async fn run_queue(
                 continue;
             }
 
-            registry.promote(&job_id, plan.clone()).await;
+            registry.promote(&job_id, plan.clone(), explanation).await;
             tracing::info!(job = %job_id, world_size = plan.world_size, "capacity freed, launching");
             if let Err(e) = dispatch_ranks(&registry, &req, &job_id, &plan).await {
                 tracing::error!(job = %job_id, "queued job failed to launch: {e}");

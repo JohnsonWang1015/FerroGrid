@@ -23,6 +23,8 @@ fn config() -> SchedulerConfig {
     SchedulerConfig {
         master_port: 29500,
         min_free_vram_b: VRAM_FLOOR,
+        network_max_age_s: 86_400,
+        placement_weights: Default::default(),
     }
 }
 
@@ -72,6 +74,7 @@ fn job(id: &str) -> Job {
         node_verdicts: Vec::new(),
         warnings: Vec::new(),
         queue_message: String::new(),
+        placement: None,
     }
 }
 

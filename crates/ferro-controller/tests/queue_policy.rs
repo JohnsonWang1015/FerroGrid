@@ -45,6 +45,7 @@ fn queued(id: &str, user: &str, priority: u32, submitted: i64) -> Job {
         node_verdicts: Vec::new(),
         warnings: Vec::new(),
         queue_message: String::new(),
+        placement: None,
     }
 }
 
