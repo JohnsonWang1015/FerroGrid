@@ -5,6 +5,91 @@ specification (§91). Newest entry first.
 
 ---
 
+## Phase 7 — Backfilling and reservation
+
+**Phase:** 7 — Dispatch modes, EASY backfilling with reservation
+**Status:** ✅ Complete. The feature works; the measurement says not to use it by default.
+
+### Implemented
+
+- **`crates/ferro-sched/src/dispatch.rs`** — one `Dispatch` enum shared by the
+  controller and the simulator, so there cannot be two definitions of what the
+  scheduler does.
+- **`opportunistic`** (default, unchanged), **`strict`** (nothing overtakes the
+  head), **`reserved`** (EASY backfilling: the first job that does not fit holds
+  a reservation, and a later job may start only if it can *prove* it finishes
+  before that reservation's earliest start).
+- **The proof requirement is enforced, not waived.** A running job with neither
+  a declared estimate nor a timeout is unknowable; if the reservation's earliest
+  start cannot be computed, nothing past it is admitted. `reserved` then
+  collapses onto `strict` rather than guessing.
+- `--dispatch <MODE>` on the controller; `--with-strict` / `--with-reserved` in
+  the experiment runner.
+
+### Tests
+
+| Check | Result |
+|---|---|
+| `cargo test --workspace` | **255 passed, 0 failed** (was 229; +26) |
+| `cargo fmt --check` / `clippy -D warnings` | ✅ clean |
+| Pre-existing assertions modified | **none** |
+
+`reservation_is_given_no_information_the_controller_would_not_have` is the guard
+that matters: the simulator knows every job's true duration, and reserving
+against it would hand the algorithm information the controller can never have.
+The test sets `estimate_fraction = 0` and asserts `reserved` collapses onto
+`strict` — if it were reading the future it would still backfill.
+
+### The result, and a correction to Phase 4
+
+Workload D, split by job class, which the earlier write-up did not do:
+
+| Dispatch | class | mean wait | overtaken by |
+|---|---|---|---|
+| `opportunistic` | distributed (36) | 7 844 s | **70.9** |
+| `opportunistic` | small (164) | **142 s** | 0.0 |
+| `strict` | distributed | 7 174 s | 0.0 |
+| `strict` | small | 7 537 s | 0.0 |
+| `reserved` | distributed | **6 910 s** | 3.3 |
+| `reserved` | small | 6 899 s | 1.1 |
+
+**Phase 4 claimed opportunistic dispatch "costs an unbounded tail for large
+jobs" and that reservation "is what bounds it". That was wrong.** The claim came
+from an aggregate p95 of 10 801 s against a mean of 1 529 s, read as starvation.
+It is not a tail — it is a bimodal population, 82 % small and fast against 18 %
+large and slow, and the 95th percentile simply lands in the second group.
+
+The overtaking is real: 70 later arrivals start before a large job, on average.
+The *consequence* is not. Forbid overtaking entirely and those jobs wait 9 %
+less. Their wait is set by cluster saturation, not queue position.
+
+Reservation does exactly what it promises — overtaking falls to 3.3, large jobs
+improve 12 %, utilisation stays at 97.7 % — and charges the small jobs **48×**
+for it. On this workload that is a bad trade, which is why it ships opt-in with
+the default unmoved.
+
+### Known limitations
+
+1. **One workload shaped the conclusion.** A cluster with fewer, larger jobs, or
+   one where a delayed large job costs more than many delayed small ones, would
+   reach a different answer. The mechanism is implemented and available; the
+   recommendation is workload-specific and says so.
+2. **Reservation is only as good as the declarations.** With no estimates and no
+   timeouts it is strict FIFO, which is measurably worse than the default.
+3. **The earliest-start calculation ignores placement shape.** It counts free
+   GPUs, not whether they can be assembled into the shape the reserved job
+   needs, so a reservation can be satisfied on paper and still not place.
+4. **No preemption.** Reservation holds a place; it never takes one back.
+
+### Next
+
+§85's minimum feature set and §86's strong target are both complete. What
+remains from the specification is stretch work — preemption and cooperative
+checkpointing, power and thermal awareness, quota, authentication — none of
+which the measurements so far have shown a need for.
+
+---
+
 ## Phase 6 — Recovery
 
 **Phase:** 6 — Reconciling restored state against the cluster

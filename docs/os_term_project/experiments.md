@@ -185,28 +185,86 @@ representing real effects, and not from the strategies diverging by accident.
 
 ---
 
-## 4. An unplanned finding: FerroGrid already backfills
+## 4. RQ4 — dispatch, backfilling and reservation
 
 The controller's `run_queue` walks the entire waiting list each tick and starts
-anything that fits, not just the head. That is opportunistic dispatch — it
-backfills, without reservations — and it is not what "FIFO queue" usually
-implies.
+anything that fits. That is opportunistic dispatch — it backfills, with no
+reservation — and it is not what "FIFO queue" usually implies.
 
-Workload **D** (large distributed jobs against a stream of small ones):
+Workload **D** (large distributed jobs against a stream of small ones), FIFO
+ranking throughout, all three dispatch modes:
 
 | Dispatch | avg wait | p95 wait | GPU util | starved |
 |---|---|---|---|---|
-| opportunistic (what FerroGrid does) | **1 529 s** | 10 801 s | **98.1 %** | **15** |
-| strict head-of-line | 7 471 s | 14 169 s | 94.0 % | 165 |
+| `opportunistic` (default) | **1 529 s** | 10 801 s | **98.1 %** | **15** |
+| `reserved` | 6 901 s | 13 534 s | 97.7 % | 163 |
+| `strict` | 7 471 s | 14 169 s | 94.0 % | 165 |
 
-Strict FIFO is **4.9× worse** on mean waiting time and starves eleven times as
-many jobs. On workload A, where every job is the same size, the two are
-identical — head-of-line blocking needs jobs of different sizes to bite.
+### A correction to an earlier claim in this document
 
-The other half of that finding is the cost: with no reservation, a four-GPU job
-can be walked past indefinitely by one-GPU jobs. Workload D's p95 wait is
-10 801 s against a mean of 1 529 s, and that tail is the large jobs. Reservation
-(§34) is what bounds it, and is not implemented.
+An earlier version of this section said opportunistic dispatch "costs an
+unbounded tail for large jobs" and that reservation "is what bounds it". **That
+was wrong, and the reservation implementation is what disproved it.** The claim
+came from reading the aggregate — a p95 of 10 801 s against a mean of 1 529 s —
+and attributing the gap to large jobs being starved. Splitting by job class
+shows it is not:
+
+| Dispatch | class | n | mean wait | p95 | overtaken by |
+|---|---|---|---|---|---|
+| `opportunistic` | distributed | 36 | 7 844 s | 12 843 s | **70.9** |
+| `opportunistic` | small | 164 | **142 s** | 284 s | 0.0 |
+| `strict` | distributed | 36 | 7 174 s | 13 380 s | 0.0 |
+| `strict` | small | 164 | 7 537 s | 14 169 s | 0.0 |
+| `reserved` | distributed | 36 | **6 910 s** | 12 761 s | 3.3 |
+| `reserved` | small | 164 | 6 899 s | 13 534 s | 1.1 |
+
+The aggregate p95 is not a tail at all — it is a **bimodal population**. Eighty-
+two per cent of the jobs are small and fast, eighteen per cent are large and
+slow, and the 95th percentile simply lands in the second group. Reading a
+mixture as a tail is the mistake.
+
+The overtaking is real and enormous: under opportunistic dispatch a large job is
+passed by **70 later arrivals on average**, and up to 141. What is *not* real is
+the consequence. Forbid the overtaking entirely and those same jobs wait
+7 174 s instead of 7 844 s — **9 % better**. Their wait is set by the cluster
+being saturated, not by their position in the queue, and no amount of protecting
+their place in line changes when the GPUs they need come free.
+
+### What reservation actually buys
+
+Reservation does what it promises: overtaking drops from 70.9 to 3.3, and large
+jobs improve to 6 910 s — **12 % better than opportunistic**. It also keeps
+utilisation at 97.7 %, nearly all of what strict FIFO gives up, which is the
+backfilling half working correctly.
+
+The cost is the small jobs: **142 s → 6 899 s, a factor of 48.**
+
+So the answer to RQ4 — *can backfilling improve utilisation without
+significantly delaying large distributed jobs?* — is that FerroGrid's existing
+opportunistic backfilling already achieves 98.1 % utilisation and delays large
+jobs by 9 % relative to never overtaking them at all. Adding reservation to
+protect them recovers most of that 9 %, and charges every other job 48× for it.
+
+**On this workload reservation is not worth having**, which is why it is opt-in
+and the default did not move. It is implemented, tested and available for
+clusters whose shape differs — a workload with fewer, larger jobs, or one where
+a delayed large job is genuinely more expensive than many delayed small ones,
+would reach a different answer. What can be said from these numbers is that the
+scheduler FerroGrid already ships is the right default for the workload it was
+measured against.
+
+### Reservation needs information the cluster rarely has
+
+EASY backfilling has to know when running jobs will end. FerroGrid has two
+optional sources — a declared `--estimated-duration` and a `--timeout` — and
+§2.3 already measured how unreliable declarations are.
+
+When neither exists, the reservation's earliest start is uncomputable and the
+implementation refuses to guess: nothing past the reservation is admitted, and
+`reserved` collapses onto `strict`. A simulator test asserts exactly this by
+setting `estimate_fraction = 0`, which doubles as the guard against the easiest
+way to fake this whole section — reserving against the *true* durations, which
+the simulator knows and the controller never will.
 
 ---
 
