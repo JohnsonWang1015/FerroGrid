@@ -1487,8 +1487,11 @@ and how to add a kernel.
 
 Phase 1 is deliberately small. Known gaps, in rough priority order:
 
-- Controller state is in memory: node registrations self-heal after a restart,
-  job history does not.
+- The controller restores its jobs, queue order, GPU benchmarks and `ferro net`
+  measurements from `~/.local/state/ferrogrid/controller.db` (`--state`,
+  `--no-state`), but it does not yet reconcile them against what the agents
+  report: a job that was running when the controller died comes back running
+  until a heartbeat says otherwise. Node registrations self-heal, as before.
 - Without `--wait`, a job that cannot be placed is still rejected rather than
   held. Both queue policy (`fifo`, `priority`, `aging`, `fair-share`, `sjf`) and
   placement policy (`performance`, `first-fit`, `best-fit`, `vram`, `topology`)

@@ -541,6 +541,73 @@ pub fn queue(list: &[JobSummary], json: bool) -> String {
     out
 }
 
+/// The controller's timeline, oldest first.
+///
+/// Newest last because it is a timeline: a view that puts the latest line at
+/// the top has to be read backwards by anyone reconstructing what happened in
+/// what order, which is the only reason to look at this at all. No table
+/// either -- the columns are narrow and mostly fixed, and a box drawn around a
+/// log makes it harder to scan, not easier.
+pub fn events(list: &[Event], json: bool) -> String {
+    if json {
+        let v: Vec<_> = list
+            .iter()
+            .map(|e| {
+                serde_json::json!({
+                    "id": e.id,
+                    "unix_s": e.unix_s,
+                    "kind": e.kind,
+                    "job_id": e.job_id,
+                    "node_id": e.node_id,
+                    "actor": e.actor,
+                    "detail": e.detail,
+                })
+            })
+            .collect();
+        return dump(&v);
+    }
+
+    if list.is_empty() {
+        return "Nothing has happened yet.\n".into();
+    }
+
+    // Laid out against what is actually here rather than against the longest
+    // kind there is: a screen of job events should not carry four columns of
+    // whitespace reserved for CONTROLLER_RECOVERED.
+    let kind_w = list.iter().map(|e| e.kind.len()).max().unwrap_or(0);
+    let subject_w = list
+        .iter()
+        .map(|e| event_subject(e).len())
+        .max()
+        .unwrap_or(0);
+    let actor_w = list.iter().map(|e| e.actor.len()).max().unwrap_or(0);
+
+    let mut out = String::new();
+    for e in list {
+        let row = format!(
+            "{}  {:<kind_w$}  {:<subject_w$}  {:<actor_w$}  {}",
+            ts(e.unix_s),
+            e.kind,
+            event_subject(e),
+            e.actor,
+            e.detail,
+        );
+        line!(out, "{}", row.trim_end());
+    }
+    out
+}
+
+/// The one column saying what an event is about. A job event carries a job id
+/// and a node event a node id; none carries both, so two columns would be two
+/// mostly-empty ones.
+fn event_subject(e: &Event) -> &str {
+    if e.job_id.is_empty() {
+        &e.node_id
+    } else {
+        &e.job_id
+    }
+}
+
 /// What a queued job is asking for, as a human reads it.
 fn request_shape(j: &JobSummary) -> String {
     match j.plan.as_ref() {

@@ -515,6 +515,35 @@ message ReportLogsResponse {}
 message ReportJobStatusRequest { JobStatus status = 1; }
 message ReportJobStatusResponse {}
 
+// One thing that happened, as the controller recorded it. A job record says
+// what a job is now; only the log says what it went through to get there.
+message Event {
+  // Monotonic, and monotonic across controller restarts.
+  uint64 id       = 1;
+  int64 unix_s    = 2;
+  // JOB_SUBMITTED, GPU_ALLOCATED, NODE_LOST, ... Sent as a string so a client
+  // built against an older proto still prints a kind it has never heard of.
+  string kind     = 3;
+  // Empty where the event is not about a job / a node / a person.
+  string job_id   = 4;
+  string node_id  = 5;
+  string actor    = 6;
+  // Short and human: "gpu-a[0,1]", "exit 137", "position 3".
+  string detail   = 7;
+}
+
+message ListEventsRequest {
+  // Newest N, after filtering. 0 => everything still kept.
+  uint32 limit  = 1;
+  // Empty => no filter.
+  string job_id = 2;
+  string kind   = 3;
+}
+message ListEventsResponse {
+  // Oldest first, so it reads forwards as a timeline.
+  repeated Event events = 1;
+}
+
 service Controller {
   rpc RegisterNode(RegisterRequest) returns (RegisterResponse);
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
@@ -533,6 +562,7 @@ service Controller {
   rpc RunPlugin(RunPluginRequest) returns (RunPluginResponse);
   rpc CancelJob(CancelJobRequest) returns (CancelJobResponse);
   rpc StreamLogs(LogRequest) returns (stream LogLine);
+  rpc ListEvents(ListEventsRequest) returns (ListEventsResponse);
 
   // Agent -> controller streaming of job output and status.
   rpc ReportLogs(ReportLogsRequest) returns (ReportLogsResponse);

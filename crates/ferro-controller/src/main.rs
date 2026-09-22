@@ -3,9 +3,11 @@
 use anyhow::Result;
 use clap::Parser;
 use ferro_controller::registry::Registry;
+use ferro_controller::store::{Event, Store};
 use ferro_controller::{plugins, service};
 use ferro_proto::controller_server::ControllerServer;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 #[derive(Parser, Debug)]
@@ -32,6 +34,18 @@ struct Args {
     /// Guards against GPUs busy with workloads FerroGrid does not manage.
     #[arg(long, default_value_t = 8)]
     min_free_vram_gib: u64,
+
+    /// Where jobs, queue order, GPU benchmarks and `ferro net` measurements
+    /// are kept across restarts. Defaults to
+    /// $XDG_STATE_HOME/ferrogrid/controller.db, i.e.
+    /// ~/.local/state/ferrogrid/controller.db. Parent directories are created.
+    #[arg(long, env = "FERRO_STATE", value_name = "PATH")]
+    state: Option<PathBuf>,
+
+    /// Keep everything in memory, as before persistence existed: nothing is
+    /// written and a restart starts empty.
+    #[arg(long, conflicts_with = "state")]
+    no_state: bool,
 
     /// Which job runs next, out of those waiting for capacity.
     #[arg(long, default_value = "fifo", value_name = "POLICY")]
@@ -116,7 +130,30 @@ async fn main() -> Result<()> {
         },
     };
     let queue_policy = ferro_sched::queue_policy(&args.queue_policy, &tuning)?;
-    let registry = Arc::new(Registry::with_queue_policy(min_free_vram_b, queue_policy));
+    let mut restored_jobs = 0;
+    let registry = Arc::new(if args.no_state {
+        tracing::warn!("--no-state: jobs and measurements will not survive a restart");
+        Registry::with_queue_policy(min_free_vram_b, queue_policy)
+    } else {
+        let path = args.state.clone().unwrap_or_else(default_state_path);
+        let state = Store::load(&path)?;
+        let store = Store::open(&path)?;
+        // Restored, not reconciled: a job that was running when this process
+        // died comes back running until an agent says otherwise.
+        tracing::info!(
+            state = %path.display(),
+            "restored {} job(s), {} GPU benchmark(s), {} measured link(s)",
+            state.jobs.len(),
+            state.bench.len(),
+            state.network.len(),
+        );
+        restored_jobs = state.jobs.len();
+        Registry::restore(min_free_vram_b, queue_policy, store, state)
+    });
+
+    registry
+        .record_event(Event::controller_start(restored_jobs))
+        .await;
     let plugins = plugins::Registry::load(args.plugins.as_deref())?;
     match &plugins.source {
         Some(p) => tracing::info!(
@@ -165,6 +202,8 @@ async fn main() -> Result<()> {
     );
 
     tokio::spawn(service::reap_expired(registry.clone()));
+    // Nothing else notices a node going quiet: heartbeats simply stop.
+    tokio::spawn(service::watch_node_health(registry.clone()));
     // Jobs submitted with `--wait` sit here until the cluster frees up.
     tokio::spawn(service::run_queue(registry.clone(), placement, sched));
 
@@ -176,4 +215,15 @@ async fn main() -> Result<()> {
         })
         .await?;
     Ok(())
+}
+
+/// `~/.local/state/ferrogrid/controller.db`, spelled the way the XDG base
+/// directory spec does so a machine that has moved its state directory is
+/// obeyed rather than second-guessed.
+fn default_state_path() -> PathBuf {
+    std::env::var_os("XDG_STATE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/state")))
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("ferrogrid/controller.db")
 }

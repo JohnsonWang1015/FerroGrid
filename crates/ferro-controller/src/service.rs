@@ -152,6 +152,9 @@ impl Controller for ControllerService {
                         Some(deadline),
                     ))
                     .await;
+                if let Err(e) = self.registry.flush().await {
+                    return Ok(not_durable(&job_id, e, None, node_verdicts, Vec::new()));
+                }
                 let queue_position = self.registry.queue_position(&job_id).await;
                 tracing::info!(job = %job_id, "queued at #{queue_position}: {message}");
                 return Ok(Response::new(SubmitJobResponse {
@@ -207,6 +210,15 @@ impl Controller for ControllerService {
         // explained after the cluster has moved on from the state that made it.
         job.placement = placement;
         self.registry.insert_job(job).await;
+
+        // The one place the controller waits for a disk. Telling a user their
+        // job was accepted and then losing it in a crash is the failure this
+        // whole phase exists to prevent, so the record goes down before the
+        // ranks go out; everything after this is write-behind. Outside the
+        // registry lock, which `insert_job` has already released.
+        if let Err(e) = self.registry.flush().await {
+            return Ok(not_durable(&job_id, e, Some(plan), node_verdicts, warnings));
+        }
 
         match start_job(&self.registry, &req, &job_id, &plan).await {
             Ok(()) => {
@@ -782,6 +794,36 @@ impl Controller for ControllerService {
         ))
     }
 
+    async fn list_events(
+        &self,
+        req: Request<ListEventsRequest>,
+    ) -> Result<Response<ListEventsResponse>, Status> {
+        let req = req.into_inner();
+        // A kind nobody emits is a typo, and answering a typo with an empty
+        // timeline reads as "nothing has happened", which is a different and
+        // much more alarming answer.
+        let kind = match req.kind.as_str() {
+            "" => None,
+            k => Some(crate::store::EventKind::parse(k).ok_or_else(|| {
+                Status::invalid_argument(format!(
+                    "unknown event kind `{k}`; known kinds are {}",
+                    crate::store::EventKind::ALL
+                        .iter()
+                        .map(|k| k.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ))
+            })?),
+        };
+        let events = self
+            .registry
+            .events(req.limit as usize, &req.job_id, kind)
+            .await;
+        Ok(Response::new(ListEventsResponse {
+            events: events.iter().map(wire_event).collect(),
+        }))
+    }
+
     async fn report_logs(
         &self,
         req: Request<ReportLogsRequest>,
@@ -840,6 +882,21 @@ impl Controller for ControllerService {
 
         self.registry.release_if_done(&job_id).await;
         Ok(Response::new(ReportJobStatusResponse {}))
+    }
+}
+
+/// An event as it goes out on the wire. The kind is a string there: a CLI
+/// built against an older proto should still print a kind it has never heard
+/// of rather than an enum it cannot decode.
+fn wire_event(event: &crate::store::Event) -> Event {
+    Event {
+        id: event.id,
+        unix_s: event.unix_s,
+        kind: event.kind.as_str().to_string(),
+        job_id: event.job_id.clone(),
+        node_id: event.node_id.clone(),
+        actor: event.actor.clone(),
+        detail: event.detail.clone(),
     }
 }
 
@@ -1036,6 +1093,28 @@ fn explain(decision: &PlacementDecision) -> PlacementExplanation {
         total: decision.score.total,
         reasons: decision.score.reasons.clone(),
     }
+}
+
+/// The job is in memory but not on disk. Refusing is the honest answer: a
+/// caller that is told `accepted` has been promised the cluster will remember,
+/// and nothing downstream can make that true afterwards.
+fn not_durable(
+    job_id: &str,
+    error: crate::store::StoreError,
+    plan: Option<JobPlan>,
+    node_verdicts: Vec<NodeVerdict>,
+    warnings: Vec<String>,
+) -> Response<SubmitJobResponse> {
+    tracing::error!(job = %job_id, "refusing the job: {error}");
+    Response::new(SubmitJobResponse {
+        job_id: job_id.to_string(),
+        accepted: false,
+        message: format!("could not record the job durably: {error}"),
+        plan,
+        queue_position: 0,
+        node_verdicts,
+        warnings,
+    })
 }
 
 fn new_job_id() -> String {
@@ -1268,6 +1347,21 @@ pub async fn run_queue(
                 tracing::error!(job = %job_id, "queued job failed to launch: {e}");
             }
         }
+    }
+}
+
+/// Notices nodes going quiet, and coming back.
+///
+/// Health is a length of silence rather than anything a node sends, so no
+/// request path can observe the moment it changes -- there is no request. Only
+/// a clock looking can, which is what this is. The registry reports edges
+/// only, so a node that is down all weekend is one event, not one every five
+/// seconds.
+pub async fn watch_node_health(registry: std::sync::Arc<Registry>) {
+    let mut tick = tokio::time::interval(std::time::Duration::from_secs(5));
+    loop {
+        tick.tick().await;
+        registry.sweep_node_health().await;
     }
 }
 

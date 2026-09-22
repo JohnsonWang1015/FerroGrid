@@ -1,8 +1,10 @@
 //! In-memory registry of nodes, jobs, and their logs.
 //!
-//! MVP scope: state lives in the controller process only. Agents re-register
-//! automatically after a controller restart, so node state self-heals; job
-//! history does not survive a restart, which is an accepted trade-off here.
+//! Reads and writes all go through here; the durable copy is write-behind.
+//! Agents re-register automatically after a controller restart, so node state
+//! self-heals and is never written down. Jobs, their submission order, GPU
+//! benchmarks and `ferro net` measurements exist nowhere else, so they are --
+//! see `store` for which fields and why.
 
 use ferro_proto::{
     Gpu, GpuEntry, GpuOccupant, GpuProcess, JobPhase, JobPlan, JobStatus, JobSummary, LogLine,
@@ -15,6 +17,10 @@ use ferro_sched::{
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex};
+
+use crate::store::{
+    Change, Event, EventKind, JobRecord, LoadedJob, LoadedState, Store, StoreError, EVENT_RING,
+};
 
 /// A node is considered unhealthy after this many seconds without a heartbeat.
 pub const HEARTBEAT_TIMEOUT_S: i64 = 15;
@@ -207,6 +213,68 @@ impl Job {
         self.util_sum += pct;
         self.util_n += 1;
     }
+
+    /// The durable half of this job. `order_seq` is its index in `job_order`,
+    /// which the caller holds the lock for and this job does not know.
+    pub fn to_record(&self, order_seq: i64) -> JobRecord {
+        JobRecord {
+            job_id: self.job_id.clone(),
+            order_seq,
+            name: self.name.clone(),
+            submitted_by: self.submitted_by.clone(),
+            project: self.project.clone(),
+            priority: self.priority,
+            estimated_duration_s: self.estimated_duration_s,
+            timeout_s: self.timeout_s,
+            submitted: self.submitted,
+            queued: self.queued,
+            queue_deadline: self.queue_deadline,
+            plan: self.plan.clone(),
+            queue_req: self.queue_req.clone(),
+            placement: self.placement.clone(),
+        }
+    }
+
+    /// Rebuild a job from disk, exactly as it was written.
+    ///
+    /// Nothing here is reconciled against what the cluster currently reports: a
+    /// job that was Running when the controller died comes back Running, even
+    /// if its ranks are long gone. Deciding what is still true is a separate
+    /// job from remembering what was, and mixing the two would mean a restart
+    /// silently rewriting history it has no evidence about.
+    ///
+    /// The broadcast channel is new because the old subscribers died with the
+    /// process, and the log ring starts empty because it was never stored.
+    pub fn from_record(record: JobRecord, per_node: HashMap<String, JobStatus>) -> Self {
+        let (tx, _) = broadcast::channel(4096);
+        Job {
+            job_id: record.job_id,
+            name: record.name,
+            submitted_by: record.submitted_by,
+            project: record.project,
+            priority: record.priority,
+            estimated_duration_s: record.estimated_duration_s,
+            timeout_s: record.timeout_s,
+            plan: record.plan,
+            per_node,
+            submitted: record.submitted,
+            logs: std::collections::VecDeque::new(),
+            nccl_errors: Vec::new(),
+            metrics: Default::default(),
+            util_sum: 0.0,
+            util_n: 0,
+            tx,
+            queued: record.queued,
+            queue_req: record.queue_req,
+            queue_deadline: record.queue_deadline,
+            // A live assessment of a cluster that has moved on. The next queue
+            // tick writes the current one.
+            node_verdicts: Vec::new(),
+            warnings: Vec::new(),
+            queue_message: String::new(),
+            placement: record.placement,
+        }
+    }
 }
 
 pub struct RegistryInner {
@@ -221,6 +289,17 @@ pub struct RegistryInner {
     /// it. Heartbeats replace the GPU list wholesale, and these survive that
     /// the same way the benchmark scores do.
     pub net: NetworkSnapshot,
+    /// The timeline, oldest first. This is the read path: `ferro events`
+    /// answers from here, so it works under `--no-state` exactly as it does
+    /// with a database behind it, and a read never touches a disk.
+    pub events: std::collections::VecDeque<Event>,
+    /// Number for the next event. Carries on across restarts, from the last id
+    /// read back off disk.
+    next_event_id: u64,
+    /// Whether each node was healthy the last time anybody looked. Health is a
+    /// duration without a heartbeat rather than anything a node sends, so the
+    /// only way to notice it changing is to remember the previous answer.
+    pub node_health: HashMap<String, bool>,
     /// Decides which queued job runs next. Lives here rather than beside the
     /// dispatcher so that the position a user is quoted and the order they are
     /// actually served in are computed by the same object -- they are the same
@@ -236,6 +315,9 @@ impl Default for RegistryInner {
             jobs: HashMap::new(),
             job_order: Vec::new(),
             net: NetworkSnapshot::default(),
+            events: std::collections::VecDeque::new(),
+            next_event_id: 1,
+            node_health: HashMap::new(),
             queue_policy: Arc::new(ferro_sched::queue::Fifo),
         }
     }
@@ -246,6 +328,10 @@ pub struct Registry {
     /// The scheduler's VRAM floor, kept here too so "free" means the same
     /// thing in `ferro nodes` as it does at placement time.
     pub min_free_vram_b: u64,
+    /// Where durable state goes. `None` is a controller running entirely in
+    /// memory, which is what `--no-state` and every test that does not care
+    /// about restarts get.
+    store: Option<Store>,
 }
 
 impl Registry {
@@ -254,6 +340,7 @@ impl Registry {
         Self {
             inner: Mutex::new(RegistryInner::default()),
             min_free_vram_b,
+            store: None,
         }
     }
 
@@ -264,18 +351,202 @@ impl Registry {
                 ..Default::default()
             }),
             min_free_vram_b,
+            store: None,
         }
+    }
+
+    /// A registry that picks up where the last one left off, and keeps writing.
+    ///
+    /// Nodes are deliberately absent: they are back within a heartbeat, and
+    /// restoring them would mean claiming a node is present on the strength of
+    /// a file rather than a heartbeat.
+    pub fn restore(
+        min_free_vram_b: u64,
+        queue_policy: Arc<dyn QueuePolicy>,
+        store: Store,
+        state: LoadedState,
+    ) -> Self {
+        // The ring comes back with the tail of the log in it, so `ferro events`
+        // after a restart still answers "what happened last night" rather than
+        // starting the history at the restart. The sequence continues from the
+        // last id: two events with the same number would be two events nobody
+        // can put in order.
+        let next_event_id = state.events.last().map(|e| e.id + 1).unwrap_or(1);
+        let mut inner = RegistryInner {
+            queue_policy,
+            bench: state.bench,
+            events: state.events.into_iter().collect(),
+            next_event_id,
+            ..Default::default()
+        };
+        for link in &state.network {
+            inner
+                .net
+                .record(&link.a, &link.b, link.mbps, link.measured_unix_s);
+        }
+        // `LoadedState.jobs` arrives in `order_seq` order, which is what
+        // `job_order` means: rebuilding it by pushing preserves both the queue
+        // order and the tie-break between two jobs submitted in one second.
+        for LoadedJob { record, per_node } in state.jobs {
+            let job = Job::from_record(record, per_node);
+            inner.job_order.push(job.job_id.clone());
+            inner.jobs.insert(job.job_id.clone(), job);
+        }
+        Self {
+            inner: Mutex::new(inner),
+            min_free_vram_b,
+            store: Some(store),
+        }
+    }
+
+    /// Return once every change queued so far has been committed.
+    ///
+    /// Callers must not hold `inner` across this: that is the whole point of
+    /// the write-behind channel. A registry without a store has nothing to
+    /// wait for and says so immediately.
+    pub async fn flush(&self) -> Result<(), StoreError> {
+        match &self.store {
+            Some(store) => store.flush().await,
+            None => Ok(()),
+        }
+    }
+
+    /// Queue a change for the store. Cheap enough to call under the lock --
+    /// that is the contract the store's writer thread exists to honour.
+    fn write(&self, change: Change) {
+        if let Some(store) = &self.store {
+            store.write(change);
+        }
+    }
+
+    /// Queue a job's durable half, looking its submission sequence up from the
+    /// order it is already in.
+    fn write_job(&self, inner: &RegistryInner, job_id: &str) {
+        if self.store.is_none() {
+            return;
+        }
+        let Some(job) = inner.jobs.get(job_id) else {
+            return;
+        };
+        let order_seq = inner
+            .job_order
+            .iter()
+            .position(|id| id == job_id)
+            .unwrap_or(inner.job_order.len()) as i64;
+        self.write(Change::Job(Box::new(job.to_record(order_seq))));
+    }
+
+    /// Record something that has already happened: onto the ring, which is
+    /// what anyone reads, and down the same write-behind channel as every
+    /// other change.
+    ///
+    /// Never flushed. A job record goes to disk before its ranks go out
+    /// because the user is being promised something; an event is a note about
+    /// the past, and waiting on a disk to finish writing one would put a
+    /// syscall in front of the thing it describes.
+    fn emit(&self, inner: &mut RegistryInner, event: Event) {
+        let event = Event {
+            id: inner.next_event_id,
+            unix_s: now_s(),
+            ..event
+        };
+        inner.next_event_id += 1;
+        self.write(Change::Event(event.clone()));
+        inner.events.push_back(event);
+        if inner.events.len() > EVENT_RING {
+            inner.events.pop_front();
+        }
+    }
+
+    /// Record an event about something the registry itself cannot see -- the
+    /// controller process starting, which no call through here would produce.
+    pub async fn record_event(&self, event: Event) {
+        let mut g = self.inner.lock().await;
+        self.emit(&mut g, event);
+    }
+
+    /// The timeline, oldest first, so it reads forwards.
+    ///
+    /// Filtered before it is truncated: `--limit 50 --kind JOB_FAILED` means
+    /// the last fifty failures, not the failures among the last fifty events.
+    /// A zero limit means everything still kept.
+    pub async fn events(&self, limit: usize, job_id: &str, kind: Option<EventKind>) -> Vec<Event> {
+        let g = self.inner.lock().await;
+        let mut matching: Vec<Event> = g
+            .events
+            .iter()
+            .filter(|e| job_id.is_empty() || e.job_id == job_id)
+            .filter(|e| kind.map(|k| e.kind == k).unwrap_or(true))
+            .cloned()
+            .collect();
+        if limit > 0 && matching.len() > limit {
+            matching.drain(..matching.len() - limit);
+        }
+        matching
+    }
+
+    /// Emit `NODE_LOST` and `NODE_RECOVERED` for nodes whose health has
+    /// changed since the last sweep.
+    ///
+    /// On the edge only: a node that has been down all weekend is one event,
+    /// not one per sweep, which is the whole reason the previous answer is
+    /// remembered rather than recomputed and reported.
+    pub async fn sweep_node_health(&self) {
+        let mut g = self.inner.lock().await;
+        let changed: Vec<(String, bool, i64)> = g
+            .nodes
+            .values()
+            .filter(|n| {
+                g.node_health
+                    .get(&n.info.node_id)
+                    .copied()
+                    .unwrap_or(n.healthy())
+                    != n.healthy()
+            })
+            .map(|n| (n.info.node_id.clone(), n.healthy(), n.last_seen))
+            .collect();
+
+        for (node_id, healthy, last_seen) in changed {
+            g.node_health.insert(node_id.clone(), healthy);
+            let event = if healthy {
+                Event::new(EventKind::NodeRecovered).node(&node_id)
+            } else {
+                Event::new(EventKind::NodeLost)
+                    .node(&node_id)
+                    .detail(format!("silent for {}s", (now_s() - last_seen).max(0)))
+            };
+            self.emit(&mut g, event);
+        }
+    }
+
+    fn write_status(&self, status: &JobStatus) {
+        self.write(Change::Status {
+            job_id: status.job_id.clone(),
+            node_id: status.node_id.clone(),
+            status: Box::new(status.clone()),
+        });
     }
 
     pub async fn upsert_node(&self, info: NodeInfo) {
         let mut g = self.inner.lock().await;
         let id = info.node_id.clone();
+        let detail = format!("{} GPU(s)", info.gpus.len());
         g.nodes.insert(
-            id,
+            id.clone(),
             Node {
                 info,
                 last_seen: now_s(),
             },
+        );
+        // A node that re-registers has just come back by definition, so the
+        // health watch starts again from healthy rather than reporting a
+        // recovery the registration already said.
+        g.node_health.insert(id.clone(), true);
+        self.emit(
+            &mut g,
+            Event::new(EventKind::NodeRegistered)
+                .node(&id)
+                .detail(detail),
         );
     }
 
@@ -333,6 +604,20 @@ impl Registry {
             // untested one, and the scheduler would then rank it.
             if pair.error.is_empty() {
                 g.net.record(&pair.from_node, &pair.to_node, pair.mbps, now);
+                // Read the pair back rather than storing what was reported:
+                // the snapshot keeps the slower of the two directions, and the
+                // number worth reloading is the one it decided to keep.
+                if let Some(mbps) = g.net.between(&pair.from_node, &pair.to_node, now, 0) {
+                    self.write(Change::Network {
+                        a: pair.from_node.clone(),
+                        b: pair.to_node.clone(),
+                        mbps,
+                        measured_unix_s: g
+                            .net
+                            .measured_at(&pair.from_node, &pair.to_node)
+                            .unwrap_or(now),
+                    });
+                }
             }
         }
     }
@@ -350,6 +635,11 @@ impl Registry {
         for r in results {
             if r.tflops > 0.0 && !r.uuid.is_empty() {
                 g.bench.insert(r.uuid.clone(), (r.tflops, now));
+                self.write(Change::Benchmark {
+                    uuid: r.uuid.clone(),
+                    tflops: r.tflops,
+                    measured_unix_s: now,
+                });
             }
         }
         let bench = g.bench.clone();
@@ -427,6 +717,7 @@ impl Registry {
         placement: Option<PlacementExplanation>,
     ) {
         let mut g = self.inner.lock().await;
+        let mut scheduled = None;
         if let Some(job) = g.jobs.get_mut(job_id) {
             job.plan = plan;
             job.placement = placement;
@@ -435,6 +726,17 @@ impl Registry {
             job.queue_message.clear();
             // The wall clock starts when the job starts, not when it queued.
             job.submitted = now_s();
+            scheduled = Some((job.submitted_by.clone(), where_it_runs(&job.plan)));
+        }
+        self.write_job(&g, job_id);
+        if let Some((actor, placed)) = scheduled {
+            self.emit(
+                &mut g,
+                Event::new(EventKind::JobScheduled)
+                    .job(job_id)
+                    .actor(&actor)
+                    .detail(placed),
+            );
         }
     }
 
@@ -465,18 +767,28 @@ impl Registry {
         if !job.queued {
             return false;
         }
+        let actor = job.submitted_by.clone();
         job.queued = false;
         job.queue_req = None;
         job.queue_message = message.to_string();
-        job.per_node.insert(
-            String::new(),
-            JobStatus {
-                job_id: job_id.to_string(),
-                phase: phase as i32,
-                message: message.to_string(),
-                ended_unix_s: now_s(),
-                ..Default::default()
-            },
+        let status = JobStatus {
+            job_id: job_id.to_string(),
+            phase: phase as i32,
+            message: message.to_string(),
+            ended_unix_s: now_s(),
+            ..Default::default()
+        };
+        job.per_node.insert(String::new(), status.clone());
+        self.write_job(&g, job_id);
+        self.write_status(&status);
+        // This is how a queued job ends whatever the reason -- cancelled by
+        // its owner, or given up on by the dispatcher when it ran out of
+        // patience. Record the one that happened, not the one the caller's
+        // name suggests.
+        let kind = phase_event(phase).unwrap_or(EventKind::JobCancelled);
+        self.emit(
+            &mut g,
+            Event::new(kind).job(job_id).actor(&actor).detail(message),
         );
         true
     }
@@ -516,8 +828,31 @@ impl Registry {
 
     pub async fn insert_job(&self, job: Job) {
         let mut g = self.inner.lock().await;
-        g.job_order.push(job.job_id.clone());
-        g.jobs.insert(job.job_id.clone(), job);
+        let job_id = job.job_id.clone();
+        let actor = job.submitted_by.clone();
+        let queued = job.queued;
+        g.job_order.push(job_id.clone());
+        g.jobs.insert(job_id.clone(), job);
+        self.write_job(&g, &job_id);
+        self.emit(
+            &mut g,
+            Event::new(EventKind::JobSubmitted)
+                .job(&job_id)
+                .actor(&actor),
+        );
+        if queued {
+            // The position is the promise the queue makes to this user, so it
+            // belongs in the record of the promise being made -- by the time
+            // anyone reads this back, the queue has moved on.
+            let position = g.queue_position(&job_id);
+            self.emit(
+                &mut g,
+                Event::new(EventKind::JobQueued)
+                    .job(&job_id)
+                    .actor(&actor)
+                    .detail(format!("position {position}")),
+            );
+        }
     }
 
     pub async fn append_logs(&self, lines: Vec<LogLine>) {
@@ -547,7 +882,8 @@ impl Registry {
 
     pub async fn update_job_status(&self, status: JobStatus) {
         let mut g = self.inner.lock().await;
-        let Some(job) = g.jobs.get_mut(&status.job_id) else {
+        let job_id = status.job_id.clone();
+        let Some(job) = g.jobs.get_mut(&job_id) else {
             return;
         };
         // Agents send a start event with started_unix_s and a finish event
@@ -565,7 +901,31 @@ impl Registry {
             },
             ..status
         };
+        self.write_status(&merged);
+
+        // The job's phase, not this rank's: ranks report the same phase over
+        // and over -- every heartbeat carries one -- and a job only starts,
+        // finishes or fails once. The transition is the event; the reports are
+        // just how it is discovered.
+        let before = job.phase();
+        let actor = job.submitted_by.clone();
         job.per_node.insert(merged.node_id.clone(), merged);
+        let after = job.phase();
+
+        if after != before {
+            if let Some(kind) = phase_event(after) {
+                // A start needs no explanation; an ending does.
+                let detail = if after.is_terminal() {
+                    ending_detail(job, after)
+                } else {
+                    String::new()
+                };
+                self.emit(
+                    &mut g,
+                    Event::new(kind).job(&job_id).actor(&actor).detail(detail),
+                );
+            }
+        }
     }
 
     /// Free the GPUs a finished job was holding. Agents do this too via their
@@ -580,12 +940,35 @@ impl Registry {
         if !done {
             return;
         }
+        let mut freed: Vec<String> = Vec::new();
         for node in g.nodes.values_mut() {
+            let mut indices = Vec::new();
             for gpu in node.info.gpus.iter_mut() {
                 if gpu.allocated_job_id == job_id {
                     gpu.allocated_job_id.clear();
+                    indices.push(gpu.index);
                 }
             }
+            if !indices.is_empty() {
+                freed.push(name_gpus(&node.info.node_id, &indices));
+            }
+        }
+        // Only when cards actually went back. This runs on every terminal
+        // report and on every cancellation, and most of those free nothing --
+        // a second rank reporting the same failure, a job that never placed.
+        if !freed.is_empty() {
+            let actor = g
+                .jobs
+                .get(job_id)
+                .map(|j| j.submitted_by.clone())
+                .unwrap_or_default();
+            self.emit(
+                &mut g,
+                Event::new(EventKind::GpuReleased)
+                    .job(job_id)
+                    .actor(&actor)
+                    .detail(freed.join(" ")),
+            );
         }
     }
 
@@ -643,8 +1026,86 @@ impl Registry {
                 }
             }
         }
+
+        // Which cards, by name: the plan that asked for them is not in front
+        // of whoever reads this afterwards, and "somebody took two GPUs" is
+        // not an answer to "who had gpu-a 1 at four in the morning".
+        let actor = g
+            .jobs
+            .get(job_id)
+            .map(|j| j.submitted_by.clone())
+            .unwrap_or_default();
+        self.emit(
+            &mut g,
+            Event::new(EventKind::GpuAllocated)
+                .job(job_id)
+                .actor(&actor)
+                .detail(where_it_runs(plan)),
+        );
         Ok(())
     }
+}
+
+/// `gpu-a[0,1]`, the shortest true answer to "which cards".
+fn name_gpus(node_id: &str, indices: &[u32]) -> String {
+    let list: Vec<String> = indices.iter().map(|i| i.to_string()).collect();
+    format!("{node_id}[{}]", list.join(","))
+}
+
+/// Where a plan puts a job: `gpu-a[0,1] gpu-b[0,1]`.
+fn where_it_runs(plan: &JobPlan) -> String {
+    plan.placements
+        .iter()
+        .map(|p| name_gpus(&p.node_id, &p.gpu_indices))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The event a job reaching this phase is worth recording as. Phases that are
+/// steps along the way rather than news -- pending, launching -- have none.
+fn phase_event(phase: JobPhase) -> Option<EventKind> {
+    match phase {
+        JobPhase::Running => Some(EventKind::JobStarted),
+        JobPhase::Succeeded => Some(EventKind::JobCompleted),
+        JobPhase::Failed => Some(EventKind::JobFailed),
+        JobPhase::Cancelled => Some(EventKind::JobCancelled),
+        _ => None,
+    }
+}
+
+/// The short half of a status. Next to "failed", what a reader wants is the
+/// exit code; where there is none, the message says what happened instead.
+fn status_detail(status: &JobStatus) -> String {
+    if status.exit_code != 0 {
+        return format!("exit {}", status.exit_code);
+    }
+    status
+        .message
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .to_string()
+}
+
+/// Why a job ended, read off a rank that ended that way rather than off
+/// whichever report happened to complete the picture: a rank can die before
+/// its peer has reported anything at all, and then it is the peer's *start*
+/// that turns the job failed. The answer worth printing is the dead rank's
+/// exit code, not the peer's progress message. Lowest rank first, because
+/// report order is not recorded and a `HashMap`'s order would make the same
+/// failure read differently every run.
+fn ending_detail(job: &Job, phase: JobPhase) -> String {
+    let mut ranks: Vec<&JobStatus> = job
+        .per_node
+        .values()
+        .filter(|s| s.phase() == phase)
+        .collect();
+    ranks.sort_by_key(|s| s.node_rank);
+    ranks
+        .into_iter()
+        .map(status_detail)
+        .find(|d| !d.is_empty())
+        .unwrap_or_default()
 }
 
 /// Why a reservation was refused. Every variant means the same thing to a

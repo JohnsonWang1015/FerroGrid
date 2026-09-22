@@ -146,6 +146,24 @@ enum Cmd {
         #[command(flatten)]
         watch: WatchArgs,
     },
+    /// What the cluster has been doing: submissions, placements, failures,
+    /// nodes coming and going, oldest first.
+    Events {
+        /// Only this job's events.
+        #[arg(long = "job", value_name = "ID")]
+        job_id: Option<String>,
+
+        /// Only this kind, e.g. JOB_FAILED. Case does not matter.
+        #[arg(long, value_name = "KIND")]
+        kind: Option<String>,
+
+        /// How many to show. 0 shows everything the controller still keeps.
+        #[arg(long, default_value_t = 50)]
+        limit: u32,
+
+        #[command(flatten)]
+        watch: WatchArgs,
+    },
     /// Cancel a running job.
     Cancel { job_id: String },
 }
@@ -508,6 +526,28 @@ async fn main() -> Result<()> {
                     .await?
                     .into_inner();
                 Ok(render::queue(&r.jobs, cli.json))
+            })
+            .await?;
+        }
+        Cmd::Events {
+            job_id,
+            kind,
+            limit,
+            watch,
+        } => {
+            repeat(watch, cli.json, || async {
+                let mut c = client.clone();
+                let r = c
+                    .list_events(ListEventsRequest {
+                        limit,
+                        job_id: job_id.clone().unwrap_or_default(),
+                        // The kinds are shouted on the wire; nobody should
+                        // have to hold shift to filter by one.
+                        kind: kind.as_deref().map(str::to_uppercase).unwrap_or_default(),
+                    })
+                    .await?
+                    .into_inner();
+                Ok(render::events(&r.events, cli.json))
             })
             .await?;
         }

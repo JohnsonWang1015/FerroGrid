@@ -13,3 +13,4 @@ pub mod metrics;
 pub mod plugins;
 pub mod registry;
 pub mod service;
+pub mod store;
