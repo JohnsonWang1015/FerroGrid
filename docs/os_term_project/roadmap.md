@@ -332,7 +332,7 @@ command, from a clean checkout.
 
 ---
 
-### Phase 5 — Persistence ✅ *complete* · Phase 6 — Recovery · Phase 7 — Advanced
+### Phase 5 — Persistence ✅ · Phase 6 — Recovery ✅ · Phase 7 — Advanced
 
 Per the specification. SQLite with WAL; **ephemeral telemetry stays in memory**
 (heartbeats, GPU utilisation samples, the 20,000-line log ring) and only durable

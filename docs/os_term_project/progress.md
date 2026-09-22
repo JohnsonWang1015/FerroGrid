@@ -5,6 +5,87 @@ specification (§91). Newest entry first.
 
 ---
 
+## Phase 6 — Recovery
+
+**Phase:** 6 — Reconciling restored state against the cluster
+**Status:** ✅ Complete. Gate met.
+
+### Implemented
+
+- **A reconciliation window** (`--reconcile-window-secs`, default 30) rather
+  than an instant verdict. Agents reconnect on a 3 s heartbeat behind a 3 s
+  backoff and a node is not called unhealthy for 15 s; deciding at startup
+  would kill work that is merely slow to be reported.
+- **Claiming from either signal** — a `JobStatus` report *or* a GPU carrying
+  the job's `allocated_job_id`. Requiring both would lose jobs whose rank had
+  nothing to say in that particular heartbeat.
+- **Unclaimed jobs are failed with the distinction that matters**: a healthy
+  node that did not mention the job (`lost while the controller was down`)
+  versus a node that never reconnected (`fate unknown`). Both terminal, but
+  only one is worth walking to a machine about.
+- **Queued-but-running jobs are adopted**, with the plan rebuilt from the GPU
+  ownership the agents report, and multi-node plans completed as later peers
+  reconnect.
+- **`reconciling` on `JobSummary`** (new field number) so an operator can see
+  the controller is still making up its mind.
+- **`RECONCILED` event** carrying restored / claimed / adopted / failed and the
+  elapsed time — §69's recovery-time and lost-job measurements become two event
+  rows rather than a benchmark harness.
+
+### Tests
+
+| Check | Result |
+|---|---|
+| `cargo test --workspace` | **229 passed, 0 failed** (was 220; +9 recovery) |
+| `cargo fmt --check` / `clippy -D warnings` | ✅ clean |
+| Pre-existing tests modified | **none** |
+
+### Verified live
+
+A real controller and agent, a genuinely running job, then **both** processes
+killed and the controller alone restarted with a 6 s window:
+
+```
+  t+2s (window open):   longrunner: running  reconciling=True
+  t+8s (window closed): longrunner: failed   reconciling=False
+
+  JOB_FAILED   fate unknown: local-gpu has not reported since the controller restarted
+  RECONCILED   restored 1, claimed 0, adopted 0, failed 1 in 6s
+```
+
+The job was not failed early, and the reason picked the correct branch — the
+agent never came back, so the honest answer is "unknown", not "gone".
+
+### A specification bug this phase caught
+
+The brief said *every* job still reconciling and non-terminal becomes failed. A
+restored **queued** job is non-terminal, so taken literally that would fail
+every job waiting in line — destroying exactly the queue position Phase 5
+persists. A queued job holds nothing and claims nothing; the dispatcher owns
+it. It is now un-flagged at window close and left in line.
+
+### Known limitations
+
+1. **No elastic restart.** A job failed here is not resubmitted. Retry policy
+   (§43) needs failure classification to be meaningful and is a separate
+   decision.
+2. **No agent-side cleanup.** If an agent is holding a container for a job the
+   controller has failed, the controller does not reach in and kill it.
+   Deciding to stop something on a node the operator did not ask about is a
+   bigger call than recovery should make alone; §25's orphan classification is
+   where that belongs.
+3. **Restored jobs have no logs**, because logs are still not persisted.
+4. **The window is fixed**, not adaptive. A cluster of fifty nodes with one slow
+   machine waits the same 30 s as a cluster of two.
+
+### Next
+
+Phase 7 — advanced scheduling, by remaining time: backfilling with reservation
+(the experiments showed FerroGrid already backfills without one, and what that
+costs the tail), user quota, multi-resource requests, or orphan classification.
+
+---
+
 ## Phase 5 — Persistence
 
 **Phase:** 5 — SQLite state, event log
