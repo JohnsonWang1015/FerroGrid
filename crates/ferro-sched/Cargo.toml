@@ -1,0 +1,22 @@
+[package]
+name = "ferro-sched"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# The scheduling core: policy traits plus every policy that implements them.
+#
+# This crate is deliberately **pure and synchronous**. It holds no handles,
+# opens no sockets, spawns no tasks and never reads the clock -- `now` is passed
+# in. That is what lets the offline simulator and the live controller run the
+# *same* policy objects instead of two implementations that drift apart.
+#
+# Concretely, that means this manifest must not grow a `tokio`, `tonic` or
+# `reqwest` dependency, and no `async fn` may appear in `src/`. (`ferro-proto`
+# pulls tonic in transitively for its generated types; the rule here is about
+# what this crate's own code is allowed to do.)
+[dependencies]
+ferro-proto.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]

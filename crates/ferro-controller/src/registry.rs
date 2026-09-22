@@ -8,7 +8,9 @@ use ferro_proto::{
     Gpu, GpuEntry, GpuOccupant, GpuProcess, JobPhase, JobPlan, JobStatus, JobSummary, LogLine,
     NodeInfo, NodeState, NodeVerdict, SubmitJobRequest, TrainingMetrics,
 };
+use ferro_sched::{QueueContext, QueuePolicy, QueuedJob};
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex};
 
 /// A node is considered unhealthy after this many seconds without a heartbeat.
@@ -146,7 +148,6 @@ impl Job {
     }
 }
 
-#[derive(Default)]
 pub struct RegistryInner {
     /// GPU uuid -> measured TFLOP/s. Heartbeats overwrite the GPU list, so the
     /// scores live here and are re-applied on every update.
@@ -155,6 +156,23 @@ pub struct RegistryInner {
     pub jobs: HashMap<String, Job>,
     /// Submission order, so `ferro jobs` lists newest first.
     pub job_order: Vec<String>,
+    /// Decides which queued job runs next. Lives here rather than beside the
+    /// dispatcher so that the position a user is quoted and the order they are
+    /// actually served in are computed by the same object -- they are the same
+    /// promise, and a scheduler that breaks it is worse than one with no queue.
+    pub queue_policy: Arc<dyn QueuePolicy>,
+}
+
+impl Default for RegistryInner {
+    fn default() -> Self {
+        Self {
+            bench: HashMap::new(),
+            nodes: HashMap::new(),
+            jobs: HashMap::new(),
+            job_order: Vec::new(),
+            queue_policy: Arc::new(ferro_sched::queue::Fifo),
+        }
+    }
 }
 
 pub struct Registry {
@@ -165,9 +183,20 @@ pub struct Registry {
 }
 
 impl Registry {
+    /// A registry ordering its queue first come, first served.
     pub fn new(min_free_vram_b: u64) -> Self {
         Self {
             inner: Mutex::new(RegistryInner::default()),
+            min_free_vram_b,
+        }
+    }
+
+    pub fn with_queue_policy(min_free_vram_b: u64, queue_policy: Arc<dyn QueuePolicy>) -> Self {
+        Self {
+            inner: Mutex::new(RegistryInner {
+                queue_policy,
+                ..Default::default()
+            }),
             min_free_vram_b,
         }
     }
@@ -295,15 +324,11 @@ impl Registry {
                     .map(|r| (j.job_id.clone(), r, j.queue_deadline))
             })
             .collect();
-        // FIFO by submission order. Not by timestamp: two jobs submitted in
-        // the same second still have an order, and the queue has to agree with
-        // the position each of them was told.
-        out.sort_by_key(|(id, _, _)| {
-            g.job_order
-                .iter()
-                .position(|j| j == id)
-                .unwrap_or(usize::MAX)
-        });
+        // Order is the queue policy's decision, not this function's. The same
+        // ranking backs `queue_position`, so what a user is told and what the
+        // dispatcher does cannot drift apart.
+        let ranked = g.ranked_queue();
+        out.sort_by_key(|(id, _, _)| ranked.iter().position(|j| j == id).unwrap_or(usize::MAX));
         out
     }
 
@@ -500,17 +525,38 @@ impl RegistryInner {
             .collect()
     }
 
+    /// Every waiting job, in the order the queue policy would serve them.
+    pub fn ranked_queue(&self) -> Vec<String> {
+        let waiting: Vec<QueuedJob> = self
+            .job_order
+            .iter()
+            .enumerate()
+            .filter_map(|(seq, id)| {
+                let job = self.jobs.get(id)?;
+                job.queued.then(|| QueuedJob {
+                    job_id: job.job_id.clone(),
+                    // Position in `job_order` is the submission sequence: two
+                    // jobs submitted in the same second still have an order.
+                    order_seq: seq as u64,
+                    submitted_unix_s: job.submitted,
+                    submitted_by: job.submitted_by.clone(),
+                })
+            })
+            .collect();
+        self.queue_policy
+            .rank(&waiting, &QueueContext { now: now_s() })
+    }
+
+    /// Where a job sits in line, 1-based. 0 when it is not queued.
     pub fn queue_position(&self, job_id: &str) -> u32 {
         if !self.jobs.get(job_id).map(|j| j.queued).unwrap_or(false) {
             return 0;
         }
-        let ahead = self
-            .job_order
+        self.ranked_queue()
             .iter()
-            .take_while(|id| *id != job_id)
-            .filter(|id| self.jobs.get(*id).map(|j| j.queued).unwrap_or(false))
-            .count();
-        ahead as u32 + 1
+            .position(|id| id == job_id)
+            .map(|i| i as u32 + 1)
+            .unwrap_or(0)
     }
 }
 

@@ -400,6 +400,7 @@ dependencies = [
  "anyhow",
  "clap",
  "ferro-proto",
+ "ferro-sched",
  "prost",
  "regex",
  "serde",
@@ -433,6 +434,14 @@ dependencies = [
  "tonic",
  "tonic-prost",
  "tonic-prost-build",
+]
+
+[[package]]
+name = "ferro-sched"
+version = "0.1.0"
+dependencies = [
+ "ferro-proto",
+ "thiserror 2.0.20",
 ]
 
 [[package]]

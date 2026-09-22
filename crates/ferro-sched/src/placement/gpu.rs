@@ -21,22 +21,9 @@
 //!   one with the higher benchmarked TFLOP/s wins. Names are a poor proxy:
 //!   `ferro bench` measures what the hardware actually does today.
 
+use crate::ScheduleError;
 use ferro_proto::NodeVerdict;
 use ferro_proto::{JobPlacement, JobPlan, NodeState};
-
-#[derive(Debug, thiserror::Error)]
-pub enum ScheduleError {
-    #[error("no nodes are registered")]
-    NoNodes,
-    #[error("requested {requested} nodes with {per_node} free GPU(s) each, but only {available} node(s) qualify")]
-    NotEnoughNodes {
-        requested: u32,
-        per_node: u32,
-        available: usize,
-    },
-    #[error("nodes must be >= 1 and gpus_per_node must be >= 1")]
-    BadShape,
-}
 
 fn gpu_free_bytes(g: &ferro_proto::Gpu) -> u64 {
     g.memory_total_b.saturating_sub(g.memory_used_b)

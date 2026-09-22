@@ -4,12 +4,17 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[lib]
+name = "ferro_controller"
+path = "src/lib.rs"
+
 [[bin]]
 name = "ferro-controller"
 path = "src/main.rs"
 
 [dependencies]
 ferro-proto.workspace = true
+ferro-sched.workspace = true
 tonic.workspace = true
 tonic-prost.workspace = true
 prost.workspace = true

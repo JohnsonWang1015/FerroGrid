@@ -1,10 +1,13 @@
 //! The `Controller` gRPC service: agent registration plus the CLI-facing API.
 
 use crate::registry::{now_s, Job, Registry};
-use crate::scheduler;
 use ferro_proto::controller_server::Controller;
 use ferro_proto::node_agent_client::NodeAgentClient;
 use ferro_proto::*;
+use ferro_sched as scheduler;
+use ferro_sched::{
+    PlacementDecision, PlacementPolicy, PlacementRequest, SchedulerConfig, SchedulingContext, Shape,
+};
 use std::collections::{BTreeSet, VecDeque};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -15,9 +18,12 @@ use tonic::{Request, Response, Status};
 pub struct ControllerService {
     pub registry: Arc<Registry>,
     pub plugins: crate::plugins::Registry,
-    pub master_port: u32,
     pub heartbeat_interval_s: u32,
-    pub min_free_vram_b: u64,
+    pub sched: SchedulerConfig,
+    /// Which placement policy answers "where should this job run?". Swappable
+    /// so the same controller can be run under a different strategy without a
+    /// second code path.
+    pub placement: Arc<dyn PlacementPolicy>,
 }
 
 type LogStream = Pin<Box<dyn Stream<Item = Result<LogLine, Status>> + Send>>;
@@ -96,7 +102,7 @@ impl Controller for ControllerService {
 
         let nodes = self.registry.node_states().await;
         let (plan_result, node_verdicts) =
-            plan_for(&nodes, &req, self.master_port, self.min_free_vram_b);
+            plan_for(&nodes, &req, &*self.placement, &self.sched, now_s());
 
         // This is a request-shape error, not a temporary capacity miss. Keep
         // it outside the queue path so --wait cannot retry it forever.
@@ -113,7 +119,7 @@ impl Controller for ControllerService {
         }
 
         let plan = match plan_result {
-            Ok(plan) => plan,
+            Ok(decision) => decision.plan,
             // Nothing fits right now. With `--wait` that is a queue rather
             // than a failure: on a shared cluster "full" is the normal state,
             // and resubmitting by hand at 03:00 is not a scheduling policy.
@@ -868,48 +874,56 @@ async fn describe_on(addr: &str, pid: u32) -> Result<ProcessDetail, String> {
         .into_inner())
 }
 
-/// Ask the scheduler where this job goes. Auto mode picks the shape itself,
-/// which is why the caller cannot precompute it.
+/// Ask the placement policy where this job goes, and collect the per-node
+/// ledger explaining what each node could or could not offer.
+///
+/// Auto mode lets the policy pick the shape, which is why the caller cannot
+/// precompute it. The verdicts are gathered either way: they are the only
+/// useful thing to show a user whose job did not fit.
 fn plan_for(
     nodes: &[NodeState],
     req: &SubmitJobRequest,
-    master_port: u32,
-    min_free_vram_b: u64,
-) -> (Result<JobPlan, scheduler::ScheduleError>, Vec<NodeVerdict>) {
+    placement: &dyn PlacementPolicy,
+    sched: &SchedulerConfig,
+    now: i64,
+) -> (
+    Result<PlacementDecision, scheduler::ScheduleError>,
+    Vec<NodeVerdict>,
+) {
     let gpus_per_node = if req.auto_place { 1 } else { req.gpus_per_node };
-    let verdicts =
-        scheduler::node_verdicts(nodes, gpus_per_node, &req.node_filter, min_free_vram_b);
-    let plan = if req.auto_place {
-        scheduler::plan_auto(
-            nodes,
-            &req.node_filter,
-            master_port,
-            min_free_vram_b,
+    let verdicts = scheduler::node_verdicts(
+        nodes,
+        gpus_per_node,
+        &req.node_filter,
+        sched.min_free_vram_b,
+    );
+    let shape = if req.auto_place {
+        Shape::Auto {
             // gpus_per_node doubles as a cap in auto mode when set.
-            if req.gpus_per_node > 0 {
+            max_gpus: if req.gpus_per_node > 0 {
                 req.gpus_per_node
             } else {
                 u32::MAX
             },
-        )
+        }
     } else {
-        scheduler::plan(
-            nodes,
-            req.nodes,
-            req.gpus_per_node,
-            &req.node_filter,
-            master_port,
-            min_free_vram_b,
-        )
+        Shape::Explicit {
+            nodes: req.nodes,
+            gpus_per_node: req.gpus_per_node,
+        }
     };
-    (plan, verdicts)
+    let request = PlacementRequest {
+        shape,
+        node_filter: req.node_filter.clone(),
+    };
+    let ctx = SchedulingContext::new(now, nodes, sched);
+    (placement.place(&request, &ctx), verdicts)
 }
 
+/// Whether `--wait` should keep holding this job. Capacity frees up; a
+/// malformed request never will, so only the former may sit in the queue.
 fn retryable_schedule_error(error: &scheduler::ScheduleError) -> bool {
-    matches!(
-        error,
-        scheduler::ScheduleError::NoNodes | scheduler::ScheduleError::NotEnoughNodes { .. }
-    )
+    error.is_capacity()
 }
 
 fn validate_image_override_request(req: &SubmitJobRequest) -> Result<(), String> {
@@ -1121,10 +1135,15 @@ async fn start_job(
 
 /// Places jobs submitted with `--wait` as the cluster frees up.
 ///
-/// Deliberately FIFO and one pass per tick: fancier policies (backfill,
-/// priorities) need a fairness story this cluster has not asked for, and
-/// "whoever waited longest goes next" is the one rule nobody argues with.
-pub async fn run_queue(registry: std::sync::Arc<Registry>, master_port: u32, min_free_vram_b: u64) {
+/// One pass per tick, in whatever order the registry's queue policy ranks the
+/// waiting jobs. The order itself is not decided here -- that is the queue
+/// policy's job, and keeping it there is what lets the position a user was
+/// told stay consistent with the order they are actually served in.
+pub async fn run_queue(
+    registry: std::sync::Arc<Registry>,
+    placement: Arc<dyn PlacementPolicy>,
+    sched: SchedulerConfig,
+) {
     let mut tick = tokio::time::interval(std::time::Duration::from_secs(5));
     loop {
         tick.tick().await;
@@ -1140,9 +1159,10 @@ pub async fn run_queue(registry: std::sync::Arc<Registry>, master_port: u32, min
             // Re-read the cluster for every job: the one placed a moment ago
             // took GPUs the next one must not be handed as well.
             let nodes = registry.node_states().await;
-            let (plan_result, verdicts) = plan_for(&nodes, &req, master_port, min_free_vram_b);
+            let (plan_result, verdicts) = plan_for(&nodes, &req, &*placement, &sched, now_s());
             let plan = match plan_result {
-                Ok(plan) => {
+                Ok(decision) => {
+                    let plan = decision.plan;
                     if let Err(message) = validate_image_overrides(&req, &plan) {
                         registry
                             .update_queue_assessment(&job_id, verdicts, message.clone(), Vec::new())
