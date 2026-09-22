@@ -30,7 +30,7 @@ specification (§91). Newest entry first.
 
 | Check | Result |
 |---|---|
-| `cargo test --workspace` | **255 passed, 0 failed** (was 229; +26) |
+| `cargo test --workspace` | **262 passed, 0 failed** (was 229; +33) |
 | `cargo fmt --check` / `clippy -D warnings` | ✅ clean |
 | Pre-existing assertions modified | **none** |
 
@@ -50,8 +50,8 @@ Workload D, split by job class, which the earlier write-up did not do:
 | `opportunistic` | small (164) | **142 s** | 0.0 |
 | `strict` | distributed | 7 174 s | 0.0 |
 | `strict` | small | 7 537 s | 0.0 |
-| `reserved` | distributed | **6 910 s** | 3.3 |
-| `reserved` | small | 6 899 s | 1.1 |
+| `reserved` | distributed | **6 951 s** | 3.2 |
+| `reserved` | small | 6 997 s | 0.7 |
 
 **Phase 4 claimed opportunistic dispatch "costs an unbounded tail for large
 jobs" and that reservation "is what bounds it". That was wrong.** The claim came
@@ -63,10 +63,17 @@ The overtaking is real: 70 later arrivals start before a large job, on average.
 The *consequence* is not. Forbid overtaking entirely and those jobs wait 9 %
 less. Their wait is set by cluster saturation, not queue position.
 
-Reservation does exactly what it promises — overtaking falls to 3.3, large jobs
-improve 12 %, utilisation stays at 97.7 % — and charges the small jobs **48×**
+Reservation does exactly what it promises — overtaking falls to 3.2, large jobs
+improve 11 %, utilisation stays at 97.0 % — and charges the small jobs **49×**
 for it. On this workload that is a bad trade, which is why it ships opt-in with
 the default unmoved.
+
+The first implementation had only EASY's first backfill condition; the second —
+a candidate may use resources the reservation will not need anyway — was found
+missing *after* this conclusion was drawn. It was implemented and everything
+re-measured, because a verdict against half an algorithm is not a verdict.
+Completing it moved reservation from 90 % of the way to strict to 92 %: the
+arithmetic changed, the answer did not.
 
 ### Known limitations
 

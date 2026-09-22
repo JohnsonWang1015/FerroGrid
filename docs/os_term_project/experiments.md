@@ -197,7 +197,7 @@ ranking throughout, all three dispatch modes:
 | Dispatch | avg wait | p95 wait | GPU util | starved |
 |---|---|---|---|---|
 | `opportunistic` (default) | **1 529 s** | 10 801 s | **98.1 %** | **15** |
-| `reserved` | 6 901 s | 13 534 s | 97.7 % | 163 |
+| `reserved` | 6 989 s | 13 666 s | 97.0 % | 163 |
 | `strict` | 7 471 s | 14 169 s | 94.0 % | 165 |
 
 ### A correction to an earlier claim in this document
@@ -215,8 +215,8 @@ shows it is not:
 | `opportunistic` | small | 164 | **142 s** | 284 s | 0.0 |
 | `strict` | distributed | 36 | 7 174 s | 13 380 s | 0.0 |
 | `strict` | small | 164 | 7 537 s | 14 169 s | 0.0 |
-| `reserved` | distributed | 36 | **6 910 s** | 12 761 s | 3.3 |
-| `reserved` | small | 164 | 6 899 s | 13 534 s | 1.1 |
+| `reserved` | distributed | 36 | **6 951 s** | 13 101 s | 3.2 |
+| `reserved` | small | 164 | 6 997 s | 13 661 s | 0.7 |
 
 The aggregate p95 is not a tail at all — it is a **bimodal population**. Eighty-
 two per cent of the jobs are small and fast, eighteen per cent are large and
@@ -232,18 +232,36 @@ their place in line changes when the GPUs they need come free.
 
 ### What reservation actually buys
 
-Reservation does what it promises: overtaking drops from 70.9 to 3.3, and large
-jobs improve to 6 910 s — **12 % better than opportunistic**. It also keeps
-utilisation at 97.7 %, nearly all of what strict FIFO gives up, which is the
-backfilling half working correctly.
+Reservation does what it promises: overtaking drops from 70.9 to 3.2, and large
+jobs improve to 6 951 s — **11 % better than opportunistic**, against the 9 %
+that forbidding overtaking altogether achieves. It keeps utilisation at 97.0 %,
+nearly all of what strict FIFO gives up, which is the backfilling half working.
 
-The cost is the small jobs: **142 s → 6 899 s, a factor of 48.**
+The cost is the small jobs: **142 s → 6 997 s, a factor of 49.**
 
 So the answer to RQ4 — *can backfilling improve utilisation without
 significantly delaying large distributed jobs?* — is that FerroGrid's existing
 opportunistic backfilling already achieves 98.1 % utilisation and delays large
 jobs by 9 % relative to never overtaking them at all. Adding reservation to
 protect them recovers most of that 9 %, and charges every other job 48× for it.
+
+#### This conclusion was attacked before it was kept
+
+The first implementation had only EASY's *first* backfill condition — a
+candidate may start if it proves it finishes before the reservation's earliest
+start. The **second** was missing: a candidate may also start if it uses only
+resources the reservation will not need anyway, which is non-zero whenever the
+job that unblocks the reservation overshoots.
+
+That gap was found *after* this section first drew its conclusion, and it
+mattered: a verdict measured against half an algorithm is not a verdict. The
+condition was implemented — slack at the reservation's earliest start, spent by
+the jobs that take it — and everything above was re-measured against the
+complete version.
+
+It changed the arithmetic and not the answer. Small jobs pay 49× instead of 48×;
+reserved moved from 90 % of the way to strict to 92 %. **Completing the
+algorithm made reservation marginally worse on this workload, not better.**
 
 **On this workload reservation is not worth having**, which is why it is opt-in
 and the default did not move. It is implemented, tested and available for

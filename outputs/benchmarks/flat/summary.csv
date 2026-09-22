@@ -1,6 +1,6 @@
 scenario,queue_policy,placement_policy,dispatch,seed,jobs,cluster_gpus,jobs_completed,jobs_failed,jobs_never_started,avg_wait_s,p50_wait_s,p95_wait_s,max_wait_s,avg_turnaround_s,p95_turnaround_s,makespan_s,gpu_utilisation,throughput_per_hour,jain_fairness,wait_fairness,heavy_user_wait_ratio,starved_jobs,jobs_overtaken_often,max_overtaken_by,fragmentation,mean_slowdown,scheduler_us_per_pass,scheduling_passes,git_commit
-E-heterogeneous,fifo,performance,opportunistic,1005,180,5,180,0,0,4181.7,2941.0,12607.0,14144.0,4578.9,13031.0,20600,0.8968,31.46,0.9470,1.0000,1.010,78,32,129,0.047,1.000,14.9,349,5132767-dirty
-E-heterogeneous,fifo,first-fit,opportunistic,1005,180,5,180,0,0,4181.7,2941.0,12607.0,14144.0,4578.9,13031.0,20600,0.8968,31.46,0.9470,1.0000,1.010,78,32,129,0.023,1.000,13.1,349,5132767-dirty
-E-heterogeneous,fifo,best-fit,opportunistic,1005,180,5,180,0,0,4181.7,2941.0,12607.0,14144.0,4578.9,13031.0,20600,0.8968,31.46,0.9470,1.0000,1.010,78,32,129,0.023,1.000,13.2,349,5132767-dirty
-E-heterogeneous,fifo,vram,opportunistic,1005,180,5,180,0,0,4181.7,2941.0,12607.0,14144.0,4578.9,13031.0,20600,0.8968,31.46,0.9470,1.0000,1.010,78,32,129,0.046,1.000,13.5,349,5132767-dirty
-E-heterogeneous,fifo,topology,opportunistic,1005,180,5,180,0,0,4181.7,2941.0,12607.0,14144.0,4578.9,13031.0,20600,0.8968,31.46,0.9470,1.0000,1.010,78,32,129,0.047,1.000,13.2,349,5132767-dirty
+E-heterogeneous,fifo,performance,opportunistic,1005,180,5,180,0,0,4181.7,2941.0,12607.0,14144.0,4578.9,13031.0,20600,0.8968,31.46,0.9470,1.0000,1.010,78,32,129,0.047,1.000,14.5,349,29fcac5-dirty
+E-heterogeneous,fifo,first-fit,opportunistic,1005,180,5,180,0,0,4181.7,2941.0,12607.0,14144.0,4578.9,13031.0,20600,0.8968,31.46,0.9470,1.0000,1.010,78,32,129,0.023,1.000,13.9,349,29fcac5-dirty
+E-heterogeneous,fifo,best-fit,opportunistic,1005,180,5,180,0,0,4181.7,2941.0,12607.0,14144.0,4578.9,13031.0,20600,0.8968,31.46,0.9470,1.0000,1.010,78,32,129,0.023,1.000,13.2,349,29fcac5-dirty
+E-heterogeneous,fifo,vram,opportunistic,1005,180,5,180,0,0,4181.7,2941.0,12607.0,14144.0,4578.9,13031.0,20600,0.8968,31.46,0.9470,1.0000,1.010,78,32,129,0.046,1.000,13.8,349,29fcac5-dirty
+E-heterogeneous,fifo,topology,opportunistic,1005,180,5,180,0,0,4181.7,2941.0,12607.0,14144.0,4578.9,13031.0,20600,0.8968,31.46,0.9470,1.0000,1.010,78,32,129,0.047,1.000,13.1,349,29fcac5-dirty
