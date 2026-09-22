@@ -496,10 +496,51 @@ impl Registry {
         }
     }
 
-    /// Optimistically mark GPUs busy at submit time so two back-to-back
-    /// submissions cannot both be handed the same devices.
-    pub async fn reserve(&self, plan: &JobPlan, job_id: &str) {
+    /// Take exactly the GPUs in `plan`, or take none of them.
+    ///
+    /// Placement runs outside this lock -- it is pure CPU work over a snapshot,
+    /// and holding the lock across it would serialise every queued job's
+    /// planning for no benefit. That leaves a window in which another
+    /// submission can claim a card this plan wanted, so the reservation
+    /// verifies its own precondition here rather than assuming it: a
+    /// compare-and-swap against the real ownership, not against a version
+    /// counter that every heartbeat would bump.
+    ///
+    /// All-or-nothing matters as much as the check. A partial reservation would
+    /// leave this job owning cards it will never launch on, and the release
+    /// that follows a failure clears by job id -- which is how an unconditional
+    /// overwrite used to end with one job releasing another job's GPUs.
+    pub async fn reserve_exact(&self, plan: &JobPlan, job_id: &str) -> Result<(), ReserveConflict> {
         let mut g = self.inner.lock().await;
+
+        // Check everything before touching anything.
+        for p in &plan.placements {
+            let node = g
+                .nodes
+                .get(&p.node_id)
+                .ok_or_else(|| ReserveConflict::NodeGone {
+                    node_id: p.node_id.clone(),
+                })?;
+            for index in &p.gpu_indices {
+                let gpu = node
+                    .info
+                    .gpus
+                    .iter()
+                    .find(|g| g.index == *index)
+                    .ok_or_else(|| ReserveConflict::GpuGone {
+                        node_id: p.node_id.clone(),
+                        gpu_index: *index,
+                    })?;
+                if !gpu.allocated_job_id.is_empty() && gpu.allocated_job_id != job_id {
+                    return Err(ReserveConflict::AlreadyHeld {
+                        node_id: p.node_id.clone(),
+                        gpu_index: *index,
+                        holder: gpu.allocated_job_id.clone(),
+                    });
+                }
+            }
+        }
+
         for p in &plan.placements {
             if let Some(node) = g.nodes.get_mut(&p.node_id) {
                 for gpu in node.info.gpus.iter_mut() {
@@ -509,7 +550,25 @@ impl Registry {
                 }
             }
         }
+        Ok(())
     }
+}
+
+/// Why a reservation was refused. Every variant means the same thing to a
+/// caller -- the snapshot this plan was built from is stale -- but they are
+/// worth telling apart in a log when a cluster is misbehaving.
+#[derive(Debug, thiserror::Error)]
+pub enum ReserveConflict {
+    #[error("{node_id} GPU {gpu_index} was taken by {holder} while this job was being planned")]
+    AlreadyHeld {
+        node_id: String,
+        gpu_index: u32,
+        holder: String,
+    },
+    #[error("{node_id} is no longer registered")]
+    NodeGone { node_id: String },
+    #[error("{node_id} no longer reports GPU {gpu_index}")]
+    GpuGone { node_id: String, gpu_index: u32 },
 }
 
 impl RegistryInner {

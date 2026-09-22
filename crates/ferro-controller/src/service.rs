@@ -1060,6 +1060,27 @@ async fn start_job(
     job_id: &str,
     plan: &JobPlan,
 ) -> Result<(), String> {
+    // Take the cards first. All-or-nothing, and refused outright if another
+    // submission claimed one while this plan was being built -- the snapshot
+    // is then stale and the only honest answer is to plan again.
+    registry
+        .reserve_exact(plan, job_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    dispatch_ranks(registry, req, job_id, plan).await
+}
+
+/// Launch every rank of an already-reserved plan.
+///
+/// Split from the reservation because the queue dispatcher needs to reserve
+/// first and decide what to do about a conflict *before* the job stops being
+/// queued: a job that lost a race should go back in line, not fail.
+async fn dispatch_ranks(
+    registry: &Registry,
+    req: &SubmitJobRequest,
+    job_id: &str,
+    plan: &JobPlan,
+) -> Result<(), String> {
     // Auto mode decides the shape, so the launch requests must follow the
     // plan rather than what the caller asked for.
     let nnodes = plan.placements.len() as u32;
@@ -1068,10 +1089,6 @@ async fn start_job(
         .first()
         .map(|p| p.gpu_indices.len() as u32)
         .unwrap_or(0);
-
-    // Reserve before dispatching, so a second submission racing this one
-    // sees the GPUs as taken instead of planning onto the same devices.
-    registry.reserve(plan, job_id).await;
 
     // Launch rank 0 first: it hosts the rendezvous, and starting the other
     // ranks against a master that is not up yet just burns retry timeout.
@@ -1160,7 +1177,7 @@ pub async fn run_queue(
             // took GPUs the next one must not be handed as well.
             let nodes = registry.node_states().await;
             let (plan_result, verdicts) = plan_for(&nodes, &req, &*placement, &sched, now_s());
-            let plan = match plan_result {
+            let (plan, verdicts) = match plan_result {
                 Ok(decision) => {
                     let plan = decision.plan;
                     if let Err(message) = validate_image_overrides(&req, &plan) {
@@ -1173,9 +1190,9 @@ pub async fn run_queue(
 
                     let warnings = compatibility_warnings(&nodes, &plan);
                     registry
-                        .update_queue_assessment(&job_id, verdicts, String::new(), warnings)
+                        .update_queue_assessment(&job_id, verdicts.clone(), String::new(), warnings)
                         .await;
-                    plan
+                    (plan, verdicts)
                 }
                 Err(e) => {
                     let message = e.to_string();
@@ -1188,9 +1205,21 @@ pub async fn run_queue(
                     continue;
                 }
             };
+            // Reserve before promoting. A job that lost the cards to a racing
+            // submission belongs back in line, not in the failed list: it did
+            // nothing wrong, and it is still waiting for exactly what it asked
+            // for. The next tick plans it again against fresh state.
+            if let Err(conflict) = registry.reserve_exact(&plan, &job_id).await {
+                tracing::info!(job = %job_id, "still waiting: {conflict}");
+                registry
+                    .update_queue_assessment(&job_id, verdicts, conflict.to_string(), Vec::new())
+                    .await;
+                continue;
+            }
+
             registry.promote(&job_id, plan.clone()).await;
             tracing::info!(job = %job_id, world_size = plan.world_size, "capacity freed, launching");
-            if let Err(e) = start_job(&registry, &req, &job_id, &plan).await {
+            if let Err(e) = dispatch_ranks(&registry, &req, &job_id, &plan).await {
                 tracing::error!(job = %job_id, "queued job failed to launch: {e}");
             }
         }

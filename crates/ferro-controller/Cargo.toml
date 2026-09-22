@@ -32,3 +32,6 @@ thiserror.workspace = true
 toml.workspace = true
 
 [dev-dependencies]
+ferro-proto.workspace = true
+ferro-sched.workspace = true
+tokio.workspace = true
