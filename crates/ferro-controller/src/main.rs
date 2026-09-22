@@ -56,7 +56,12 @@ async fn main() -> Result<()> {
             "loaded {} plugin(s) from {}: {}",
             plugins.plugins.len(),
             p.display(),
-            plugins.plugins.keys().cloned().collect::<Vec<_>>().join(", ")
+            plugins
+                .plugins
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
         None => tracing::info!("no plugin config found; `ferro fetch`/`push` unavailable"),
     }

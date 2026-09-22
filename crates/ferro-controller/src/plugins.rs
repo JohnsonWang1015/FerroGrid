@@ -84,9 +84,12 @@ impl Registry {
             }
             let text = std::fs::read_to_string(&path)
                 .with_context(|| format!("read {}", path.display()))?;
-            let plugins: BTreeMap<String, Plugin> = toml::from_str(&text)
-                .with_context(|| format!("parse {}", path.display()))?;
-            return Ok(Self { plugins, source: Some(path) });
+            let plugins: BTreeMap<String, Plugin> =
+                toml::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
+            return Ok(Self {
+                plugins,
+                source: Some(path),
+            });
         }
 
         // No config is not an error: the cluster simply has no plugins.
@@ -122,7 +125,9 @@ mod tests {
 
     #[test]
     fn substitutes_whole_argv_elements() {
-        let argv = nextcloud().argv("fetch", "Datasets/adni", "/data/adni").unwrap();
+        let argv = nextcloud()
+            .argv("fetch", "Datasets/adni", "/data/adni")
+            .unwrap();
         assert_eq!(
             argv,
             vec!["ncfetch", "mirror", "Datasets/adni", "--out", "/data/adni"]

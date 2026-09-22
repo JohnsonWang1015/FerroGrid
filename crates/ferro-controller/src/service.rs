@@ -544,7 +544,7 @@ impl Controller for ControllerService {
                     Ok(r) => results.extend(r.into_inner().results),
                     Err(e) => results.push(GpuBenchmark {
                         node_id,
-                        error: format!("{}", e.message()),
+                        error: e.message().to_string(),
                         ..Default::default()
                     }),
                 },
@@ -1145,12 +1145,7 @@ pub async fn run_queue(registry: std::sync::Arc<Registry>, master_port: u32, min
                 Ok(plan) => {
                     if let Err(message) = validate_image_overrides(&req, &plan) {
                         registry
-                            .update_queue_assessment(
-                                &job_id,
-                                verdicts,
-                                message.clone(),
-                                Vec::new(),
-                            )
+                            .update_queue_assessment(&job_id, verdicts, message.clone(), Vec::new())
                             .await;
                         registry.dequeue(&job_id, JobPhase::Failed, &message).await;
                         continue;
@@ -1165,12 +1160,7 @@ pub async fn run_queue(registry: std::sync::Arc<Registry>, master_port: u32, min
                 Err(e) => {
                     let message = e.to_string();
                     registry
-                        .update_queue_assessment(
-                            &job_id,
-                            verdicts,
-                            message.clone(),
-                            Vec::new(),
-                        )
+                        .update_queue_assessment(&job_id, verdicts, message.clone(), Vec::new())
                         .await;
                     if !retryable_schedule_error(&e) {
                         registry.dequeue(&job_id, JobPhase::Failed, &message).await;
@@ -1227,7 +1217,7 @@ async fn dispatch(addr: &str, req: LaunchJobRequest) -> Result<(), String> {
     let resp = client
         .launch_job(req)
         .await
-        .map_err(|e| format!("{}", e.message()))?;
+        .map_err(|e| e.message().to_string())?;
     let resp = resp.into_inner();
     if resp.launched {
         Ok(())
@@ -1254,7 +1244,7 @@ async fn exec_plugin_on(
             timeout_s,
         })
         .await
-        .map_err(|e| format!("{}", e.message()))?
+        .map_err(|e| e.message().to_string())?
         .into_inner();
     Ok((resp.exit_code, resp.output, resp.error))
 }
@@ -1268,7 +1258,7 @@ async fn stop_on(addr: &str, job_id: &str) -> Result<(), String> {
             job_id: job_id.to_string(),
         })
         .await
-        .map_err(|e| format!("{}", e.message()))?;
+        .map_err(|e| e.message().to_string())?;
     Ok(())
 }
 
@@ -1367,6 +1357,8 @@ mod tests {
                 available: 0,
             }
         ));
-        assert!(!retryable_schedule_error(&scheduler::ScheduleError::BadShape));
+        assert!(!retryable_schedule_error(
+            &scheduler::ScheduleError::BadShape
+        ));
     }
 }

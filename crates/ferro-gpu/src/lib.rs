@@ -50,7 +50,12 @@ impl GpuMonitor {
                     }
                 };
                 tracing::info!("NVML initialised, {} GPU(s) detected", statics.len());
-                Self { nvml: Some(nvml), init_error: None, statics, util_cursor: Mutex::new(HashMap::new()) }
+                Self {
+                    nvml: Some(nvml),
+                    init_error: None,
+                    statics,
+                    util_cursor: Mutex::new(HashMap::new()),
+                }
             }
             Err(e) => {
                 tracing::warn!("NVML unavailable: {e}");
@@ -68,7 +73,9 @@ impl GpuMonitor {
         let count = nvml.device_count().context("nvml device_count")?;
         let mut out = Vec::with_capacity(count as usize);
         for index in 0..count {
-            let d = nvml.device_by_index(index).with_context(|| format!("device {index}"))?;
+            let d = nvml
+                .device_by_index(index)
+                .with_context(|| format!("device {index}"))?;
             let cc = d
                 .cuda_compute_capability()
                 .map(|c| format!("{}.{}", c.major, c.minor))
@@ -161,12 +168,17 @@ impl GpuMonitor {
         };
         let mut out = Vec::new();
         for s in &self.statics {
-            let Ok(d) = nvml.device_by_index(s.index) else { continue };
+            let Ok(d) = nvml.device_by_index(s.index) else {
+                continue;
+            };
             // Compute first: a pid doing both (a desktop running CUDA) is more
             // usefully reported as the thing that is training.
             for (graphics, procs) in [(false, compute_procs(&d)), (true, graphics_procs(&d))] {
                 for p in procs {
-                    if out.iter().any(|r: &RawProcess| r.gpu_index == s.index && r.pid == p.pid) {
+                    if out
+                        .iter()
+                        .any(|r: &RawProcess| r.gpu_index == s.index && r.pid == p.pid)
+                    {
                         continue;
                     }
                     out.push(RawProcess {
@@ -198,7 +210,9 @@ impl GpuMonitor {
         let mut answered = false;
 
         for s in &self.statics {
-            let Ok(d) = nvml.device_by_index(s.index) else { continue };
+            let Ok(d) = nvml.device_by_index(s.index) else {
+                continue;
+            };
             let since = cursor.get(&s.index).copied();
             match d.process_utilization_stats(since) {
                 Ok(samples) => {

@@ -469,8 +469,14 @@ mod tests {
 
     #[test]
     fn reports_the_effective_docker_image() {
-        assert_eq!(resolve_image("", "node/default:tag", false), "node/default:tag");
-        assert_eq!(resolve_image("requested:tag", "node/default:tag", false), "requested:tag");
+        assert_eq!(
+            resolve_image("", "node/default:tag", false),
+            "node/default:tag"
+        );
+        assert_eq!(
+            resolve_image("requested:tag", "node/default:tag", false),
+            "requested:tag"
+        );
         assert_eq!(resolve_image("requested:tag", "node/default:tag", true), "");
     }
 }

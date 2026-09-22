@@ -100,13 +100,13 @@ impl Job {
             return JobPhase::Launching;
         }
         let phases: Vec<JobPhase> = self.per_node.values().map(|s| s.phase()).collect();
-        if phases.iter().any(|p| *p == JobPhase::Failed) {
+        if phases.contains(&JobPhase::Failed) {
             JobPhase::Failed
-        } else if phases.iter().any(|p| *p == JobPhase::Cancelled) {
+        } else if phases.contains(&JobPhase::Cancelled) {
             JobPhase::Cancelled
         } else if phases.iter().all(|p| *p == JobPhase::Succeeded) {
             JobPhase::Succeeded
-        } else if phases.iter().any(|p| *p == JobPhase::Running) {
+        } else if phases.contains(&JobPhase::Running) {
             JobPhase::Running
         } else {
             JobPhase::Pending
@@ -116,7 +116,7 @@ impl Job {
     pub fn to_summary(&self) -> JobSummary {
         let mut per_node: Vec<JobStatus> = self.per_node.values().cloned().collect();
         per_node.sort_by_key(|s| s.node_rank);
-        let mut metrics = self.metrics.clone();
+        let mut metrics = self.metrics;
         if self.util_n > 0 {
             metrics.avg_gpu_util_pct = self.util_sum / self.util_n as f64;
         }

@@ -119,7 +119,12 @@ pub async fn run(state: SharedState, force: bool) -> Result<Vec<GpuBenchmark>> {
             }
             Err(e) => (0.0, format!("{e:#}")),
         };
-        tracing::info!(gpu = gpu.index, tflops, "benchmark: {}", if error.is_empty() { "ok" } else { &error });
+        tracing::info!(
+            gpu = gpu.index,
+            tflops,
+            "benchmark: {}",
+            if error.is_empty() { "ok" } else { &error }
+        );
         out.push(GpuBenchmark {
             node_id: state.node_id.clone(),
             index: gpu.index,
@@ -146,12 +151,17 @@ async fn measure(state: &SharedState, index: u32) -> Result<f64> {
     } else {
         tokio::process::Command::new("docker")
             .args([
-                "run", "--rm",
-                "--gpus", &format!("\"device={index}\""),
+                "run",
+                "--rm",
+                "--gpus",
+                &format!("\"device={index}\""),
                 // The container sees one GPU, so it is always index 0 inside.
-                "-e", "FERRO_BENCH_GPU=0",
+                "-e",
+                "FERRO_BENCH_GPU=0",
                 &state.default_image,
-                "python", "-c", BENCH_PY,
+                "python",
+                "-c",
+                BENCH_PY,
             ])
             .output()
             .await
@@ -168,6 +178,10 @@ async fn measure(state: &SharedState, index: u32) -> Result<f64> {
     let stderr = String::from_utf8_lossy(&output.stderr);
     anyhow::bail!(
         "benchmark produced no result: {}",
-        stderr.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("(no output)")
+        stderr
+            .lines()
+            .rev()
+            .find(|l| !l.trim().is_empty())
+            .unwrap_or("(no output)")
     )
 }

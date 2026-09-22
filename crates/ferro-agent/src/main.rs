@@ -59,7 +59,11 @@ pub struct Args {
     heartbeat_secs: u64,
 
     /// Docker image used when the job does not specify one.
-    #[arg(long, env = "FERRO_DEFAULT_IMAGE", default_value = "pytorch/pytorch:2.9.1-cuda12.6-cudnn9-runtime")]
+    #[arg(
+        long,
+        env = "FERRO_DEFAULT_IMAGE",
+        default_value = "pytorch/pytorch:2.9.1-cuda12.6-cudnn9-runtime"
+    )]
     default_image: String,
 
     /// Root directory for job workspaces on this node. Relative script paths
@@ -77,8 +81,7 @@ pub struct Args {
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .init();
 
@@ -130,7 +133,10 @@ async fn heartbeat_loop(state: Arc<AgentState>, args: Args) {
         match ControllerClient::connect(args.controller.clone()).await {
             Ok(mut client) => {
                 let node = state.node_info().await;
-                match client.register_node(RegisterRequest { node: Some(node) }).await {
+                match client
+                    .register_node(RegisterRequest { node: Some(node) })
+                    .await
+                {
                     Ok(resp) => {
                         let resp = resp.into_inner();
                         if resp.heartbeat_interval_s > 0 {

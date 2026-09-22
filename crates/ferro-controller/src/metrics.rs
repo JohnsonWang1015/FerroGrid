@@ -67,7 +67,9 @@ pub fn merge(dst: &mut TrainingMetrics, src: TrainingMetrics) {
     dst.samples_per_s = keep(dst.samples_per_s, src.samples_per_s);
     dst.tokens_per_s = keep(dst.tokens_per_s, src.tokens_per_s);
     dst.step_time_ms = keep(dst.step_time_ms, src.step_time_ms);
-    dst.peak_vram_gb = dst.peak_vram_gb.max(keep(dst.peak_vram_gb, src.peak_vram_gb));
+    dst.peak_vram_gb = dst
+        .peak_vram_gb
+        .max(keep(dst.peak_vram_gb, src.peak_vram_gb));
     dst.updated_unix_s = src.updated_unix_s;
 }
 
@@ -109,18 +111,33 @@ mod tests {
 
     #[test]
     fn peak_vram_is_monotonic() {
-        let mut dst = TrainingMetrics { peak_vram_gb: 10.0, ..Default::default() };
-        merge(&mut dst, parse_metric_line(r#"FERRO_METRIC {"peak_vram_gb": 4.0}"#).unwrap());
+        let mut dst = TrainingMetrics {
+            peak_vram_gb: 10.0,
+            ..Default::default()
+        };
+        merge(
+            &mut dst,
+            parse_metric_line(r#"FERRO_METRIC {"peak_vram_gb": 4.0}"#).unwrap(),
+        );
         assert!((dst.peak_vram_gb - 10.0).abs() < 1e-9);
-        merge(&mut dst, parse_metric_line(r#"FERRO_METRIC {"peak_vram_gb": 18.0}"#).unwrap());
+        merge(
+            &mut dst,
+            parse_metric_line(r#"FERRO_METRIC {"peak_vram_gb": 18.0}"#).unwrap(),
+        );
         assert!((dst.peak_vram_gb - 18.0).abs() < 1e-9);
     }
 
     #[test]
     fn detects_nccl_failures() {
-        assert!(is_nccl_error("[rank1]: NCCL WARN Connect to 10.0.0.2 failed"));
-        assert!(is_nccl_error("torch.distributed.DistBackendError: NCCL error"));
-        assert!(is_nccl_error("[rank0]: ncclSystemError: System call failed"));
+        assert!(is_nccl_error(
+            "[rank1]: NCCL WARN Connect to 10.0.0.2 failed"
+        ));
+        assert!(is_nccl_error(
+            "torch.distributed.DistBackendError: NCCL error"
+        ));
+        assert!(is_nccl_error(
+            "[rank0]: ncclSystemError: System call failed"
+        ));
         assert!(!is_nccl_error("training step 3 loss 1.2"));
     }
 

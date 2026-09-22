@@ -370,7 +370,7 @@ pub fn jobs(list: &[JobSummary], json: bool) -> String {
         let v: Vec<_> = list
             .iter()
             .map(|j| {
-                let m = j.metrics.clone().unwrap_or_default();
+                let m = j.metrics.unwrap_or_default();
                 serde_json::json!({
                     "job_id": j.job_id,
                     "name": j.name,
@@ -407,7 +407,7 @@ pub fn jobs(list: &[JobSummary], json: bool) -> String {
     ]);
     for j in list {
         let p = j.plan.clone().unwrap_or_default();
-        let m = j.metrics.clone().unwrap_or_default();
+        let m = j.metrics.unwrap_or_default();
         t.add_row(vec![
             Cell::new(&j.job_id),
             Cell::new(&j.name),
@@ -426,7 +426,10 @@ pub fn jobs(list: &[JobSummary], json: bool) -> String {
     }
     let mut out = String::new();
     line!(out, "{t}");
-    for j in list.iter().filter(|j| j.queued && !j.queue_message.is_empty()) {
+    for j in list
+        .iter()
+        .filter(|j| j.queued && !j.queue_message.is_empty())
+    {
         line!(out, "{} waiting: {}", j.job_id, j.queue_message);
     }
     out
@@ -434,7 +437,7 @@ pub fn jobs(list: &[JobSummary], json: bool) -> String {
 
 pub fn job_detail(j: &JobSummary, json: bool) -> String {
     if json {
-        let m = j.metrics.clone().unwrap_or_default();
+        let m = j.metrics.unwrap_or_default();
         let p = j.plan.clone().unwrap_or_default();
         return dump(&serde_json::json!({
             "job_id": j.job_id,
@@ -527,7 +530,7 @@ pub fn job_detail(j: &JobSummary, json: bool) -> String {
     }
     line!(out, "{t}");
 
-    let m = j.metrics.clone().unwrap_or_default();
+    let m = j.metrics.unwrap_or_default();
     let mut mt = table(&[
         "STEP",
         "LOSS",
@@ -701,11 +704,9 @@ pub fn dashboard(nodes: &[NodeState], gpus: &[GpuEntry], jobs: &[JobSummary]) ->
             11..=70 => Color::Yellow,
             _ => Color::Green,
         };
-        let mem_pct = if g.memory_total_b > 0 {
-            (g.memory_used_b * 100 / g.memory_total_b) as u32
-        } else {
-            0
-        };
+        let mem_pct = (g.memory_used_b * 100)
+            .checked_div(g.memory_total_b)
+            .unwrap_or(0) as u32;
         t.add_row(vec![
             Cell::new(&e.node_id),
             Cell::new(g.index),
@@ -739,7 +740,7 @@ pub fn dashboard(nodes: &[NodeState], gpus: &[GpuEntry], jobs: &[JobSummary]) ->
         "NCCL ERR",
     ]);
     for j in live {
-        let m = j.metrics.clone().unwrap_or_default();
+        let m = j.metrics.unwrap_or_default();
         let p = j.plan.clone().unwrap_or_default();
         jt.add_row(vec![
             Cell::new(&j.job_id),
@@ -785,7 +786,7 @@ pub fn processes(procs: &[ProcessEntry], json: bool) -> String {
         let v: Vec<_> = procs
             .iter()
             .map(|p| {
-                let m = p.metrics.clone().unwrap_or_default();
+                let m = p.metrics.unwrap_or_default();
                 serde_json::json!({
                     "job_id": p.job_id,
                     "external": p.external,
@@ -827,7 +828,7 @@ pub fn processes(procs: &[ProcessEntry], json: bool) -> String {
         "VRAM", "STEP", "TOKENS/S",
     ]);
     for p in procs {
-        let m = p.metrics.clone().unwrap_or_default();
+        let m = p.metrics.unwrap_or_default();
         let util = if p.external && p.proc_util_known {
             p.proc_util_pct.round() as u32
         } else {

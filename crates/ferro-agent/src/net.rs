@@ -23,7 +23,9 @@ const CHUNK: usize = 4 << 20;
 /// It accepts exactly one peer and goes away on its own: the alternative is a
 /// permanently open port on every GPU node that reads whatever it is given.
 pub async fn sink(seconds: u32) -> Result<u16> {
-    let listener = TcpListener::bind(("0.0.0.0", 0)).await.context("bind sink")?;
+    let listener = TcpListener::bind(("0.0.0.0", 0))
+        .await
+        .context("bind sink")?;
     let port = listener.local_addr().context("sink addr")?.port();
 
     tokio::spawn(async move {
@@ -31,7 +33,9 @@ pub async fn sink(seconds: u32) -> Result<u16> {
         // happens -- a probe that dies mid-run must not leave this behind.
         let budget = Duration::from_secs(seconds as u64 + 10);
         let _ = tokio::time::timeout(budget, async move {
-            let Ok((mut stream, _)) = listener.accept().await else { return };
+            let Ok((mut stream, _)) = listener.accept().await else {
+                return;
+            };
             let mut buf = vec![0u8; CHUNK];
             while let Ok(n) = stream.read(&mut buf).await {
                 if n == 0 {
@@ -81,7 +85,11 @@ pub fn mbps(bytes: u64, seconds: f64) -> f64 {
 pub fn link_speed_mbps(iface: &str) -> Option<u32> {
     let raw = std::fs::read_to_string(format!("/sys/class/net/{iface}/speed")).ok()?;
     // Virtual and down interfaces report -1 here rather than failing.
-    raw.trim().parse::<i64>().ok().filter(|v| *v > 0).map(|v| v as u32)
+    raw.trim()
+        .parse::<i64>()
+        .ok()
+        .filter(|v| *v > 0)
+        .map(|v| v as u32)
 }
 
 #[cfg(test)]

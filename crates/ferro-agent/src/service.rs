@@ -5,9 +5,9 @@ use crate::state::SharedState;
 use ferro_proto::node_agent_server::NodeAgent;
 use ferro_proto::{
     BenchmarkRequest, BenchmarkResponse, DescribeProcessRequest, ExecPluginRequest,
-    ExecPluginResponse, GetNodeInfoRequest, LaunchJobRequest, LaunchJobResponse, NetProbeRequest,
-    NetProbeResponse, NetSinkRequest, NetSinkResponse, NodeInfo, PingRequest, PingResponse,
-    Gpu, ProcessDetail, StopJobRequest, StopJobResponse,
+    ExecPluginResponse, GetNodeInfoRequest, Gpu, LaunchJobRequest, LaunchJobResponse,
+    NetProbeRequest, NetProbeResponse, NetSinkRequest, NetSinkResponse, NodeInfo, PingRequest,
+    PingResponse, ProcessDetail, StopJobRequest, StopJobResponse,
 };
 use tonic::{Request, Response, Status};
 
@@ -57,9 +57,7 @@ impl NodeAgent for AgentService {
         if !req.gpu_uuids.is_empty() {
             match check_gpu_uuids(&req, &self.state.gpu_snapshot().await) {
                 Ok(()) => {}
-                Err(GpuUuidError::Shape(message)) => {
-                    return Err(Status::invalid_argument(message))
-                }
+                Err(GpuUuidError::Shape(message)) => return Err(Status::invalid_argument(message)),
                 Err(GpuUuidError::Mismatch(message)) => {
                     return Err(Status::failed_precondition(message))
                 }
@@ -232,6 +230,33 @@ fn check_gpu_uuids(req: &LaunchJobRequest, snapshot: &[Gpu]) -> Result<(), GpuUu
     Ok(())
 }
 
+fn expand_home(path: &str) -> String {
+    match path.strip_prefix("~/") {
+        Some(rest) => match std::env::var("HOME") {
+            Ok(home) => format!("{home}/{rest}"),
+            Err(_) => path.to_string(),
+        },
+        None => path.to_string(),
+    }
+}
+
+/// Keep the end of a transfer tool's output: progress bars can run to
+/// megabytes, and the part that says what went wrong is at the bottom.
+fn tail(s: &str) -> String {
+    const MAX: usize = 8 * 1024;
+    let s = s.trim_end();
+    if s.len() <= MAX {
+        return s.to_string();
+    }
+    let cut = s.len() - MAX;
+    let start = s
+        .char_indices()
+        .find(|(i, _)| *i >= cut)
+        .map(|(i, _)| i)
+        .unwrap_or(s.len());
+    format!("...(truncated)\n{}", &s[start..])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -263,43 +288,15 @@ mod tests {
 
     #[test]
     fn gpu_uuid_check_rejects_a_changed_device() {
-        let error = check_gpu_uuids(
-            &request(&[0], &["old-uuid"]),
-            &[gpu(0, "new-uuid")],
-        )
-        .unwrap_err();
-        assert!(matches!(error, GpuUuidError::Mismatch(message) if message.contains("UUID changed")));
+        let error =
+            check_gpu_uuids(&request(&[0], &["old-uuid"]), &[gpu(0, "new-uuid")]).unwrap_err();
+        assert!(
+            matches!(error, GpuUuidError::Mismatch(message) if message.contains("UUID changed"))
+        );
     }
 
     #[test]
     fn gpu_uuid_check_keeps_old_clients_compatible() {
         assert!(check_gpu_uuids(&request(&[0], &[]), &[gpu(0, "uuid-0")]).is_ok());
     }
-}
-
-fn expand_home(path: &str) -> String {
-    match path.strip_prefix("~/") {
-        Some(rest) => match std::env::var("HOME") {
-            Ok(home) => format!("{home}/{rest}"),
-            Err(_) => path.to_string(),
-        },
-        None => path.to_string(),
-    }
-}
-
-/// Keep the end of a transfer tool's output: progress bars can run to
-/// megabytes, and the part that says what went wrong is at the bottom.
-fn tail(s: &str) -> String {
-    const MAX: usize = 8 * 1024;
-    let s = s.trim_end();
-    if s.len() <= MAX {
-        return s.to_string();
-    }
-    let cut = s.len() - MAX;
-    let start = s
-        .char_indices()
-        .find(|(i, _)| *i >= cut)
-        .map(|(i, _)| i)
-        .unwrap_or(s.len());
-    format!("...(truncated)\n{}", &s[start..])
 }

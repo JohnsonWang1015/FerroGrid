@@ -63,10 +63,7 @@ impl AgentState {
             .map(|(h, _)| h.to_string())
             .unwrap_or_else(|| advertise.clone());
         let nccl_ip = args.nccl_ip.clone().unwrap_or(advertise_ip);
-        let nccl_ifname = args
-            .nccl_ifname
-            .clone()
-            .or_else(|| detect_ifname(&nccl_ip));
+        let nccl_ifname = args.nccl_ifname.clone().or_else(|| detect_ifname(&nccl_ip));
 
         match &nccl_ifname {
             Some(n) => tracing::info!("NCCL will use interface {n} ({nccl_ip})"),
@@ -147,7 +144,12 @@ impl AgentState {
     }
 
     pub async fn job_statuses(&self) -> Vec<JobStatus> {
-        self.jobs.lock().await.values().map(|j| j.status.clone()).collect()
+        self.jobs
+            .lock()
+            .await
+            .values()
+            .map(|j| j.status.clone())
+            .collect()
     }
 
     /// GPUs held by live jobs; the controller schedules around these but the
@@ -208,8 +210,12 @@ fn detect_ifname(ip: &str) -> Option<String> {
     for line in String::from_utf8_lossy(&out.stdout).lines() {
         let tokens: Vec<&str> = line.split_whitespace().collect();
         let Some(name) = tokens.get(1) else { continue };
-        let Some(pos) = tokens.iter().position(|t| *t == "inet") else { continue };
-        let Some(cidr) = tokens.get(pos + 1) else { continue };
+        let Some(pos) = tokens.iter().position(|t| *t == "inet") else {
+            continue;
+        };
+        let Some(cidr) = tokens.get(pos + 1) else {
+            continue;
+        };
         if cidr.split('/').next() == Some(ip) {
             return Some(name.to_string());
         }
@@ -240,7 +246,11 @@ fn detect_local_ip(endpoint: &str) -> Result<String> {
     let sock = std::net::UdpSocket::bind("0.0.0.0:0").context("bind probe socket")?;
     sock.connect(&addr)
         .with_context(|| format!("route probe to {addr}"))?;
-    Ok(sock.local_addr().context("probe local_addr")?.ip().to_string())
+    Ok(sock
+        .local_addr()
+        .context("probe local_addr")?
+        .ip()
+        .to_string())
 }
 
 fn read_mem_total_bytes() -> u64 {
