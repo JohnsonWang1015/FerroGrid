@@ -1,0 +1,31 @@
+[package]
+name = "ferro-sim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Offline evaluation of the scheduling policies.
+#
+# This crate drives the *same* `ferro-sched` policy objects the controller
+# runs. It does not reimplement scheduling, and a change here that makes a
+# published comparison look better without changing `ferro-sched` is a bug in
+# the experiment, not a result.
+#
+# It owns its own PRNG rather than taking a dependency on one, because a
+# reproducibility claim that depends on a third party's unspecified algorithm
+# staying identical across versions is not a reproducibility claim.
+[lib]
+name = "ferro_sim"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ferro-sim"
+path = "src/main.rs"
+
+[dependencies]
+ferro-proto.workspace = true
+ferro-sched.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+clap.workspace = true
+anyhow.workspace = true

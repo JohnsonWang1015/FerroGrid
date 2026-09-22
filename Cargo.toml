@@ -4,6 +4,7 @@ members = [
     "crates/ferro-proto",
     "crates/ferro-gpu",
     "crates/ferro-sched",
+    "crates/ferro-sim",
     "crates/ferro-agent",
     "crates/ferro-controller",
     "crates/ferro-cli",
@@ -18,6 +19,7 @@ license = "Apache-2.0"
 ferro-proto = { path = "crates/ferro-proto" }
 ferro-gpu = { path = "crates/ferro-gpu" }
 ferro-sched = { path = "crates/ferro-sched" }
+ferro-sim = { path = "crates/ferro-sim" }
 
 tonic = "0.14"
 tonic-prost = "0.14"
