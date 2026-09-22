@@ -1,0 +1,901 @@
+scenario,queue_policy,placement_policy,dispatch,job_id,user,class,priority,gpus,arrival_s,start_s,end_s,duration_s,nominal_duration_s,wait_s,turnaround_s,overtaken_by,failed,nodes
+E-heterogeneous,fifo,performance,opportunistic,j0000,bob,paired,50,2,7,7,686,679,679,0,679,0,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0001,alice,single,50,1,10,10,487,477,477,0,477,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0002,bob,single,50,1,33,33,274,241,241,0,241,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0003,bob,single,50,1,42,42,172,130,130,0,130,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0004,bob,paired,50,2,73,686,1162,476,476,613,1089,5,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0005,bob,paired,50,2,84,784,1202,418,418,700,1118,6,false,gpu-c gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0006,bob,single,50,1,106,172,538,366,366,66,432,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0007,bob,paired,50,2,278,1162,1587,425,425,884,1309,5,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0008,bob,single,50,1,293,293,602,309,309,0,309,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0009,alice,single,50,1,404,487,784,297,297,83,380,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0010,bob,single,50,1,418,538,784,246,246,120,366,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0011,bob,single,50,1,486,602,759,157,157,116,273,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0012,bob,single,50,1,488,759,1307,548,548,271,819,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0013,alice,single,50,1,505,1202,1644,442,442,697,1139,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0014,bob,single,50,1,545,1202,1694,492,492,657,1149,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0015,alice,single,50,1,576,1307,1451,144,144,731,875,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0016,alice,single,50,1,596,1451,1730,279,279,855,1134,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0017,alice,single,50,1,599,1587,1889,302,302,988,1290,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0018,alice,single,50,1,659,1587,1943,356,356,928,1284,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0019,alice,paired,50,2,668,10924,11319,395,395,10256,10651,129,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0020,alice,single,50,1,696,1644,2045,401,401,948,1349,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0021,bob,paired,50,2,715,10946,11766,820,820,10231,11051,128,false,gpu-b gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0022,alice,single,50,1,811,1694,2073,379,379,883,1262,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0023,alice,single,50,1,831,1730,1928,198,198,899,1097,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0024,bob,single,50,1,831,1889,2363,474,474,1058,1532,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0025,bob,single,50,1,844,1928,2062,134,134,1084,1218,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0026,alice,single,50,1,865,1943,2407,464,464,1078,1542,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0027,alice,single,50,1,879,2045,2313,268,268,1166,1434,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0028,bob,single,50,1,973,2062,2501,439,439,1089,1528,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0029,alice,single,50,1,1056,2073,2402,329,329,1017,1346,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0030,bob,paired,50,2,1079,11319,11958,639,639,10240,10879,120,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0031,bob,single,50,1,1101,2313,2470,157,157,1212,1369,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0032,alice,single,50,1,1122,2363,2862,499,499,1241,1740,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0033,alice,single,50,1,1249,2402,2651,249,249,1153,1402,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0034,alice,single,50,1,1258,2407,2923,516,516,1149,1665,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0035,bob,single,50,1,1334,2470,2771,301,301,1136,1437,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0036,bob,single,50,1,1341,2501,2974,473,473,1160,1633,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0037,alice,single,50,1,1345,2651,2999,348,348,1306,1654,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0038,bob,single,50,1,1397,2771,3031,260,260,1374,1634,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0039,bob,single,50,1,1401,2862,3453,591,591,1461,2052,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0040,alice,single,50,1,1405,2923,3136,213,213,1518,1731,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0041,bob,single,50,1,1410,2974,3309,335,335,1564,1899,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0042,bob,paired,50,2,1464,11766,12309,543,543,10302,10845,109,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0043,alice,single,50,1,1485,2999,3157,158,158,1514,1672,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0044,bob,single,50,1,1488,3031,3424,393,393,1543,1936,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0045,bob,single,50,1,1504,3136,3256,120,120,1632,1752,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0046,alice,single,50,1,1509,3157,3615,458,458,1648,2106,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0047,bob,paired,50,2,1542,11958,12397,439,439,10416,10855,105,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0048,alice,single,50,1,1562,3256,3525,269,269,1694,1963,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0049,bob,single,50,1,1590,3309,3815,506,506,1719,2225,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0050,alice,single,50,1,1619,3424,3602,178,178,1805,1983,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0051,bob,single,50,1,1666,3453,3934,481,481,1787,2268,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0052,alice,single,50,1,1723,3525,3854,329,329,1802,2131,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0053,alice,single,50,1,1770,3602,4069,467,467,1832,2299,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0054,bob,paired,50,2,1835,12309,12886,577,577,10474,11051,99,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0055,bob,paired,50,2,1869,12397,13279,882,882,10528,11410,99,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0056,bob,single,50,1,1894,3615,4094,479,479,1721,2200,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0057,alice,single,50,1,1910,3815,4066,251,251,1905,2156,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0058,bob,single,50,1,2019,3854,4431,577,577,1835,2412,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0059,bob,single,50,1,2021,3934,4253,319,319,1913,2232,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0060,alice,single,50,1,2066,4066,4426,360,360,2000,2360,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0061,bob,single,50,1,2083,4069,4458,389,389,1986,2375,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0062,alice,single,50,1,2141,4094,4249,155,155,1953,2108,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0063,alice,single,50,1,2226,4249,4507,258,258,2023,2281,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0064,alice,single,50,1,2226,4253,4393,140,140,2027,2167,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0065,bob,single,50,1,2271,4393,4812,419,419,2122,2541,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0066,bob,paired,50,2,2362,12886,13538,652,652,10524,11176,89,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0067,alice,single,50,1,2376,4426,4587,161,161,2050,2211,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0068,bob,single,50,1,2376,4431,4932,501,501,2055,2556,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0069,bob,single,50,1,2407,4458,4625,167,167,2051,2218,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0070,bob,single,50,1,2424,4507,5054,547,547,2083,2630,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0071,alice,single,50,1,2446,4587,4957,370,370,2141,2511,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0072,bob,single,50,1,2532,4625,4978,353,353,2093,2446,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0073,bob,single,50,1,2565,4812,5286,474,474,2247,2721,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0074,bob,single,50,1,2569,4932,5096,164,164,2363,2527,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0075,bob,single,50,1,2573,4957,5544,587,587,2384,2971,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0076,bob,single,50,1,2682,4978,5359,381,381,2296,2677,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0077,alice,single,50,1,2762,5054,5581,527,527,2292,2819,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0078,alice,paired,50,2,2772,13279,14039,760,760,10507,11267,78,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0079,bob,single,50,1,2828,5096,5235,139,139,2268,2407,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0080,bob,single,50,1,2869,5235,5812,577,577,2366,2943,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0081,alice,single,50,1,2894,5286,5499,213,213,2392,2605,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0082,alice,paired,50,2,2898,13538,13889,351,351,10640,10991,75,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0083,alice,single,50,1,2933,5359,5679,320,320,2426,2746,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0084,bob,paired,50,2,2988,13889,14556,667,667,10901,11568,74,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0085,alice,single,50,1,3056,5499,5676,177,177,2443,2620,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0086,bob,paired,50,2,3103,14039,14347,308,308,10936,11244,73,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0087,bob,paired,50,2,3110,14347,15099,752,752,11237,11989,73,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0088,bob,single,50,1,3158,5544,5986,442,442,2386,2828,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0089,bob,single,50,1,3230,5581,5918,337,337,2351,2688,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0090,alice,single,50,1,3234,5676,5834,158,158,2442,2600,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0091,bob,paired,50,2,3265,14556,14875,319,319,11291,11610,70,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0092,alice,single,50,1,3308,5679,5832,153,153,2371,2524,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0093,bob,single,50,1,3375,5812,6034,222,222,2437,2659,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0094,alice,single,50,1,3375,5832,6413,581,581,2457,3038,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0095,alice,single,50,1,3379,5834,6296,462,462,2455,2917,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0096,bob,single,50,1,3464,5918,6252,334,334,2454,2788,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0097,alice,single,50,1,3498,5986,6496,510,510,2488,2998,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0098,bob,single,50,1,3500,6034,6219,185,185,2534,2719,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0099,alice,single,50,1,3518,6219,6737,518,518,2701,3219,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0100,alice,paired,50,2,3527,14875,15377,502,502,11348,11850,62,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0101,bob,single,50,1,3528,6252,6576,324,324,2724,3048,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0102,bob,single,50,1,3541,6296,6691,395,395,2755,3150,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0103,bob,single,50,1,3544,6413,6811,398,398,2869,3267,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0104,bob,single,50,1,3555,6496,7017,521,521,2941,3462,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0105,bob,single,50,1,3564,6576,7133,557,557,3012,3569,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0106,alice,paired,50,2,3575,15099,15610,511,511,11524,12035,57,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0107,bob,single,50,1,3593,6691,7252,561,561,3098,3659,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0108,bob,single,50,1,3610,6737,7276,539,539,3127,3666,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0109,bob,single,50,1,3641,6811,6938,127,127,3170,3297,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0110,bob,paired,50,2,3687,15377,15999,622,622,11690,12312,54,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0111,alice,single,50,1,3742,6938,7072,134,134,3196,3330,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0112,bob,single,50,1,3752,7017,7522,505,505,3265,3770,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0113,alice,single,50,1,3830,7072,7340,268,268,3242,3510,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0114,bob,single,50,1,3872,7133,7657,524,524,3261,3785,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0115,bob,paired,50,2,3893,15610,15949,339,339,11717,12056,49,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0116,alice,single,50,1,3893,7252,7422,170,170,3359,3529,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0117,bob,paired,50,2,3928,15949,16627,678,678,12021,12699,49,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0118,alice,single,50,1,4035,7276,7410,134,134,3241,3375,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0119,bob,single,50,1,4056,7340,7725,385,385,3284,3669,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0120,alice,single,50,1,4060,7410,7831,421,421,3350,3771,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0121,bob,single,50,1,4105,7422,7769,347,347,3317,3664,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0122,alice,single,50,1,4145,7522,8038,516,516,3377,3893,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0123,bob,single,50,1,4158,7657,8198,541,541,3499,4040,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0124,bob,single,50,1,4280,7725,8073,348,348,3445,3793,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0125,bob,single,50,1,4283,7769,7990,221,221,3486,3707,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0126,alice,single,50,1,4286,7831,8031,200,200,3545,3745,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0127,bob,single,50,1,4294,7990,8368,378,378,3696,4074,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0128,bob,single,50,1,4311,8031,8254,223,223,3720,3943,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0129,bob,single,50,1,4364,8038,8433,395,395,3674,4069,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0130,alice,paired,50,2,4399,15999,16809,810,810,11600,12410,37,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0131,bob,paired,50,2,4400,16627,17322,695,695,12227,12922,37,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0132,bob,paired,50,2,4425,16809,17456,647,647,12384,13031,37,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0133,alice,single,50,1,4444,8073,8286,213,213,3629,3842,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0134,bob,single,50,1,4449,8198,8761,563,563,3749,4312,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0135,bob,single,50,1,4491,8254,8637,383,383,3763,4146,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0136,bob,single,50,1,4502,8286,8790,504,504,3784,4288,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0137,bob,single,50,1,4587,8368,8734,366,366,3781,4147,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0138,bob,single,50,1,4600,8433,8912,479,479,3833,4312,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0139,bob,single,50,1,4605,8637,8762,125,125,4032,4157,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0140,alice,single,50,1,4612,8734,9248,514,514,4122,4636,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0141,alice,paired,50,2,4715,17322,17706,384,384,12607,12991,29,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0142,alice,single,50,1,4720,8761,9217,456,456,4041,4497,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0143,alice,paired,50,2,4735,17456,18061,605,605,12721,13326,28,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0144,bob,single,50,1,4738,8762,9353,591,591,4024,4615,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0145,bob,single,50,1,4753,8790,9390,600,600,4037,4637,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0146,alice,single,50,1,4758,8912,9348,436,436,4154,4590,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0147,alice,paired,50,2,4791,17706,18132,426,426,12915,13341,25,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0148,bob,single,50,1,4812,9217,9643,426,426,4405,4831,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0149,bob,single,50,1,4834,9248,9476,228,228,4414,4642,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0150,alice,single,50,1,4854,9348,9758,410,410,4494,4904,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0151,bob,single,50,1,4884,9353,9640,287,287,4469,4756,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0152,bob,single,50,1,4993,9390,9836,446,446,4397,4843,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0153,alice,single,50,1,5039,9476,9873,397,397,4437,4834,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0154,bob,single,50,1,5066,9640,10002,362,362,4574,4936,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0155,alice,single,50,1,5075,9643,9862,219,219,4568,4787,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0156,bob,single,50,1,5126,9758,10167,409,409,4632,5041,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0157,alice,paired,50,2,5139,18061,18882,821,821,12922,13743,16,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0158,alice,single,50,1,5141,9836,10225,389,389,4695,5084,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0159,bob,paired,50,2,5165,18132,18611,479,479,12967,13446,15,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0160,bob,single,50,1,5202,9862,10349,487,487,4660,5147,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0161,bob,single,50,1,5257,9873,10438,565,565,4616,5181,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0162,bob,single,50,1,5305,10002,10320,318,318,4697,5015,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0163,alice,single,50,1,5317,10167,10365,198,198,4850,5048,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0164,bob,single,50,1,5360,10225,10515,290,290,4865,5155,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0165,alice,single,50,1,5403,10320,10549,229,229,4917,5146,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0166,bob,single,50,1,5414,10349,10597,248,248,4935,5183,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0167,alice,single,50,1,5440,10365,10924,559,559,4925,5484,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0168,bob,paired,50,2,5465,18611,19092,481,481,13146,13627,7,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0169,alice,single,50,1,5473,10438,10860,422,422,4965,5387,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0170,alice,paired,50,2,5491,18882,19727,845,845,13391,14236,6,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0171,alice,single,50,1,5509,10515,10804,289,289,5006,5295,0,false,gpu-c
+E-heterogeneous,fifo,performance,opportunistic,j0172,bob,single,50,1,5518,10549,10765,216,216,5031,5247,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0173,alice,single,50,1,5578,10597,10740,143,143,5019,5162,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0174,bob,paired,50,2,5662,19092,19912,820,820,13430,14250,3,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0175,alice,paired,50,2,5721,19727,20136,409,409,14006,14415,3,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0176,alice,paired,50,2,5768,19912,20607,695,695,14144,14839,3,false,gpu-c gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0177,bob,single,50,1,5813,10740,10937,197,197,4927,5124,0,false,gpu-a
+E-heterogeneous,fifo,performance,opportunistic,j0178,alice,single,50,1,5909,10765,10946,181,181,4856,5037,0,false,gpu-b
+E-heterogeneous,fifo,performance,opportunistic,j0179,bob,single,50,1,5987,10804,11079,275,275,4817,5092,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0000,bob,paired,50,2,7,7,686,679,679,0,679,0,false,gpu-a gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0001,alice,single,50,1,10,10,487,477,477,0,477,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0002,bob,single,50,1,33,33,274,241,241,0,241,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0003,bob,single,50,1,42,42,172,130,130,0,130,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0004,bob,paired,50,2,73,686,1162,476,476,613,1089,5,false,gpu-a gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0005,bob,paired,50,2,84,784,1202,418,418,700,1118,6,false,gpu-b gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0006,bob,single,50,1,106,172,538,366,366,66,432,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0007,bob,paired,50,2,278,1162,1587,425,425,884,1309,5,false,gpu-a gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0008,bob,single,50,1,293,293,602,309,309,0,309,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0009,alice,single,50,1,404,487,784,297,297,83,380,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0010,bob,single,50,1,418,538,784,246,246,120,366,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0011,bob,single,50,1,486,602,759,157,157,116,273,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0012,bob,single,50,1,488,759,1307,548,548,271,819,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0013,alice,single,50,1,505,1202,1644,442,442,697,1139,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0014,bob,single,50,1,545,1202,1694,492,492,657,1149,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0015,alice,single,50,1,576,1307,1451,144,144,731,875,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0016,alice,single,50,1,596,1451,1730,279,279,855,1134,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0017,alice,single,50,1,599,1587,1889,302,302,988,1290,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0018,alice,single,50,1,659,1587,1943,356,356,928,1284,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0019,alice,paired,50,2,668,10924,11319,395,395,10256,10651,129,false,gpu-a gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0020,alice,single,50,1,696,1644,2045,401,401,948,1349,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0021,bob,paired,50,2,715,10946,11766,820,820,10231,11051,128,false,gpu-b gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0022,alice,single,50,1,811,1694,2073,379,379,883,1262,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0023,alice,single,50,1,831,1730,1928,198,198,899,1097,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0024,bob,single,50,1,831,1889,2363,474,474,1058,1532,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0025,bob,single,50,1,844,1928,2062,134,134,1084,1218,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0026,alice,single,50,1,865,1943,2407,464,464,1078,1542,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0027,alice,single,50,1,879,2045,2313,268,268,1166,1434,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0028,bob,single,50,1,973,2062,2501,439,439,1089,1528,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0029,alice,single,50,1,1056,2073,2402,329,329,1017,1346,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0030,bob,paired,50,2,1079,11319,11958,639,639,10240,10879,120,false,gpu-a gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0031,bob,single,50,1,1101,2313,2470,157,157,1212,1369,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0032,alice,single,50,1,1122,2363,2862,499,499,1241,1740,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0033,alice,single,50,1,1249,2402,2651,249,249,1153,1402,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0034,alice,single,50,1,1258,2407,2923,516,516,1149,1665,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0035,bob,single,50,1,1334,2470,2771,301,301,1136,1437,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0036,bob,single,50,1,1341,2501,2974,473,473,1160,1633,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0037,alice,single,50,1,1345,2651,2999,348,348,1306,1654,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0038,bob,single,50,1,1397,2771,3031,260,260,1374,1634,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0039,bob,single,50,1,1401,2862,3453,591,591,1461,2052,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0040,alice,single,50,1,1405,2923,3136,213,213,1518,1731,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0041,bob,single,50,1,1410,2974,3309,335,335,1564,1899,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0042,bob,paired,50,2,1464,11766,12309,543,543,10302,10845,109,false,gpu-b gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0043,alice,single,50,1,1485,2999,3157,158,158,1514,1672,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0044,bob,single,50,1,1488,3031,3424,393,393,1543,1936,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0045,bob,single,50,1,1504,3136,3256,120,120,1632,1752,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0046,alice,single,50,1,1509,3157,3615,458,458,1648,2106,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0047,bob,paired,50,2,1542,11958,12397,439,439,10416,10855,105,false,gpu-a gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0048,alice,single,50,1,1562,3256,3525,269,269,1694,1963,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0049,bob,single,50,1,1590,3309,3815,506,506,1719,2225,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0050,alice,single,50,1,1619,3424,3602,178,178,1805,1983,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0051,bob,single,50,1,1666,3453,3934,481,481,1787,2268,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0052,alice,single,50,1,1723,3525,3854,329,329,1802,2131,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0053,alice,single,50,1,1770,3602,4069,467,467,1832,2299,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0054,bob,paired,50,2,1835,12309,12886,577,577,10474,11051,99,false,gpu-b gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0055,bob,paired,50,2,1869,12397,13279,882,882,10528,11410,99,false,gpu-a gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0056,bob,single,50,1,1894,3615,4094,479,479,1721,2200,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0057,alice,single,50,1,1910,3815,4066,251,251,1905,2156,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0058,bob,single,50,1,2019,3854,4431,577,577,1835,2412,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0059,bob,single,50,1,2021,3934,4253,319,319,1913,2232,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0060,alice,single,50,1,2066,4066,4426,360,360,2000,2360,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0061,bob,single,50,1,2083,4069,4458,389,389,1986,2375,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0062,alice,single,50,1,2141,4094,4249,155,155,1953,2108,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0063,alice,single,50,1,2226,4249,4507,258,258,2023,2281,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0064,alice,single,50,1,2226,4253,4393,140,140,2027,2167,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0065,bob,single,50,1,2271,4393,4812,419,419,2122,2541,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0066,bob,paired,50,2,2362,12886,13538,652,652,10524,11176,89,false,gpu-b gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0067,alice,single,50,1,2376,4426,4587,161,161,2050,2211,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0068,bob,single,50,1,2376,4431,4932,501,501,2055,2556,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0069,bob,single,50,1,2407,4458,4625,167,167,2051,2218,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0070,bob,single,50,1,2424,4507,5054,547,547,2083,2630,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0071,alice,single,50,1,2446,4587,4957,370,370,2141,2511,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0072,bob,single,50,1,2532,4625,4978,353,353,2093,2446,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0073,bob,single,50,1,2565,4812,5286,474,474,2247,2721,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0074,bob,single,50,1,2569,4932,5096,164,164,2363,2527,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0075,bob,single,50,1,2573,4957,5544,587,587,2384,2971,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0076,bob,single,50,1,2682,4978,5359,381,381,2296,2677,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0077,alice,single,50,1,2762,5054,5581,527,527,2292,2819,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0078,alice,paired,50,2,2772,13279,14039,760,760,10507,11267,78,false,gpu-a gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0079,bob,single,50,1,2828,5096,5235,139,139,2268,2407,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0080,bob,single,50,1,2869,5235,5812,577,577,2366,2943,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0081,alice,single,50,1,2894,5286,5499,213,213,2392,2605,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0082,alice,paired,50,2,2898,13538,13889,351,351,10640,10991,75,false,gpu-b gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0083,alice,single,50,1,2933,5359,5679,320,320,2426,2746,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0084,bob,paired,50,2,2988,13889,14556,667,667,10901,11568,74,false,gpu-b gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0085,alice,single,50,1,3056,5499,5676,177,177,2443,2620,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0086,bob,paired,50,2,3103,14039,14347,308,308,10936,11244,73,false,gpu-a gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0087,bob,paired,50,2,3110,14347,15099,752,752,11237,11989,73,false,gpu-a gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0088,bob,single,50,1,3158,5544,5986,442,442,2386,2828,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0089,bob,single,50,1,3230,5581,5918,337,337,2351,2688,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0090,alice,single,50,1,3234,5676,5834,158,158,2442,2600,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0091,bob,paired,50,2,3265,14556,14875,319,319,11291,11610,70,false,gpu-b gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0092,alice,single,50,1,3308,5679,5832,153,153,2371,2524,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0093,bob,single,50,1,3375,5812,6034,222,222,2437,2659,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0094,alice,single,50,1,3375,5832,6413,581,581,2457,3038,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0095,alice,single,50,1,3379,5834,6296,462,462,2455,2917,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0096,bob,single,50,1,3464,5918,6252,334,334,2454,2788,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0097,alice,single,50,1,3498,5986,6496,510,510,2488,2998,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0098,bob,single,50,1,3500,6034,6219,185,185,2534,2719,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0099,alice,single,50,1,3518,6219,6737,518,518,2701,3219,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0100,alice,paired,50,2,3527,14875,15377,502,502,11348,11850,62,false,gpu-b gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0101,bob,single,50,1,3528,6252,6576,324,324,2724,3048,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0102,bob,single,50,1,3541,6296,6691,395,395,2755,3150,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0103,bob,single,50,1,3544,6413,6811,398,398,2869,3267,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0104,bob,single,50,1,3555,6496,7017,521,521,2941,3462,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0105,bob,single,50,1,3564,6576,7133,557,557,3012,3569,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0106,alice,paired,50,2,3575,15099,15610,511,511,11524,12035,57,false,gpu-a gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0107,bob,single,50,1,3593,6691,7252,561,561,3098,3659,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0108,bob,single,50,1,3610,6737,7276,539,539,3127,3666,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0109,bob,single,50,1,3641,6811,6938,127,127,3170,3297,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0110,bob,paired,50,2,3687,15377,15999,622,622,11690,12312,54,false,gpu-b gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0111,alice,single,50,1,3742,6938,7072,134,134,3196,3330,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0112,bob,single,50,1,3752,7017,7522,505,505,3265,3770,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0113,alice,single,50,1,3830,7072,7340,268,268,3242,3510,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0114,bob,single,50,1,3872,7133,7657,524,524,3261,3785,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0115,bob,paired,50,2,3893,15610,15949,339,339,11717,12056,49,false,gpu-a gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0116,alice,single,50,1,3893,7252,7422,170,170,3359,3529,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0117,bob,paired,50,2,3928,15949,16627,678,678,12021,12699,49,false,gpu-a gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0118,alice,single,50,1,4035,7276,7410,134,134,3241,3375,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0119,bob,single,50,1,4056,7340,7725,385,385,3284,3669,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0120,alice,single,50,1,4060,7410,7831,421,421,3350,3771,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0121,bob,single,50,1,4105,7422,7769,347,347,3317,3664,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0122,alice,single,50,1,4145,7522,8038,516,516,3377,3893,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0123,bob,single,50,1,4158,7657,8198,541,541,3499,4040,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0124,bob,single,50,1,4280,7725,8073,348,348,3445,3793,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0125,bob,single,50,1,4283,7769,7990,221,221,3486,3707,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0126,alice,single,50,1,4286,7831,8031,200,200,3545,3745,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0127,bob,single,50,1,4294,7990,8368,378,378,3696,4074,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0128,bob,single,50,1,4311,8031,8254,223,223,3720,3943,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0129,bob,single,50,1,4364,8038,8433,395,395,3674,4069,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0130,alice,paired,50,2,4399,15999,16809,810,810,11600,12410,37,false,gpu-b gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0131,bob,paired,50,2,4400,16627,17322,695,695,12227,12922,37,false,gpu-a gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0132,bob,paired,50,2,4425,16809,17456,647,647,12384,13031,37,false,gpu-b gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0133,alice,single,50,1,4444,8073,8286,213,213,3629,3842,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0134,bob,single,50,1,4449,8198,8761,563,563,3749,4312,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0135,bob,single,50,1,4491,8254,8637,383,383,3763,4146,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0136,bob,single,50,1,4502,8286,8790,504,504,3784,4288,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0137,bob,single,50,1,4587,8368,8734,366,366,3781,4147,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0138,bob,single,50,1,4600,8433,8912,479,479,3833,4312,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0139,bob,single,50,1,4605,8637,8762,125,125,4032,4157,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0140,alice,single,50,1,4612,8734,9248,514,514,4122,4636,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0141,alice,paired,50,2,4715,17322,17706,384,384,12607,12991,29,false,gpu-a gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0142,alice,single,50,1,4720,8761,9217,456,456,4041,4497,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0143,alice,paired,50,2,4735,17456,18061,605,605,12721,13326,28,false,gpu-b gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0144,bob,single,50,1,4738,8762,9353,591,591,4024,4615,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0145,bob,single,50,1,4753,8790,9390,600,600,4037,4637,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0146,alice,single,50,1,4758,8912,9348,436,436,4154,4590,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0147,alice,paired,50,2,4791,17706,18132,426,426,12915,13341,25,false,gpu-a gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0148,bob,single,50,1,4812,9217,9643,426,426,4405,4831,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0149,bob,single,50,1,4834,9248,9476,228,228,4414,4642,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0150,alice,single,50,1,4854,9348,9758,410,410,4494,4904,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0151,bob,single,50,1,4884,9353,9640,287,287,4469,4756,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0152,bob,single,50,1,4993,9390,9836,446,446,4397,4843,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0153,alice,single,50,1,5039,9476,9873,397,397,4437,4834,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0154,bob,single,50,1,5066,9640,10002,362,362,4574,4936,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0155,alice,single,50,1,5075,9643,9862,219,219,4568,4787,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0156,bob,single,50,1,5126,9758,10167,409,409,4632,5041,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0157,alice,paired,50,2,5139,18061,18882,821,821,12922,13743,16,false,gpu-b gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0158,alice,single,50,1,5141,9836,10225,389,389,4695,5084,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0159,bob,paired,50,2,5165,18132,18611,479,479,12967,13446,15,false,gpu-a gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0160,bob,single,50,1,5202,9862,10349,487,487,4660,5147,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0161,bob,single,50,1,5257,9873,10438,565,565,4616,5181,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0162,bob,single,50,1,5305,10002,10320,318,318,4697,5015,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0163,alice,single,50,1,5317,10167,10365,198,198,4850,5048,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0164,bob,single,50,1,5360,10225,10515,290,290,4865,5155,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0165,alice,single,50,1,5403,10320,10549,229,229,4917,5146,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0166,bob,single,50,1,5414,10349,10597,248,248,4935,5183,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0167,alice,single,50,1,5440,10365,10924,559,559,4925,5484,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0168,bob,paired,50,2,5465,18611,19092,481,481,13146,13627,7,false,gpu-a gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0169,alice,single,50,1,5473,10438,10860,422,422,4965,5387,0,false,gpu-a
+E-heterogeneous,fifo,first-fit,opportunistic,j0170,alice,paired,50,2,5491,18882,19727,845,845,13391,14236,6,false,gpu-b gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0171,alice,single,50,1,5509,10515,10804,289,289,5006,5295,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0172,bob,single,50,1,5518,10549,10765,216,216,5031,5247,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0173,alice,single,50,1,5578,10597,10740,143,143,5019,5162,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0174,bob,paired,50,2,5662,19092,19912,820,820,13430,14250,3,false,gpu-a gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0175,alice,paired,50,2,5721,19727,20136,409,409,14006,14415,3,false,gpu-b gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0176,alice,paired,50,2,5768,19912,20607,695,695,14144,14839,3,false,gpu-a gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0177,bob,single,50,1,5813,10740,10937,197,197,4927,5124,0,false,gpu-c
+E-heterogeneous,fifo,first-fit,opportunistic,j0178,alice,single,50,1,5909,10765,10946,181,181,4856,5037,0,false,gpu-b
+E-heterogeneous,fifo,first-fit,opportunistic,j0179,bob,single,50,1,5987,10804,11079,275,275,4817,5092,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0000,bob,paired,50,2,7,7,686,679,679,0,679,0,false,gpu-a gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0001,alice,single,50,1,10,10,487,477,477,0,477,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0002,bob,single,50,1,33,33,274,241,241,0,241,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0003,bob,single,50,1,42,42,172,130,130,0,130,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0004,bob,paired,50,2,73,686,1162,476,476,613,1089,5,false,gpu-a gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0005,bob,paired,50,2,84,784,1202,418,418,700,1118,6,false,gpu-c gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0006,bob,single,50,1,106,172,538,366,366,66,432,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0007,bob,paired,50,2,278,1162,1587,425,425,884,1309,5,false,gpu-a gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0008,bob,single,50,1,293,293,602,309,309,0,309,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0009,alice,single,50,1,404,487,784,297,297,83,380,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0010,bob,single,50,1,418,538,784,246,246,120,366,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0011,bob,single,50,1,486,602,759,157,157,116,273,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0012,bob,single,50,1,488,759,1307,548,548,271,819,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0013,alice,single,50,1,505,1202,1644,442,442,697,1139,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0014,bob,single,50,1,545,1202,1694,492,492,657,1149,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0015,alice,single,50,1,576,1307,1451,144,144,731,875,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0016,alice,single,50,1,596,1451,1730,279,279,855,1134,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0017,alice,single,50,1,599,1587,1889,302,302,988,1290,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0018,alice,single,50,1,659,1587,1943,356,356,928,1284,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0019,alice,paired,50,2,668,10924,11319,395,395,10256,10651,129,false,gpu-a gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0020,alice,single,50,1,696,1644,2045,401,401,948,1349,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0021,bob,paired,50,2,715,10946,11766,820,820,10231,11051,128,false,gpu-c gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0022,alice,single,50,1,811,1694,2073,379,379,883,1262,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0023,alice,single,50,1,831,1730,1928,198,198,899,1097,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0024,bob,single,50,1,831,1889,2363,474,474,1058,1532,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0025,bob,single,50,1,844,1928,2062,134,134,1084,1218,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0026,alice,single,50,1,865,1943,2407,464,464,1078,1542,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0027,alice,single,50,1,879,2045,2313,268,268,1166,1434,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0028,bob,single,50,1,973,2062,2501,439,439,1089,1528,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0029,alice,single,50,1,1056,2073,2402,329,329,1017,1346,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0030,bob,paired,50,2,1079,11319,11958,639,639,10240,10879,120,false,gpu-a gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0031,bob,single,50,1,1101,2313,2470,157,157,1212,1369,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0032,alice,single,50,1,1122,2363,2862,499,499,1241,1740,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0033,alice,single,50,1,1249,2402,2651,249,249,1153,1402,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0034,alice,single,50,1,1258,2407,2923,516,516,1149,1665,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0035,bob,single,50,1,1334,2470,2771,301,301,1136,1437,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0036,bob,single,50,1,1341,2501,2974,473,473,1160,1633,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0037,alice,single,50,1,1345,2651,2999,348,348,1306,1654,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0038,bob,single,50,1,1397,2771,3031,260,260,1374,1634,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0039,bob,single,50,1,1401,2862,3453,591,591,1461,2052,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0040,alice,single,50,1,1405,2923,3136,213,213,1518,1731,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0041,bob,single,50,1,1410,2974,3309,335,335,1564,1899,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0042,bob,paired,50,2,1464,11766,12309,543,543,10302,10845,109,false,gpu-c gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0043,alice,single,50,1,1485,2999,3157,158,158,1514,1672,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0044,bob,single,50,1,1488,3031,3424,393,393,1543,1936,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0045,bob,single,50,1,1504,3136,3256,120,120,1632,1752,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0046,alice,single,50,1,1509,3157,3615,458,458,1648,2106,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0047,bob,paired,50,2,1542,11958,12397,439,439,10416,10855,105,false,gpu-a gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0048,alice,single,50,1,1562,3256,3525,269,269,1694,1963,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0049,bob,single,50,1,1590,3309,3815,506,506,1719,2225,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0050,alice,single,50,1,1619,3424,3602,178,178,1805,1983,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0051,bob,single,50,1,1666,3453,3934,481,481,1787,2268,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0052,alice,single,50,1,1723,3525,3854,329,329,1802,2131,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0053,alice,single,50,1,1770,3602,4069,467,467,1832,2299,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0054,bob,paired,50,2,1835,12309,12886,577,577,10474,11051,99,false,gpu-c gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0055,bob,paired,50,2,1869,12397,13279,882,882,10528,11410,99,false,gpu-a gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0056,bob,single,50,1,1894,3615,4094,479,479,1721,2200,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0057,alice,single,50,1,1910,3815,4066,251,251,1905,2156,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0058,bob,single,50,1,2019,3854,4431,577,577,1835,2412,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0059,bob,single,50,1,2021,3934,4253,319,319,1913,2232,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0060,alice,single,50,1,2066,4066,4426,360,360,2000,2360,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0061,bob,single,50,1,2083,4069,4458,389,389,1986,2375,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0062,alice,single,50,1,2141,4094,4249,155,155,1953,2108,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0063,alice,single,50,1,2226,4249,4507,258,258,2023,2281,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0064,alice,single,50,1,2226,4253,4393,140,140,2027,2167,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0065,bob,single,50,1,2271,4393,4812,419,419,2122,2541,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0066,bob,paired,50,2,2362,12886,13538,652,652,10524,11176,89,false,gpu-c gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0067,alice,single,50,1,2376,4426,4587,161,161,2050,2211,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0068,bob,single,50,1,2376,4431,4932,501,501,2055,2556,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0069,bob,single,50,1,2407,4458,4625,167,167,2051,2218,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0070,bob,single,50,1,2424,4507,5054,547,547,2083,2630,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0071,alice,single,50,1,2446,4587,4957,370,370,2141,2511,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0072,bob,single,50,1,2532,4625,4978,353,353,2093,2446,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0073,bob,single,50,1,2565,4812,5286,474,474,2247,2721,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0074,bob,single,50,1,2569,4932,5096,164,164,2363,2527,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0075,bob,single,50,1,2573,4957,5544,587,587,2384,2971,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0076,bob,single,50,1,2682,4978,5359,381,381,2296,2677,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0077,alice,single,50,1,2762,5054,5581,527,527,2292,2819,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0078,alice,paired,50,2,2772,13279,14039,760,760,10507,11267,78,false,gpu-a gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0079,bob,single,50,1,2828,5096,5235,139,139,2268,2407,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0080,bob,single,50,1,2869,5235,5812,577,577,2366,2943,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0081,alice,single,50,1,2894,5286,5499,213,213,2392,2605,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0082,alice,paired,50,2,2898,13538,13889,351,351,10640,10991,75,false,gpu-c gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0083,alice,single,50,1,2933,5359,5679,320,320,2426,2746,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0084,bob,paired,50,2,2988,13889,14556,667,667,10901,11568,74,false,gpu-c gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0085,alice,single,50,1,3056,5499,5676,177,177,2443,2620,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0086,bob,paired,50,2,3103,14039,14347,308,308,10936,11244,73,false,gpu-a gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0087,bob,paired,50,2,3110,14347,15099,752,752,11237,11989,73,false,gpu-a gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0088,bob,single,50,1,3158,5544,5986,442,442,2386,2828,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0089,bob,single,50,1,3230,5581,5918,337,337,2351,2688,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0090,alice,single,50,1,3234,5676,5834,158,158,2442,2600,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0091,bob,paired,50,2,3265,14556,14875,319,319,11291,11610,70,false,gpu-c gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0092,alice,single,50,1,3308,5679,5832,153,153,2371,2524,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0093,bob,single,50,1,3375,5812,6034,222,222,2437,2659,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0094,alice,single,50,1,3375,5832,6413,581,581,2457,3038,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0095,alice,single,50,1,3379,5834,6296,462,462,2455,2917,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0096,bob,single,50,1,3464,5918,6252,334,334,2454,2788,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0097,alice,single,50,1,3498,5986,6496,510,510,2488,2998,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0098,bob,single,50,1,3500,6034,6219,185,185,2534,2719,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0099,alice,single,50,1,3518,6219,6737,518,518,2701,3219,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0100,alice,paired,50,2,3527,14875,15377,502,502,11348,11850,62,false,gpu-c gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0101,bob,single,50,1,3528,6252,6576,324,324,2724,3048,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0102,bob,single,50,1,3541,6296,6691,395,395,2755,3150,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0103,bob,single,50,1,3544,6413,6811,398,398,2869,3267,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0104,bob,single,50,1,3555,6496,7017,521,521,2941,3462,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0105,bob,single,50,1,3564,6576,7133,557,557,3012,3569,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0106,alice,paired,50,2,3575,15099,15610,511,511,11524,12035,57,false,gpu-a gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0107,bob,single,50,1,3593,6691,7252,561,561,3098,3659,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0108,bob,single,50,1,3610,6737,7276,539,539,3127,3666,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0109,bob,single,50,1,3641,6811,6938,127,127,3170,3297,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0110,bob,paired,50,2,3687,15377,15999,622,622,11690,12312,54,false,gpu-c gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0111,alice,single,50,1,3742,6938,7072,134,134,3196,3330,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0112,bob,single,50,1,3752,7017,7522,505,505,3265,3770,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0113,alice,single,50,1,3830,7072,7340,268,268,3242,3510,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0114,bob,single,50,1,3872,7133,7657,524,524,3261,3785,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0115,bob,paired,50,2,3893,15610,15949,339,339,11717,12056,49,false,gpu-a gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0116,alice,single,50,1,3893,7252,7422,170,170,3359,3529,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0117,bob,paired,50,2,3928,15949,16627,678,678,12021,12699,49,false,gpu-a gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0118,alice,single,50,1,4035,7276,7410,134,134,3241,3375,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0119,bob,single,50,1,4056,7340,7725,385,385,3284,3669,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0120,alice,single,50,1,4060,7410,7831,421,421,3350,3771,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0121,bob,single,50,1,4105,7422,7769,347,347,3317,3664,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0122,alice,single,50,1,4145,7522,8038,516,516,3377,3893,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0123,bob,single,50,1,4158,7657,8198,541,541,3499,4040,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0124,bob,single,50,1,4280,7725,8073,348,348,3445,3793,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0125,bob,single,50,1,4283,7769,7990,221,221,3486,3707,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0126,alice,single,50,1,4286,7831,8031,200,200,3545,3745,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0127,bob,single,50,1,4294,7990,8368,378,378,3696,4074,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0128,bob,single,50,1,4311,8031,8254,223,223,3720,3943,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0129,bob,single,50,1,4364,8038,8433,395,395,3674,4069,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0130,alice,paired,50,2,4399,15999,16809,810,810,11600,12410,37,false,gpu-c gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0131,bob,paired,50,2,4400,16627,17322,695,695,12227,12922,37,false,gpu-a gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0132,bob,paired,50,2,4425,16809,17456,647,647,12384,13031,37,false,gpu-c gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0133,alice,single,50,1,4444,8073,8286,213,213,3629,3842,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0134,bob,single,50,1,4449,8198,8761,563,563,3749,4312,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0135,bob,single,50,1,4491,8254,8637,383,383,3763,4146,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0136,bob,single,50,1,4502,8286,8790,504,504,3784,4288,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0137,bob,single,50,1,4587,8368,8734,366,366,3781,4147,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0138,bob,single,50,1,4600,8433,8912,479,479,3833,4312,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0139,bob,single,50,1,4605,8637,8762,125,125,4032,4157,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0140,alice,single,50,1,4612,8734,9248,514,514,4122,4636,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0141,alice,paired,50,2,4715,17322,17706,384,384,12607,12991,29,false,gpu-a gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0142,alice,single,50,1,4720,8761,9217,456,456,4041,4497,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0143,alice,paired,50,2,4735,17456,18061,605,605,12721,13326,28,false,gpu-c gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0144,bob,single,50,1,4738,8762,9353,591,591,4024,4615,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0145,bob,single,50,1,4753,8790,9390,600,600,4037,4637,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0146,alice,single,50,1,4758,8912,9348,436,436,4154,4590,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0147,alice,paired,50,2,4791,17706,18132,426,426,12915,13341,25,false,gpu-a gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0148,bob,single,50,1,4812,9217,9643,426,426,4405,4831,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0149,bob,single,50,1,4834,9248,9476,228,228,4414,4642,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0150,alice,single,50,1,4854,9348,9758,410,410,4494,4904,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0151,bob,single,50,1,4884,9353,9640,287,287,4469,4756,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0152,bob,single,50,1,4993,9390,9836,446,446,4397,4843,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0153,alice,single,50,1,5039,9476,9873,397,397,4437,4834,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0154,bob,single,50,1,5066,9640,10002,362,362,4574,4936,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0155,alice,single,50,1,5075,9643,9862,219,219,4568,4787,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0156,bob,single,50,1,5126,9758,10167,409,409,4632,5041,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0157,alice,paired,50,2,5139,18061,18882,821,821,12922,13743,16,false,gpu-c gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0158,alice,single,50,1,5141,9836,10225,389,389,4695,5084,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0159,bob,paired,50,2,5165,18132,18611,479,479,12967,13446,15,false,gpu-a gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0160,bob,single,50,1,5202,9862,10349,487,487,4660,5147,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0161,bob,single,50,1,5257,9873,10438,565,565,4616,5181,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0162,bob,single,50,1,5305,10002,10320,318,318,4697,5015,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0163,alice,single,50,1,5317,10167,10365,198,198,4850,5048,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0164,bob,single,50,1,5360,10225,10515,290,290,4865,5155,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0165,alice,single,50,1,5403,10320,10549,229,229,4917,5146,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0166,bob,single,50,1,5414,10349,10597,248,248,4935,5183,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0167,alice,single,50,1,5440,10365,10924,559,559,4925,5484,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0168,bob,paired,50,2,5465,18611,19092,481,481,13146,13627,7,false,gpu-a gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0169,alice,single,50,1,5473,10438,10860,422,422,4965,5387,0,false,gpu-a
+E-heterogeneous,fifo,best-fit,opportunistic,j0170,alice,paired,50,2,5491,18882,19727,845,845,13391,14236,6,false,gpu-c gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0171,alice,single,50,1,5509,10515,10804,289,289,5006,5295,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0172,bob,single,50,1,5518,10549,10765,216,216,5031,5247,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0173,alice,single,50,1,5578,10597,10740,143,143,5019,5162,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0174,bob,paired,50,2,5662,19092,19912,820,820,13430,14250,3,false,gpu-a gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0175,alice,paired,50,2,5721,19727,20136,409,409,14006,14415,3,false,gpu-c gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0176,alice,paired,50,2,5768,19912,20607,695,695,14144,14839,3,false,gpu-a gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0177,bob,single,50,1,5813,10740,10937,197,197,4927,5124,0,false,gpu-b
+E-heterogeneous,fifo,best-fit,opportunistic,j0178,alice,single,50,1,5909,10765,10946,181,181,4856,5037,0,false,gpu-c
+E-heterogeneous,fifo,best-fit,opportunistic,j0179,bob,single,50,1,5987,10804,11079,275,275,4817,5092,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0000,bob,paired,50,2,7,7,686,679,679,0,679,0,false,gpu-b gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0001,alice,single,50,1,10,10,487,477,477,0,477,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0002,bob,single,50,1,33,33,274,241,241,0,241,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0003,bob,single,50,1,42,42,172,130,130,0,130,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0004,bob,paired,50,2,73,686,1162,476,476,613,1089,5,false,gpu-b gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0005,bob,paired,50,2,84,784,1202,418,418,700,1118,6,false,gpu-b gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0006,bob,single,50,1,106,172,538,366,366,66,432,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0007,bob,paired,50,2,278,1162,1587,425,425,884,1309,5,false,gpu-b gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0008,bob,single,50,1,293,293,602,309,309,0,309,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0009,alice,single,50,1,404,487,784,297,297,83,380,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0010,bob,single,50,1,418,538,784,246,246,120,366,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0011,bob,single,50,1,486,602,759,157,157,116,273,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0012,bob,single,50,1,488,759,1307,548,548,271,819,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0013,alice,single,50,1,505,1202,1644,442,442,697,1139,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0014,bob,single,50,1,545,1202,1694,492,492,657,1149,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0015,alice,single,50,1,576,1307,1451,144,144,731,875,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0016,alice,single,50,1,596,1451,1730,279,279,855,1134,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0017,alice,single,50,1,599,1587,1889,302,302,988,1290,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0018,alice,single,50,1,659,1587,1943,356,356,928,1284,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0019,alice,paired,50,2,668,10924,11319,395,395,10256,10651,129,false,gpu-b gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0020,alice,single,50,1,696,1644,2045,401,401,948,1349,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0021,bob,paired,50,2,715,10946,11766,820,820,10231,11051,128,false,gpu-a gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0022,alice,single,50,1,811,1694,2073,379,379,883,1262,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0023,alice,single,50,1,831,1730,1928,198,198,899,1097,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0024,bob,single,50,1,831,1889,2363,474,474,1058,1532,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0025,bob,single,50,1,844,1928,2062,134,134,1084,1218,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0026,alice,single,50,1,865,1943,2407,464,464,1078,1542,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0027,alice,single,50,1,879,2045,2313,268,268,1166,1434,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0028,bob,single,50,1,973,2062,2501,439,439,1089,1528,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0029,alice,single,50,1,1056,2073,2402,329,329,1017,1346,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0030,bob,paired,50,2,1079,11319,11958,639,639,10240,10879,120,false,gpu-b gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0031,bob,single,50,1,1101,2313,2470,157,157,1212,1369,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0032,alice,single,50,1,1122,2363,2862,499,499,1241,1740,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0033,alice,single,50,1,1249,2402,2651,249,249,1153,1402,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0034,alice,single,50,1,1258,2407,2923,516,516,1149,1665,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0035,bob,single,50,1,1334,2470,2771,301,301,1136,1437,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0036,bob,single,50,1,1341,2501,2974,473,473,1160,1633,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0037,alice,single,50,1,1345,2651,2999,348,348,1306,1654,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0038,bob,single,50,1,1397,2771,3031,260,260,1374,1634,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0039,bob,single,50,1,1401,2862,3453,591,591,1461,2052,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0040,alice,single,50,1,1405,2923,3136,213,213,1518,1731,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0041,bob,single,50,1,1410,2974,3309,335,335,1564,1899,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0042,bob,paired,50,2,1464,11766,12309,543,543,10302,10845,109,false,gpu-b gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0043,alice,single,50,1,1485,2999,3157,158,158,1514,1672,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0044,bob,single,50,1,1488,3031,3424,393,393,1543,1936,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0045,bob,single,50,1,1504,3136,3256,120,120,1632,1752,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0046,alice,single,50,1,1509,3157,3615,458,458,1648,2106,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0047,bob,paired,50,2,1542,11958,12397,439,439,10416,10855,105,false,gpu-b gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0048,alice,single,50,1,1562,3256,3525,269,269,1694,1963,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0049,bob,single,50,1,1590,3309,3815,506,506,1719,2225,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0050,alice,single,50,1,1619,3424,3602,178,178,1805,1983,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0051,bob,single,50,1,1666,3453,3934,481,481,1787,2268,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0052,alice,single,50,1,1723,3525,3854,329,329,1802,2131,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0053,alice,single,50,1,1770,3602,4069,467,467,1832,2299,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0054,bob,paired,50,2,1835,12309,12886,577,577,10474,11051,99,false,gpu-b gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0055,bob,paired,50,2,1869,12397,13279,882,882,10528,11410,99,false,gpu-b gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0056,bob,single,50,1,1894,3615,4094,479,479,1721,2200,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0057,alice,single,50,1,1910,3815,4066,251,251,1905,2156,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0058,bob,single,50,1,2019,3854,4431,577,577,1835,2412,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0059,bob,single,50,1,2021,3934,4253,319,319,1913,2232,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0060,alice,single,50,1,2066,4066,4426,360,360,2000,2360,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0061,bob,single,50,1,2083,4069,4458,389,389,1986,2375,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0062,alice,single,50,1,2141,4094,4249,155,155,1953,2108,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0063,alice,single,50,1,2226,4249,4507,258,258,2023,2281,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0064,alice,single,50,1,2226,4253,4393,140,140,2027,2167,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0065,bob,single,50,1,2271,4393,4812,419,419,2122,2541,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0066,bob,paired,50,2,2362,12886,13538,652,652,10524,11176,89,false,gpu-b gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0067,alice,single,50,1,2376,4426,4587,161,161,2050,2211,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0068,bob,single,50,1,2376,4431,4932,501,501,2055,2556,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0069,bob,single,50,1,2407,4458,4625,167,167,2051,2218,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0070,bob,single,50,1,2424,4507,5054,547,547,2083,2630,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0071,alice,single,50,1,2446,4587,4957,370,370,2141,2511,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0072,bob,single,50,1,2532,4625,4978,353,353,2093,2446,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0073,bob,single,50,1,2565,4812,5286,474,474,2247,2721,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0074,bob,single,50,1,2569,4932,5096,164,164,2363,2527,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0075,bob,single,50,1,2573,4957,5544,587,587,2384,2971,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0076,bob,single,50,1,2682,4978,5359,381,381,2296,2677,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0077,alice,single,50,1,2762,5054,5581,527,527,2292,2819,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0078,alice,paired,50,2,2772,13279,14039,760,760,10507,11267,78,false,gpu-b gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0079,bob,single,50,1,2828,5096,5235,139,139,2268,2407,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0080,bob,single,50,1,2869,5235,5812,577,577,2366,2943,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0081,alice,single,50,1,2894,5286,5499,213,213,2392,2605,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0082,alice,paired,50,2,2898,13538,13889,351,351,10640,10991,75,false,gpu-b gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0083,alice,single,50,1,2933,5359,5679,320,320,2426,2746,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0084,bob,paired,50,2,2988,13889,14556,667,667,10901,11568,74,false,gpu-b gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0085,alice,single,50,1,3056,5499,5676,177,177,2443,2620,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0086,bob,paired,50,2,3103,14039,14347,308,308,10936,11244,73,false,gpu-b gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0087,bob,paired,50,2,3110,14347,15099,752,752,11237,11989,73,false,gpu-b gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0088,bob,single,50,1,3158,5544,5986,442,442,2386,2828,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0089,bob,single,50,1,3230,5581,5918,337,337,2351,2688,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0090,alice,single,50,1,3234,5676,5834,158,158,2442,2600,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0091,bob,paired,50,2,3265,14556,14875,319,319,11291,11610,70,false,gpu-b gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0092,alice,single,50,1,3308,5679,5832,153,153,2371,2524,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0093,bob,single,50,1,3375,5812,6034,222,222,2437,2659,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0094,alice,single,50,1,3375,5832,6413,581,581,2457,3038,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0095,alice,single,50,1,3379,5834,6296,462,462,2455,2917,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0096,bob,single,50,1,3464,5918,6252,334,334,2454,2788,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0097,alice,single,50,1,3498,5986,6496,510,510,2488,2998,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0098,bob,single,50,1,3500,6034,6219,185,185,2534,2719,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0099,alice,single,50,1,3518,6219,6737,518,518,2701,3219,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0100,alice,paired,50,2,3527,14875,15377,502,502,11348,11850,62,false,gpu-b gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0101,bob,single,50,1,3528,6252,6576,324,324,2724,3048,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0102,bob,single,50,1,3541,6296,6691,395,395,2755,3150,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0103,bob,single,50,1,3544,6413,6811,398,398,2869,3267,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0104,bob,single,50,1,3555,6496,7017,521,521,2941,3462,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0105,bob,single,50,1,3564,6576,7133,557,557,3012,3569,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0106,alice,paired,50,2,3575,15099,15610,511,511,11524,12035,57,false,gpu-b gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0107,bob,single,50,1,3593,6691,7252,561,561,3098,3659,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0108,bob,single,50,1,3610,6737,7276,539,539,3127,3666,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0109,bob,single,50,1,3641,6811,6938,127,127,3170,3297,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0110,bob,paired,50,2,3687,15377,15999,622,622,11690,12312,54,false,gpu-b gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0111,alice,single,50,1,3742,6938,7072,134,134,3196,3330,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0112,bob,single,50,1,3752,7017,7522,505,505,3265,3770,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0113,alice,single,50,1,3830,7072,7340,268,268,3242,3510,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0114,bob,single,50,1,3872,7133,7657,524,524,3261,3785,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0115,bob,paired,50,2,3893,15610,15949,339,339,11717,12056,49,false,gpu-b gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0116,alice,single,50,1,3893,7252,7422,170,170,3359,3529,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0117,bob,paired,50,2,3928,15949,16627,678,678,12021,12699,49,false,gpu-b gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0118,alice,single,50,1,4035,7276,7410,134,134,3241,3375,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0119,bob,single,50,1,4056,7340,7725,385,385,3284,3669,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0120,alice,single,50,1,4060,7410,7831,421,421,3350,3771,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0121,bob,single,50,1,4105,7422,7769,347,347,3317,3664,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0122,alice,single,50,1,4145,7522,8038,516,516,3377,3893,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0123,bob,single,50,1,4158,7657,8198,541,541,3499,4040,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0124,bob,single,50,1,4280,7725,8073,348,348,3445,3793,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0125,bob,single,50,1,4283,7769,7990,221,221,3486,3707,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0126,alice,single,50,1,4286,7831,8031,200,200,3545,3745,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0127,bob,single,50,1,4294,7990,8368,378,378,3696,4074,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0128,bob,single,50,1,4311,8031,8254,223,223,3720,3943,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0129,bob,single,50,1,4364,8038,8433,395,395,3674,4069,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0130,alice,paired,50,2,4399,15999,16809,810,810,11600,12410,37,false,gpu-b gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0131,bob,paired,50,2,4400,16627,17322,695,695,12227,12922,37,false,gpu-b gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0132,bob,paired,50,2,4425,16809,17456,647,647,12384,13031,37,false,gpu-b gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0133,alice,single,50,1,4444,8073,8286,213,213,3629,3842,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0134,bob,single,50,1,4449,8198,8761,563,563,3749,4312,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0135,bob,single,50,1,4491,8254,8637,383,383,3763,4146,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0136,bob,single,50,1,4502,8286,8790,504,504,3784,4288,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0137,bob,single,50,1,4587,8368,8734,366,366,3781,4147,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0138,bob,single,50,1,4600,8433,8912,479,479,3833,4312,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0139,bob,single,50,1,4605,8637,8762,125,125,4032,4157,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0140,alice,single,50,1,4612,8734,9248,514,514,4122,4636,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0141,alice,paired,50,2,4715,17322,17706,384,384,12607,12991,29,false,gpu-b gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0142,alice,single,50,1,4720,8761,9217,456,456,4041,4497,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0143,alice,paired,50,2,4735,17456,18061,605,605,12721,13326,28,false,gpu-b gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0144,bob,single,50,1,4738,8762,9353,591,591,4024,4615,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0145,bob,single,50,1,4753,8790,9390,600,600,4037,4637,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0146,alice,single,50,1,4758,8912,9348,436,436,4154,4590,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0147,alice,paired,50,2,4791,17706,18132,426,426,12915,13341,25,false,gpu-b gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0148,bob,single,50,1,4812,9217,9643,426,426,4405,4831,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0149,bob,single,50,1,4834,9248,9476,228,228,4414,4642,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0150,alice,single,50,1,4854,9348,9758,410,410,4494,4904,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0151,bob,single,50,1,4884,9353,9640,287,287,4469,4756,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0152,bob,single,50,1,4993,9390,9836,446,446,4397,4843,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0153,alice,single,50,1,5039,9476,9873,397,397,4437,4834,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0154,bob,single,50,1,5066,9640,10002,362,362,4574,4936,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0155,alice,single,50,1,5075,9643,9862,219,219,4568,4787,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0156,bob,single,50,1,5126,9758,10167,409,409,4632,5041,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0157,alice,paired,50,2,5139,18061,18882,821,821,12922,13743,16,false,gpu-b gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0158,alice,single,50,1,5141,9836,10225,389,389,4695,5084,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0159,bob,paired,50,2,5165,18132,18611,479,479,12967,13446,15,false,gpu-b gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0160,bob,single,50,1,5202,9862,10349,487,487,4660,5147,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0161,bob,single,50,1,5257,9873,10438,565,565,4616,5181,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0162,bob,single,50,1,5305,10002,10320,318,318,4697,5015,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0163,alice,single,50,1,5317,10167,10365,198,198,4850,5048,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0164,bob,single,50,1,5360,10225,10515,290,290,4865,5155,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0165,alice,single,50,1,5403,10320,10549,229,229,4917,5146,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0166,bob,single,50,1,5414,10349,10597,248,248,4935,5183,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0167,alice,single,50,1,5440,10365,10924,559,559,4925,5484,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0168,bob,paired,50,2,5465,18611,19092,481,481,13146,13627,7,false,gpu-b gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0169,alice,single,50,1,5473,10438,10860,422,422,4965,5387,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0170,alice,paired,50,2,5491,18882,19727,845,845,13391,14236,6,false,gpu-b gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0171,alice,single,50,1,5509,10515,10804,289,289,5006,5295,0,false,gpu-b
+E-heterogeneous,fifo,vram,opportunistic,j0172,bob,single,50,1,5518,10549,10765,216,216,5031,5247,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0173,alice,single,50,1,5578,10597,10740,143,143,5019,5162,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0174,bob,paired,50,2,5662,19092,19912,820,820,13430,14250,3,false,gpu-b gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0175,alice,paired,50,2,5721,19727,20136,409,409,14006,14415,3,false,gpu-b gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0176,alice,paired,50,2,5768,19912,20607,695,695,14144,14839,3,false,gpu-b gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0177,bob,single,50,1,5813,10740,10937,197,197,4927,5124,0,false,gpu-c
+E-heterogeneous,fifo,vram,opportunistic,j0178,alice,single,50,1,5909,10765,10946,181,181,4856,5037,0,false,gpu-a
+E-heterogeneous,fifo,vram,opportunistic,j0179,bob,single,50,1,5987,10804,11079,275,275,4817,5092,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0000,bob,paired,50,2,7,7,686,679,679,0,679,0,false,gpu-b gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0001,alice,single,50,1,10,10,487,477,477,0,477,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0002,bob,single,50,1,33,33,274,241,241,0,241,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0003,bob,single,50,1,42,42,172,130,130,0,130,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0004,bob,paired,50,2,73,686,1162,476,476,613,1089,5,false,gpu-b gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0005,bob,paired,50,2,84,784,1202,418,418,700,1118,6,false,gpu-c gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0006,bob,single,50,1,106,172,538,366,366,66,432,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0007,bob,paired,50,2,278,1162,1587,425,425,884,1309,5,false,gpu-b gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0008,bob,single,50,1,293,293,602,309,309,0,309,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0009,alice,single,50,1,404,487,784,297,297,83,380,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0010,bob,single,50,1,418,538,784,246,246,120,366,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0011,bob,single,50,1,486,602,759,157,157,116,273,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0012,bob,single,50,1,488,759,1307,548,548,271,819,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0013,alice,single,50,1,505,1202,1644,442,442,697,1139,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0014,bob,single,50,1,545,1202,1694,492,492,657,1149,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0015,alice,single,50,1,576,1307,1451,144,144,731,875,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0016,alice,single,50,1,596,1451,1730,279,279,855,1134,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0017,alice,single,50,1,599,1587,1889,302,302,988,1290,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0018,alice,single,50,1,659,1587,1943,356,356,928,1284,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0019,alice,paired,50,2,668,10924,11319,395,395,10256,10651,129,false,gpu-c gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0020,alice,single,50,1,696,1644,2045,401,401,948,1349,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0021,bob,paired,50,2,715,10946,11766,820,820,10231,11051,128,false,gpu-b gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0022,alice,single,50,1,811,1694,2073,379,379,883,1262,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0023,alice,single,50,1,831,1730,1928,198,198,899,1097,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0024,bob,single,50,1,831,1889,2363,474,474,1058,1532,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0025,bob,single,50,1,844,1928,2062,134,134,1084,1218,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0026,alice,single,50,1,865,1943,2407,464,464,1078,1542,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0027,alice,single,50,1,879,2045,2313,268,268,1166,1434,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0028,bob,single,50,1,973,2062,2501,439,439,1089,1528,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0029,alice,single,50,1,1056,2073,2402,329,329,1017,1346,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0030,bob,paired,50,2,1079,11319,11958,639,639,10240,10879,120,false,gpu-c gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0031,bob,single,50,1,1101,2313,2470,157,157,1212,1369,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0032,alice,single,50,1,1122,2363,2862,499,499,1241,1740,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0033,alice,single,50,1,1249,2402,2651,249,249,1153,1402,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0034,alice,single,50,1,1258,2407,2923,516,516,1149,1665,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0035,bob,single,50,1,1334,2470,2771,301,301,1136,1437,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0036,bob,single,50,1,1341,2501,2974,473,473,1160,1633,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0037,alice,single,50,1,1345,2651,2999,348,348,1306,1654,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0038,bob,single,50,1,1397,2771,3031,260,260,1374,1634,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0039,bob,single,50,1,1401,2862,3453,591,591,1461,2052,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0040,alice,single,50,1,1405,2923,3136,213,213,1518,1731,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0041,bob,single,50,1,1410,2974,3309,335,335,1564,1899,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0042,bob,paired,50,2,1464,11766,12309,543,543,10302,10845,109,false,gpu-b gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0043,alice,single,50,1,1485,2999,3157,158,158,1514,1672,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0044,bob,single,50,1,1488,3031,3424,393,393,1543,1936,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0045,bob,single,50,1,1504,3136,3256,120,120,1632,1752,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0046,alice,single,50,1,1509,3157,3615,458,458,1648,2106,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0047,bob,paired,50,2,1542,11958,12397,439,439,10416,10855,105,false,gpu-c gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0048,alice,single,50,1,1562,3256,3525,269,269,1694,1963,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0049,bob,single,50,1,1590,3309,3815,506,506,1719,2225,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0050,alice,single,50,1,1619,3424,3602,178,178,1805,1983,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0051,bob,single,50,1,1666,3453,3934,481,481,1787,2268,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0052,alice,single,50,1,1723,3525,3854,329,329,1802,2131,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0053,alice,single,50,1,1770,3602,4069,467,467,1832,2299,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0054,bob,paired,50,2,1835,12309,12886,577,577,10474,11051,99,false,gpu-b gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0055,bob,paired,50,2,1869,12397,13279,882,882,10528,11410,99,false,gpu-c gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0056,bob,single,50,1,1894,3615,4094,479,479,1721,2200,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0057,alice,single,50,1,1910,3815,4066,251,251,1905,2156,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0058,bob,single,50,1,2019,3854,4431,577,577,1835,2412,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0059,bob,single,50,1,2021,3934,4253,319,319,1913,2232,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0060,alice,single,50,1,2066,4066,4426,360,360,2000,2360,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0061,bob,single,50,1,2083,4069,4458,389,389,1986,2375,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0062,alice,single,50,1,2141,4094,4249,155,155,1953,2108,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0063,alice,single,50,1,2226,4249,4507,258,258,2023,2281,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0064,alice,single,50,1,2226,4253,4393,140,140,2027,2167,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0065,bob,single,50,1,2271,4393,4812,419,419,2122,2541,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0066,bob,paired,50,2,2362,12886,13538,652,652,10524,11176,89,false,gpu-b gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0067,alice,single,50,1,2376,4426,4587,161,161,2050,2211,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0068,bob,single,50,1,2376,4431,4932,501,501,2055,2556,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0069,bob,single,50,1,2407,4458,4625,167,167,2051,2218,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0070,bob,single,50,1,2424,4507,5054,547,547,2083,2630,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0071,alice,single,50,1,2446,4587,4957,370,370,2141,2511,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0072,bob,single,50,1,2532,4625,4978,353,353,2093,2446,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0073,bob,single,50,1,2565,4812,5286,474,474,2247,2721,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0074,bob,single,50,1,2569,4932,5096,164,164,2363,2527,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0075,bob,single,50,1,2573,4957,5544,587,587,2384,2971,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0076,bob,single,50,1,2682,4978,5359,381,381,2296,2677,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0077,alice,single,50,1,2762,5054,5581,527,527,2292,2819,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0078,alice,paired,50,2,2772,13279,14039,760,760,10507,11267,78,false,gpu-c gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0079,bob,single,50,1,2828,5096,5235,139,139,2268,2407,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0080,bob,single,50,1,2869,5235,5812,577,577,2366,2943,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0081,alice,single,50,1,2894,5286,5499,213,213,2392,2605,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0082,alice,paired,50,2,2898,13538,13889,351,351,10640,10991,75,false,gpu-b gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0083,alice,single,50,1,2933,5359,5679,320,320,2426,2746,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0084,bob,paired,50,2,2988,13889,14556,667,667,10901,11568,74,false,gpu-b gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0085,alice,single,50,1,3056,5499,5676,177,177,2443,2620,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0086,bob,paired,50,2,3103,14039,14347,308,308,10936,11244,73,false,gpu-c gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0087,bob,paired,50,2,3110,14347,15099,752,752,11237,11989,73,false,gpu-c gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0088,bob,single,50,1,3158,5544,5986,442,442,2386,2828,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0089,bob,single,50,1,3230,5581,5918,337,337,2351,2688,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0090,alice,single,50,1,3234,5676,5834,158,158,2442,2600,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0091,bob,paired,50,2,3265,14556,14875,319,319,11291,11610,70,false,gpu-b gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0092,alice,single,50,1,3308,5679,5832,153,153,2371,2524,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0093,bob,single,50,1,3375,5812,6034,222,222,2437,2659,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0094,alice,single,50,1,3375,5832,6413,581,581,2457,3038,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0095,alice,single,50,1,3379,5834,6296,462,462,2455,2917,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0096,bob,single,50,1,3464,5918,6252,334,334,2454,2788,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0097,alice,single,50,1,3498,5986,6496,510,510,2488,2998,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0098,bob,single,50,1,3500,6034,6219,185,185,2534,2719,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0099,alice,single,50,1,3518,6219,6737,518,518,2701,3219,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0100,alice,paired,50,2,3527,14875,15377,502,502,11348,11850,62,false,gpu-b gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0101,bob,single,50,1,3528,6252,6576,324,324,2724,3048,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0102,bob,single,50,1,3541,6296,6691,395,395,2755,3150,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0103,bob,single,50,1,3544,6413,6811,398,398,2869,3267,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0104,bob,single,50,1,3555,6496,7017,521,521,2941,3462,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0105,bob,single,50,1,3564,6576,7133,557,557,3012,3569,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0106,alice,paired,50,2,3575,15099,15610,511,511,11524,12035,57,false,gpu-c gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0107,bob,single,50,1,3593,6691,7252,561,561,3098,3659,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0108,bob,single,50,1,3610,6737,7276,539,539,3127,3666,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0109,bob,single,50,1,3641,6811,6938,127,127,3170,3297,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0110,bob,paired,50,2,3687,15377,15999,622,622,11690,12312,54,false,gpu-b gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0111,alice,single,50,1,3742,6938,7072,134,134,3196,3330,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0112,bob,single,50,1,3752,7017,7522,505,505,3265,3770,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0113,alice,single,50,1,3830,7072,7340,268,268,3242,3510,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0114,bob,single,50,1,3872,7133,7657,524,524,3261,3785,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0115,bob,paired,50,2,3893,15610,15949,339,339,11717,12056,49,false,gpu-c gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0116,alice,single,50,1,3893,7252,7422,170,170,3359,3529,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0117,bob,paired,50,2,3928,15949,16627,678,678,12021,12699,49,false,gpu-c gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0118,alice,single,50,1,4035,7276,7410,134,134,3241,3375,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0119,bob,single,50,1,4056,7340,7725,385,385,3284,3669,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0120,alice,single,50,1,4060,7410,7831,421,421,3350,3771,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0121,bob,single,50,1,4105,7422,7769,347,347,3317,3664,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0122,alice,single,50,1,4145,7522,8038,516,516,3377,3893,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0123,bob,single,50,1,4158,7657,8198,541,541,3499,4040,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0124,bob,single,50,1,4280,7725,8073,348,348,3445,3793,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0125,bob,single,50,1,4283,7769,7990,221,221,3486,3707,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0126,alice,single,50,1,4286,7831,8031,200,200,3545,3745,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0127,bob,single,50,1,4294,7990,8368,378,378,3696,4074,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0128,bob,single,50,1,4311,8031,8254,223,223,3720,3943,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0129,bob,single,50,1,4364,8038,8433,395,395,3674,4069,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0130,alice,paired,50,2,4399,15999,16809,810,810,11600,12410,37,false,gpu-b gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0131,bob,paired,50,2,4400,16627,17322,695,695,12227,12922,37,false,gpu-c gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0132,bob,paired,50,2,4425,16809,17456,647,647,12384,13031,37,false,gpu-b gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0133,alice,single,50,1,4444,8073,8286,213,213,3629,3842,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0134,bob,single,50,1,4449,8198,8761,563,563,3749,4312,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0135,bob,single,50,1,4491,8254,8637,383,383,3763,4146,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0136,bob,single,50,1,4502,8286,8790,504,504,3784,4288,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0137,bob,single,50,1,4587,8368,8734,366,366,3781,4147,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0138,bob,single,50,1,4600,8433,8912,479,479,3833,4312,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0139,bob,single,50,1,4605,8637,8762,125,125,4032,4157,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0140,alice,single,50,1,4612,8734,9248,514,514,4122,4636,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0141,alice,paired,50,2,4715,17322,17706,384,384,12607,12991,29,false,gpu-c gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0142,alice,single,50,1,4720,8761,9217,456,456,4041,4497,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0143,alice,paired,50,2,4735,17456,18061,605,605,12721,13326,28,false,gpu-b gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0144,bob,single,50,1,4738,8762,9353,591,591,4024,4615,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0145,bob,single,50,1,4753,8790,9390,600,600,4037,4637,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0146,alice,single,50,1,4758,8912,9348,436,436,4154,4590,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0147,alice,paired,50,2,4791,17706,18132,426,426,12915,13341,25,false,gpu-c gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0148,bob,single,50,1,4812,9217,9643,426,426,4405,4831,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0149,bob,single,50,1,4834,9248,9476,228,228,4414,4642,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0150,alice,single,50,1,4854,9348,9758,410,410,4494,4904,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0151,bob,single,50,1,4884,9353,9640,287,287,4469,4756,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0152,bob,single,50,1,4993,9390,9836,446,446,4397,4843,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0153,alice,single,50,1,5039,9476,9873,397,397,4437,4834,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0154,bob,single,50,1,5066,9640,10002,362,362,4574,4936,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0155,alice,single,50,1,5075,9643,9862,219,219,4568,4787,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0156,bob,single,50,1,5126,9758,10167,409,409,4632,5041,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0157,alice,paired,50,2,5139,18061,18882,821,821,12922,13743,16,false,gpu-b gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0158,alice,single,50,1,5141,9836,10225,389,389,4695,5084,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0159,bob,paired,50,2,5165,18132,18611,479,479,12967,13446,15,false,gpu-c gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0160,bob,single,50,1,5202,9862,10349,487,487,4660,5147,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0161,bob,single,50,1,5257,9873,10438,565,565,4616,5181,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0162,bob,single,50,1,5305,10002,10320,318,318,4697,5015,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0163,alice,single,50,1,5317,10167,10365,198,198,4850,5048,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0164,bob,single,50,1,5360,10225,10515,290,290,4865,5155,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0165,alice,single,50,1,5403,10320,10549,229,229,4917,5146,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0166,bob,single,50,1,5414,10349,10597,248,248,4935,5183,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0167,alice,single,50,1,5440,10365,10924,559,559,4925,5484,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0168,bob,paired,50,2,5465,18611,19092,481,481,13146,13627,7,false,gpu-c gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0169,alice,single,50,1,5473,10438,10860,422,422,4965,5387,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0170,alice,paired,50,2,5491,18882,19727,845,845,13391,14236,6,false,gpu-b gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0171,alice,single,50,1,5509,10515,10804,289,289,5006,5295,0,false,gpu-c
+E-heterogeneous,fifo,topology,opportunistic,j0172,bob,single,50,1,5518,10549,10765,216,216,5031,5247,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0173,alice,single,50,1,5578,10597,10740,143,143,5019,5162,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0174,bob,paired,50,2,5662,19092,19912,820,820,13430,14250,3,false,gpu-c gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0175,alice,paired,50,2,5721,19727,20136,409,409,14006,14415,3,false,gpu-b gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0176,alice,paired,50,2,5768,19912,20607,695,695,14144,14839,3,false,gpu-c gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0177,bob,single,50,1,5813,10740,10937,197,197,4927,5124,0,false,gpu-b
+E-heterogeneous,fifo,topology,opportunistic,j0178,alice,single,50,1,5909,10765,10946,181,181,4856,5037,0,false,gpu-a
+E-heterogeneous,fifo,topology,opportunistic,j0179,bob,single,50,1,5987,10804,11079,275,275,4817,5092,0,false,gpu-c

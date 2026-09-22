@@ -1,0 +1,5 @@
+scenario,queue_policy,placement_policy,dispatch,seed,jobs,cluster_gpus,jobs_completed,jobs_failed,jobs_never_started,avg_wait_s,p50_wait_s,p95_wait_s,max_wait_s,avg_turnaround_s,p95_turnaround_s,makespan_s,gpu_utilisation,throughput_per_hour,jain_fairness,wait_fairness,heavy_user_wait_ratio,starved_jobs,jobs_overtaken_often,max_overtaken_by,fragmentation,mean_slowdown,scheduler_us_per_pass,scheduling_passes,git_commit
+A-uniform,fifo,performance,opportunistic,1001,200,8,200,0,0,61.7,47.0,178.0,220.0,242.9,383.0,5046,0.8979,142.69,1.0000,1.0000,0.997,0,0,0,0.210,1.000,1.9,335,119dc06-dirty
+A-uniform,fifo,performance,strict,1001,200,8,200,0,0,61.7,47.0,178.0,220.0,242.9,383.0,5046,0.8979,142.69,1.0000,1.0000,0.997,0,0,0,0.210,1.000,2.5,335,119dc06-dirty
+D-large-and-small,fifo,performance,opportunistic,1004,200,8,200,0,0,1528.8,171.0,10801.0,13604.0,1786.0,11611.0,18915,0.9812,38.07,0.9996,0.9936,1.175,15,35,141,0.061,1.000,4.4,384,119dc06-dirty
+D-large-and-small,fifo,performance,strict,1004,200,8,200,0,0,7471.4,7317.0,14169.0,14551.0,7728.7,14356.0,19738,0.9403,36.48,0.9996,0.9980,0.915,165,0,0,0.162,1.000,4.8,384,119dc06-dirty

@@ -70,7 +70,10 @@ Requires [uv](https://docs.astral.sh/uv/) and a Rust toolchain
 | `python/tools/preprocess_adni.py` | ADNI T1 DICOM zips → compact volumes + manifest |
 | `mojo/kernels/` | Mojo custom kernels (`ferro_gelu`), compiled via MAX |
 | `docker/Dockerfile.train` | Optional custom training image |
+| `crates/ferro-sim` | Offline scheduler evaluation: workload generator, simulator, experiment runner |
+| `python/examples/gpu_burn.py` | Instant-start GPU workload for scheduling demos |
 | `scripts/` | Build, deploy, sync, prepare, benchmark |
+| `docs/os_term_project/` | Scheduling design, experiments and results |
 
 ## Requirements
 
@@ -844,6 +847,25 @@ Reproduce with:
 ```bash
 ./scripts/benchmark.sh gpu-a gpu-b
 ```
+
+### Comparing scheduling policies without a cluster
+
+The queue and placement policies are evaluated offline, against synthetic
+workloads, by code that links the same `ferro-sched` crate the controller runs:
+
+```bash
+./scripts/run_os_experiments.sh      # no GPU needed
+```
+
+That writes `outputs/benchmarks/*/summary.csv` with waiting time, turnaround,
+makespan, utilisation, Jain fairness, starvation and measured scheduler
+overhead for every policy over every workload, each row carrying its seed and
+git commit. The findings are written up in
+[`docs/os_term_project/experiments.md`](docs/os_term_project/experiments.md) --
+including two that changed the code: performance-aware placement pairs the two
+fastest nodes across the slowest measured link, and `run_queue` already
+backfills, which is worth 4.9x on mean waiting time and costs an unbounded tail
+for large jobs.
 
 ---
 

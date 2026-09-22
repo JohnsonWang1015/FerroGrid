@@ -309,7 +309,7 @@ score breakdown for a real decision.
 
 ---
 
-### Phase 4 — Evaluation (the term project's actual contribution)
+### Phase 4 — Evaluation (the term project's actual contribution) ✅ *complete*
 
 `crates/ferro-sim`: workload generator (Poisson arrivals, N users, job size
 mix), deterministic simulator driving **the same `ferro-sched` policies**, and an

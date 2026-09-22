@@ -5,6 +5,126 @@ specification (§91). Newest entry first.
 
 ---
 
+## Phase 4 — Evaluation
+
+**Phase:** 4 — Simulator, workload generator, experiment runner
+**Status:** ✅ Complete. Gate met, with one documented deviation.
+
+### Implemented
+
+- **`crates/ferro-sim`** — a discrete-event simulator that links `ferro-sched`
+  and drives the *same* policy objects the controller runs. No second
+  scheduler exists.
+- **Workload generator** — Poisson arrivals, weighted users, weighted job
+  classes, and a deliberate split between a job's *true* duration and the one
+  its submitter *declared*, so SJF can be evaluated against estimates that are
+  absent or wrong.
+- **Own PRNG** (PCG-XSH-RR, 40 lines). A reproducibility claim that depends on
+  a third party not changing an unspecified algorithm is not a reproducibility
+  claim.
+- **Eight scenarios** (§51 A–E, G, plus I for mixed priorities and H for bad
+  estimates). F, controller failure, is absent rather than faked: a simulator
+  with no controller cannot restart one.
+- **Metrics** — avg/p50/p95/max wait, turnaround, makespan, utilisation,
+  throughput, Jain fairness over GPU-seconds *and* over waiting time, the
+  heavy-user wait ratio, starvation, fragmentation, mean slowdown, and measured
+  scheduler overhead.
+- **`scripts/run_os_experiments.sh`** — one command, five sweeps, CSV + JSON
+  with seed, cluster, policy config and git commit on every row.
+- **`python/examples/gpu_burn.py`** (§74) — a compute-bound demo workload that
+  starts instantly, with `--idle` for producing the squatter case on purpose.
+- **`docs/os_term_project/experiments.md`** — the write-up, every figure read
+  off the generated CSVs.
+
+### Files changed
+
+```
+NEW  crates/ferro-sim/                          simulator, generator, metrics, runner
+NEW  scripts/run_os_experiments.sh
+NEW  python/examples/gpu_burn.py
+NEW  docs/os_term_project/experiments.md
+NEW  outputs/benchmarks/                        generated results, committed
+```
+
+### Tests
+
+| Check | Result |
+|---|---|
+| `cargo test --workspace` | **199 passed, 0 failed** (was 154) |
+| `uv run --all-extras pytest -q` | **19 passed** |
+| `cargo fmt --check` / `clippy -D warnings` | ✅ clean |
+
+### Three measurement bugs the experiments exposed
+
+Each was found by running the thing and disbelieving the output.
+
+1. **Starvation was defined as being overtaken.** FIFO scored zero by
+   construction and every reordering policy scored badly for reordering. A
+   definition that decides the comparison before it runs is not a metric. Now:
+   waited more than ten times your own runtime, which is scale-free and
+   policy-neutral.
+2. **Jain fairness over GPU-seconds was identical under every policy.** On a
+   run where the queue drains, what a user received equals what they demanded.
+   The index was describing the workload. Per-user waiting time and a
+   directional heavy-user ratio were added; fair share moves the latter from
+   0.99 to 4.69.
+3. **All five placement strategies produced byte-identical output.** Of course
+   they did — a job took the same time wherever it landed. The simulator now
+   models the two effects that make placement matter, and `--flat-execution`
+   keeps the old behaviour as the control proving it.
+
+### Headline results
+
+- **Aging halves what priority costs the queue's tail.** Strict priority makes
+  the low-priority user wait 11.72× longer than everyone else; aging brings
+  that to 4.62× while still serving urgent work first.
+- **Fair share corrects a flooded cluster**: the greedy user's wait rises 33 %,
+  the three polite users' fall 3–4×.
+- **SJF is worth 4.6× with honest estimates and 1.04× with realistic ones.**
+  Its entire advantage is a claim about information quality.
+- **Performance-aware placement walks into the slow wire**: 35 of 36 multi-node
+  jobs across a pair measured at 90 Mb/s, running 9.3× slow, because it ranks
+  by *negotiated* speed and every NIC claims 1000. Topology-aware placement
+  avoids it deliberately and gets the best utilisation of the five.
+- **FerroGrid already backfills.** `run_queue` walks the whole waiting list, so
+  dispatch is opportunistic, not strict FIFO. That is worth 4.9× on mean
+  waiting time — and costs an unbounded tail for large jobs, which is what
+  reservation would fix.
+- **Policy choice costs 0.2 µs per scheduling pass.** Measured, not assumed.
+
+### Gate
+
+The roadmap's gate asked for results covering "FIFO / priority / aging /
+fair-share / SJF / backfill". Five of the six are covered. **Backfill is not
+implemented** (it is Phase 7), so rather than fabricate a row, the dispatch
+sweep measures the opportunistic-versus-strict question FerroGrid actually
+poses today. That is a deviation from the stated gate and is recorded as one.
+
+### Known limitations
+
+1. **One seed per scenario.** No confidence intervals. The runner supports
+   sweeping `seed`; the script does not yet.
+2. **The execution model's constants are calibrated, not derived.** Absolute
+   slowdowns are "this scale", not "this figure".
+3. **Aging is tuned to the simulated timescales** (30 s / 5 points) rather than
+   the controller's defaults (60 s / 1 point), because at the defaults no job
+   in these workloads waits long enough for aging to do anything.
+4. **Fragmentation is reported but does not yet discriminate.** The workloads
+   lack the packing pressure that would separate best-fit from first-fit on it.
+5. **No real-cluster validation.** Every number here is simulated. The
+   placement path was demonstrated end to end on one GPU in Phase 3, but
+   nothing has cross-checked a simulated waiting time against a measured one.
+
+### Next
+
+Phase 5 — persistence. SQLite with WAL for jobs, queue, history, usage,
+benchmarks, network measurements and events; ephemeral telemetry stays in
+memory. Then Phase 6's reconciliation, which the audit found is already half
+done on the wire: agents report running jobs and GPU ownership on every
+heartbeat, and the controller currently discards what it does not recognise.
+
+---
+
 ## Phase 3 — Placement Algorithms
 
 **Phase:** 3 — Named placement strategies, measured topology, explainability
