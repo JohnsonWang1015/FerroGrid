@@ -1,8 +1,11 @@
 //! FerroGrid scheduling core.
 //!
-//! Two questions, deliberately kept apart:
+//! Three questions, deliberately kept apart:
 //!
 //! * **Which job runs next?** -- [`QueuePolicy`], over the waiting queue.
+//! * **Who may go now?** -- [`dispatch::admissible`], over the ranked queue and
+//!   what is already running. Ordering does not change; who is allowed to
+//!   overtake does.
 //! * **Where should it run?** -- [`PlacementPolicy`], over the cluster snapshot.
 //!
 //! Every policy here is a pure function of its inputs. It gets an immutable
@@ -15,10 +18,12 @@
 //! stubbed there -- at which point the simulator is measuring a second
 //! implementation rather than the one that ships.
 
+pub mod dispatch;
 pub mod placement;
 pub mod queue;
 pub mod topology;
 
+pub use dispatch::{admissible, Admission, Dispatch, RunningJob};
 pub use placement::{
     node_verdicts, BestFit, FirstFit, PerformancePlacement, PlacementDecision, PlacementPolicy,
     PlacementRequest, PlacementScore, PlacementWeights, Shape, TopologyAware, VramAware,
@@ -166,11 +171,31 @@ pub fn placement_policy(name: &str) -> Result<std::sync::Arc<dyn PlacementPolicy
     Ok(policy)
 }
 
+/// Build a dispatch mode by name.
+///
+/// `opportunistic` is the default everywhere, and deliberately so: see the
+/// [`dispatch`] module documentation for the measurements that make
+/// `reserved` an opt-in rather than an upgrade.
+pub fn dispatch_mode(name: &str) -> Result<Dispatch, UnknownPolicy> {
+    match name {
+        "opportunistic" => Ok(Dispatch::Opportunistic),
+        "strict" => Ok(Dispatch::Strict),
+        "reserved" => Ok(Dispatch::Reserved),
+        _ => Err(UnknownPolicy {
+            kind: "dispatch",
+            given: name.to_string(),
+            known: DISPATCH_MODES,
+        }),
+    }
+}
+
 /// Every queue policy this build knows, for `--help` and error messages.
 pub const QUEUE_POLICIES: &[&str] = &["fifo", "priority", "aging", "fair-share", "sjf"];
 /// Every placement policy this build knows.
 pub const PLACEMENT_POLICIES: &[&str] =
     &["performance", "first-fit", "best-fit", "vram", "topology"];
+/// Every dispatch mode this build knows.
+pub const DISPATCH_MODES: &[&str] = &["opportunistic", "strict", "reserved"];
 
 #[derive(Debug, thiserror::Error)]
 #[error("unknown {kind} policy `{given}` (known: {})", known.join(", "))]

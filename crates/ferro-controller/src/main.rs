@@ -60,6 +60,19 @@ struct Args {
     #[arg(long, default_value = "fifo", value_name = "POLICY")]
     queue_policy: String,
 
+    /// Who, out of the ranked queue, may start on a given tick.
+    ///
+    /// `opportunistic` starts anything that fits, which is what FerroGrid has
+    /// always done and measured 4.9x better than `strict` on mean waiting
+    /// time. `strict` serves the queue in order and stops at the first job
+    /// that does not fit. `reserved` backfills as `opportunistic` does, but
+    /// only past a reservation the backfilled job can prove it will not
+    /// delay -- which it can only do when the jobs involved declared
+    /// `--estimated-duration` or `--timeout`. On a cluster where they do not,
+    /// `reserved` degrades to `strict`, which is why it is not the default.
+    #[arg(long, default_value = "opportunistic", value_name = "MODE")]
+    dispatch: String,
+
     /// Aging: seconds a job must wait to earn one step of priority.
     #[arg(long, default_value_t = 60, value_name = "SECONDS")]
     aging_interval_secs: u32,
@@ -139,6 +152,7 @@ async fn main() -> Result<()> {
         },
     };
     let queue_policy = ferro_sched::queue_policy(&args.queue_policy, &tuning)?;
+    let dispatch = ferro_sched::dispatch_mode(&args.dispatch)?;
     let mut restored_jobs = 0;
     let registry = Arc::new(if args.no_state {
         tracing::warn!("--no-state: jobs and measurements will not survive a restart");
@@ -208,6 +222,7 @@ async fn main() -> Result<()> {
         min_free_vram_gib = args.min_free_vram_gib,
         queue_policy = %args.queue_policy,
         placement_policy = %args.placement_policy,
+        dispatch = dispatch.label(),
         "ferro-controller listening"
     );
 
@@ -222,7 +237,12 @@ async fn main() -> Result<()> {
     // Nothing else notices a node going quiet: heartbeats simply stop.
     tokio::spawn(service::watch_node_health(registry.clone()));
     // Jobs submitted with `--wait` sit here until the cluster frees up.
-    tokio::spawn(service::run_queue(registry.clone(), placement, sched));
+    tokio::spawn(service::run_queue(
+        registry.clone(),
+        placement,
+        sched,
+        dispatch,
+    ));
 
     tonic::transport::Server::builder()
         .add_service(ControllerServer::new(svc))

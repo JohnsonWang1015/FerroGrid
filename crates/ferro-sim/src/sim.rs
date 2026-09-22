@@ -13,19 +13,26 @@
 //! dispatch: it already backfills, without reservations. The consequence is
 //! worth being explicit about, because it is a real property of the system
 //! rather than a modelling choice -- a four-GPU job can be passed over
-//! indefinitely by a stream of one-GPU jobs, which is precisely the case
-//! reservation (§34) exists to fix.
+//! indefinitely by a stream of one-GPU jobs, which is what reservation exists
+//! to fix.
 //!
-//! So [`Dispatch`] offers both, and the default is what FerroGrid actually
+//! So all three modes are offered, and the default is what FerroGrid actually
 //! does. A simulator that modelled an idealised strict FIFO would produce
 //! numbers about a scheduler nobody is running.
+//!
+//! [`Dispatch`] is `ferro_sched`'s own type, not a copy of it: the mode this
+//! compares is the mode the controller runs, for the same reason the policies
+//! are.
 
 use crate::workload::{ClusterSpec, SimJob, WorkloadSpec};
 use ferro_proto::{JobPlan, NodeState};
+use ferro_sched::dispatch::{self, RunningJob};
 use ferro_sched::queue::{QueueContext, QueuePolicy, QueuedJob, UsageSnapshot, UserUsage};
 use ferro_sched::{NetworkSnapshot, PlacementPolicy, PlacementRequest, SchedulerConfig, Shape};
 use serde::Serialize;
 use std::collections::HashMap;
+
+pub use ferro_sched::dispatch::Dispatch;
 
 /// How a placement decision turns into a running time.
 ///
@@ -109,27 +116,6 @@ impl ExecutionModel {
             _ => 1.0,
         };
         ((nominal as f64) * compute * network).round().max(1.0) as i64
-    }
-}
-
-/// How the dispatcher treats a job at the head of the queue that does not fit.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-pub enum Dispatch {
-    /// Keep walking the ranked list and start anything that fits. What the
-    /// controller does today.
-    Opportunistic,
-    /// Stop at the first job that does not fit, so nothing overtakes it.
-    /// Classic FIFO behaviour, with the head-of-line blocking that comes with
-    /// it. Useful as a comparison point, not as a recommendation.
-    Strict,
-}
-
-impl Dispatch {
-    pub fn label(self) -> &'static str {
-        match self {
-            Dispatch::Opportunistic => "opportunistic",
-            Dispatch::Strict => "strict",
-        }
     }
 }
 
@@ -426,6 +412,7 @@ pub fn run(
         if !waiting.is_empty() {
             let started = schedule_pass(
                 &mut waiting,
+                &running,
                 &mut nodes,
                 &network,
                 queue_policy,
@@ -535,10 +522,26 @@ fn records_started_after(records: &HashMap<String, JobRecord>, arrival: i64, sel
         .count() as u32
 }
 
-/// Rank the waiting list and start whatever fits, returning what was started.
+/// What a running job is *expected* to release its GPUs at, as the controller
+/// would compute it.
+///
+/// **Not** `Running::end_s`. That is the job's true duration, which the
+/// simulator knows and the controller never does; feeding it to reservation
+/// would hand the algorithm perfect information and turn the comparison into a
+/// fiction. Only the declared estimate is used -- and the timeout would be too,
+/// if the workload model had one -- exactly as `run_queue` does it.
+fn declared_end_s(r: &Running) -> Option<i64> {
+    r.job
+        .estimated_duration_s
+        .map(|d| r.start_s.saturating_add(d as i64))
+}
+
+/// Rank the waiting list and start whatever the dispatch mode allows,
+/// returning what was started.
 #[allow(clippy::too_many_arguments)]
 fn schedule_pass(
     waiting: &mut Vec<(u64, SimJob)>,
+    running: &[Running],
     nodes: &mut [NodeState],
     network: &NetworkSnapshot,
     queue_policy: &dyn QueuePolicy,
@@ -561,17 +564,40 @@ fn schedule_pass(
             submitted_by: j.user.clone(),
             priority: j.priority,
             estimated_duration_s: j.estimated_duration_s,
+            // The workload model has no wall-clock limits, so the estimate is
+            // the only thing a simulated job ever declares.
+            timeout_s: None,
             gpus: j.gpus(),
+        })
+        .collect();
+    let live: Vec<RunningJob> = running
+        .iter()
+        .map(|r| RunningJob {
+            job_id: r.job.id.clone(),
+            gpus: r.job.gpus(),
+            expected_end_s: declared_end_s(r),
         })
         .collect();
 
     let started_at = std::time::Instant::now();
     let ranked = queue_policy.rank(&queued, &QueueContext::new(now, &snapshot));
+    // In ranked order, which is what `admissible` is defined over.
+    let in_order: Vec<QueuedJob> = ranked
+        .iter()
+        .filter_map(|r| queued.iter().find(|q| q.job_id == r.job_id).cloned())
+        .collect();
+    let admissions = dispatch::admissible(
+        &in_order,
+        &live,
+        dispatch::free_gpus(nodes, config.min_free_vram_b),
+        now,
+        dispatch,
+    );
     *scheduler_ns += started_at.elapsed().as_nanos();
 
     let mut started = Vec::new();
-    for ranking in ranked {
-        let Some(index) = waiting.iter().position(|(_, j)| j.id == ranking.job_id) else {
+    for admission in admissions.iter().filter(|a| a.allowed) {
+        let Some(index) = waiting.iter().position(|(_, j)| j.id == admission.job_id) else {
             continue;
         };
         let job = &waiting[index].1;
@@ -591,18 +617,10 @@ fn schedule_pass(
             outcome
         };
 
-        match placed {
-            Ok(decision) => {
-                let (_, job) = waiting.remove(index);
-                set_allocation(nodes, &decision.plan, &job.id);
-                started.push((job, decision.plan));
-            }
-            Err(_) => {
-                if dispatch == Dispatch::Strict {
-                    // Nothing may overtake the head of the queue.
-                    break;
-                }
-            }
+        if let Ok(decision) = placed {
+            let (_, job) = waiting.remove(index);
+            set_allocation(nodes, &decision.plan, &job.id);
+            started.push((job, decision.plan));
         }
     }
     started
@@ -749,7 +767,27 @@ mod tests {
         // FerroGrid's actual behaviour, and the reason reservation is on the
         // roadmap: a four-GPU job can be walked past by one-GPU jobs.
         let mut w = workload(40, 3.0, one_class(1, 1, 40));
-        w.classes = vec![
+        w.classes = wide_and_narrow();
+        let out = run(
+            &w,
+            &ClusterSpec::homogeneous(1, 4),
+            &Fifo,
+            &FirstFit,
+            &config(),
+            Dispatch::Opportunistic,
+            &ExecutionModel::flat(),
+        );
+        let passed_over: u32 = out.jobs.iter().map(|j| j.overtaken_by).sum();
+        assert!(
+            passed_over > 0,
+            "opportunistic dispatch should let somebody overtake"
+        );
+    }
+
+    /// The pair of classes that makes head-of-line blocking bite: one job wide
+    /// enough to need the whole node, against a stream of narrow ones.
+    fn wide_and_narrow() -> Vec<JobClass> {
+        vec![
             JobClass {
                 name: "big".into(),
                 weight: 1.0,
@@ -766,20 +804,77 @@ mod tests {
                 min_duration_s: 40,
                 max_duration_s: 40,
             },
-        ];
-        let out = run(
-            &w,
-            &ClusterSpec::homogeneous(1, 4),
-            &Fifo,
-            &FirstFit,
-            &config(),
-            Dispatch::Opportunistic,
-            &ExecutionModel::flat(),
-        );
-        let passed_over: u32 = out.jobs.iter().map(|j| j.overtaken_by).sum();
+        ]
+    }
+
+    fn overtakes(out: &SimOutcome) -> u32 {
+        out.jobs.iter().map(|j| j.overtaken_by).sum()
+    }
+
+    #[test]
+    fn reserved_dispatch_bounds_what_opportunistic_leaves_open() {
+        // The point of the mode, asserted: everybody declares an accurate
+        // duration here, so reservation has what it needs and the small jobs
+        // may only overtake when they provably will not delay the big one.
+        let mut w = workload(40, 3.0, one_class(1, 1, 40));
+        w.classes = wide_and_narrow();
+        let cluster = ClusterSpec::homogeneous(1, 4);
+        let go = |d| {
+            run(
+                &w,
+                &cluster,
+                &Fifo,
+                &FirstFit,
+                &config(),
+                d,
+                &ExecutionModel::flat(),
+            )
+        };
+
+        let opportunistic = go(Dispatch::Opportunistic);
+        let reserved = go(Dispatch::Reserved);
         assert!(
-            passed_over > 0,
-            "opportunistic dispatch should let somebody overtake"
+            overtakes(&reserved) < overtakes(&opportunistic),
+            "reservation should let fewer jobs past: {} vs {}",
+            overtakes(&reserved),
+            overtakes(&opportunistic)
+        );
+    }
+
+    #[test]
+    fn reservation_is_given_no_information_the_controller_would_not_have() {
+        // The single easiest way to fake this result is to reserve against the
+        // *true* durations, which the simulator knows and the controller never
+        // does. So: take the declarations away entirely. Reservation then has
+        // nothing to compute an earliest start from and must collapse onto
+        // strict FIFO. If it does not, it is reading the future.
+        let mut w = workload(40, 3.0, one_class(1, 1, 40));
+        w.classes = wide_and_narrow();
+        w.estimate_fraction = 0.0;
+        let cluster = ClusterSpec::homogeneous(1, 4);
+        let go = |d| {
+            run(
+                &w,
+                &cluster,
+                &Fifo,
+                &FirstFit,
+                &config(),
+                d,
+                &ExecutionModel::flat(),
+            )
+        };
+
+        let schedule = |o: &SimOutcome| -> Vec<(String, Option<i64>)> {
+            o.jobs.iter().map(|j| (j.id.clone(), j.start_s)).collect()
+        };
+        assert_eq!(
+            schedule(&go(Dispatch::Reserved)),
+            schedule(&go(Dispatch::Strict)),
+            "with nothing declared, reservation must degrade to strict FIFO"
+        );
+        assert!(
+            overtakes(&go(Dispatch::Opportunistic)) > 0,
+            "the control: the same workload does produce overtaking"
         );
     }
 

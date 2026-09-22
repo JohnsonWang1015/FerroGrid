@@ -59,6 +59,15 @@ struct RunArgs {
     #[arg(long)]
     with_strict: bool,
 
+    /// Also run every scenario under reservation-based backfilling. Worth
+    /// reading next to `--with-strict`: reservation is what bounds the large-job
+    /// tail that opportunistic dispatch leaves open, and it can only do so for
+    /// jobs whose submitters declared a duration. A scenario where few of them
+    /// did (`estimate_fraction`) is a scenario where reservation degrades
+    /// towards strict, which is the finding rather than a flaw in the run.
+    #[arg(long)]
+    with_reserved: bool,
+
     /// A GPU must have this much free VRAM to be placed on.
     #[arg(long, default_value_t = 8)]
     min_free_vram_gib: u64,
@@ -151,6 +160,10 @@ fn list() -> Result<()> {
         "Placement policies: {}",
         ferro_sched::PLACEMENT_POLICIES.join(", ")
     );
+    println!(
+        "Dispatch modes:     {} (--with-strict, --with-reserved)",
+        ferro_sched::DISPATCH_MODES.join(", ")
+    );
     Ok(())
 }
 
@@ -224,11 +237,13 @@ fn run(args: RunArgs) -> Result<()> {
     } else {
         args.queue.clone()
     };
-    let dispatches = if args.with_strict {
-        vec![Dispatch::Opportunistic, Dispatch::Strict]
-    } else {
-        vec![Dispatch::Opportunistic]
-    };
+    let mut dispatches = vec![Dispatch::Opportunistic];
+    if args.with_strict {
+        dispatches.push(Dispatch::Strict);
+    }
+    if args.with_reserved {
+        dispatches.push(Dispatch::Reserved);
+    }
 
     std::fs::create_dir_all(&args.out)
         .with_context(|| format!("creating {}", args.out.display()))?;

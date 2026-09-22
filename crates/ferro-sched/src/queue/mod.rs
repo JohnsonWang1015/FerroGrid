@@ -44,6 +44,11 @@ pub struct QueuedJob {
     /// What the submitter expects this to run for. `None` means **unknown**,
     /// and no policy may quietly turn that into a number.
     pub estimated_duration_s: Option<u32>,
+    /// The wall-clock limit after which the controller kills this job, if the
+    /// submitter set one. A different claim from the estimate: this one is
+    /// enforced, which is what lets [`crate::dispatch`] treat it as a bound
+    /// rather than a hope. `None` means no limit, not a limit of zero.
+    pub timeout_s: Option<u32>,
     /// GPUs this job is asking for, used to weigh what granting it would cost.
     pub gpus: u32,
 }
@@ -171,6 +176,7 @@ pub(crate) mod tests_support {
             submitted_by: "tester".into(),
             priority: DEFAULT_PRIORITY,
             estimated_duration_s: None,
+            timeout_s: None,
             gpus: 1,
         }
     }

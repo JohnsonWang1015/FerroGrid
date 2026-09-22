@@ -11,6 +11,7 @@ use ferro_proto::{
     LogLine, NodeInfo, NodeState, NodeVerdict, PlacementExplanation, QueueScore, ScoreComponent,
     SubmitJobRequest, TrainingMetrics,
 };
+use ferro_sched::dispatch::RunningJob;
 use ferro_sched::{
     NetworkSnapshot, QueueContext, QueuePolicy, QueueRanking, QueuedJob, UsageSnapshot, UserUsage,
 };
@@ -210,6 +211,29 @@ impl Job {
             now
         };
         (ended - started).max(0) as f64 * gpus as f64
+    }
+
+    /// When this job is expected to release its GPUs, or `None` if nobody ever
+    /// said and it is therefore unknowable.
+    ///
+    /// Two different claims, and both optional. The estimate is what the
+    /// submitter expects; the timeout is what `reap_expired` enforces by
+    /// killing the job. Where both exist the smaller wins, because that is the
+    /// earliest second past which the job has either finished or been stopped
+    /// -- and an earliest-start computed from it is the conservative one, which
+    /// admits less backfilling rather than more.
+    ///
+    /// Measured from `submitted` rather than from any rank's start time,
+    /// because `promote` resets `submitted` when the job starts and that is
+    /// precisely the clock `expired_jobs` enforces the timeout against. Two
+    /// answers to "when does the timeout fire" would eventually disagree.
+    pub fn expected_end_s(&self) -> Option<i64> {
+        let timeout = (self.timeout_s > 0).then_some(self.timeout_s);
+        let declared = match (self.estimated_duration_s, timeout) {
+            (Some(estimate), Some(limit)) => Some(estimate.min(limit)),
+            (estimate, limit) => estimate.or(limit),
+        };
+        declared.map(|d| self.submitted.saturating_add(d as i64))
     }
 
     pub fn record_util(&mut self, pct: f64) {
@@ -961,25 +985,67 @@ impl Registry {
             .collect()
     }
 
-    /// Jobs still waiting for capacity, oldest first, with the request the
-    /// dispatcher needs to place them.
+    /// Jobs still waiting for capacity, in the queue policy's order, with the
+    /// request the dispatcher needs to place them.
     pub async fn queued_jobs(&self) -> Vec<(String, SubmitJobRequest, i64)> {
+        self.waiting_jobs()
+            .await
+            .into_iter()
+            .map(|(job, req, deadline)| (job.job_id, req, deadline))
+            .collect()
+    }
+
+    /// The same list, keeping the reduced form the dispatch modes reason over.
+    ///
+    /// Order is the queue policy's decision, not this function's. The same
+    /// ranking backs `queue_position`, so what a user is told and what the
+    /// dispatcher does cannot drift apart.
+    pub async fn waiting_jobs(&self) -> Vec<(QueuedJob, SubmitJobRequest, i64)> {
         let g = self.inner.lock().await;
-        let mut out: Vec<(String, SubmitJobRequest, i64)> = g
+        let mut by_id: HashMap<String, QueuedJob> = g
+            .waiting()
+            .into_iter()
+            .map(|q| (q.job_id.clone(), q))
+            .collect();
+        g.queue_order(now_s())
+            .into_iter()
+            .filter_map(|id| {
+                let job = g.jobs.get(&id)?;
+                let req = job.queue_req.clone()?;
+                Some((by_id.remove(&id)?, req, job.queue_deadline))
+            })
+            .collect()
+    }
+
+    /// Jobs holding GPUs right now, reduced to what reservation needs of them.
+    ///
+    /// A job with no declared duration and no timeout appears here with an
+    /// unknown end, which is the honest answer and the one that makes
+    /// `Dispatch::Reserved` refuse to backfill past it. Jobs holding no GPUs
+    /// at all -- a queued job, or one whose plan is empty -- are left out:
+    /// they free nothing, so they can only push an earliest start later than
+    /// it really is.
+    pub async fn running_jobs(&self) -> Vec<RunningJob> {
+        let g = self.inner.lock().await;
+        let mut out: Vec<RunningJob> = g
             .jobs
             .values()
-            .filter(|j| j.queued)
-            .filter_map(|j| {
-                j.queue_req
-                    .clone()
-                    .map(|r| (j.job_id.clone(), r, j.queue_deadline))
+            .filter(|j| !j.queued && !j.phase().is_terminal())
+            .map(|j| RunningJob {
+                job_id: j.job_id.clone(),
+                gpus: j
+                    .plan
+                    .placements
+                    .iter()
+                    .map(|p| p.gpu_indices.len() as u32)
+                    .sum(),
+                expected_end_s: j.expected_end_s(),
             })
+            .filter(|r| r.gpus > 0)
             .collect();
-        // Order is the queue policy's decision, not this function's. The same
-        // ranking backs `queue_position`, so what a user is told and what the
-        // dispatcher does cannot drift apart.
-        let ranked = g.queue_order(now_s());
-        out.sort_by_key(|(id, _, _)| ranked.iter().position(|j| j == id).unwrap_or(usize::MAX));
+        // `jobs` is a hash map, so the iteration order is arbitrary; the
+        // dispatcher is a pure function of this list and must not inherit that.
+        out.sort_by(|a, b| a.job_id.cmp(&b.job_id));
         out
     }
 
@@ -1561,10 +1627,10 @@ impl RegistryInner {
         UsageSnapshot { per_user }
     }
 
-    /// Every waiting job, scored and ordered by the queue policy.
-    pub fn ranked_queue(&self, now: i64) -> Vec<QueueRanking> {
-        let waiting: Vec<QueuedJob> = self
-            .job_order
+    /// Every waiting job, reduced to what the queue policy and the dispatch
+    /// modes are allowed to look at.
+    pub fn waiting(&self) -> Vec<QueuedJob> {
+        self.job_order
             .iter()
             .enumerate()
             .filter_map(|(seq, id)| {
@@ -1578,10 +1644,18 @@ impl RegistryInner {
                     submitted_by: job.submitted_by.clone(),
                     priority: job.priority,
                     estimated_duration_s: job.estimated_duration_s,
+                    // 0 means no limit in the request; `None` is how the
+                    // scheduling core spells "the submitter did not say".
+                    timeout_s: (job.timeout_s > 0).then_some(job.timeout_s),
                     gpus: job.queue_req.as_ref().map(requested_gpus).unwrap_or(0),
                 })
             })
-            .collect();
+            .collect()
+    }
+
+    /// Every waiting job, scored and ordered by the queue policy.
+    pub fn ranked_queue(&self, now: i64) -> Vec<QueueRanking> {
+        let waiting = self.waiting();
         let usage = self.usage_snapshot(now);
         self.queue_policy
             .rank(&waiting, &QueueContext::new(now, &usage))

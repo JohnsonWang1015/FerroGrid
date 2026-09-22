@@ -12,7 +12,7 @@
 #
 #   queue/       every queue policy over every workload
 #   placement/   every placement policy over the heterogeneous cluster
-#   dispatch/    opportunistic vs strict head-of-line dispatch
+#   dispatch/    opportunistic vs strict head-of-line vs reserved dispatch
 #   flat/        the same placement comparison with placement made invisible,
 #                which is the control showing the execution model is doing the
 #                work rather than the strategies differing by accident
@@ -61,10 +61,14 @@ echo "=== 3/5  the same, with placement made invisible (control) ===============
     --placement vram --placement topology
 
 echo
-echo "=== 4/5  opportunistic vs strict dispatch ===================================="
+echo "=== 4/5  opportunistic vs strict vs reserved dispatch ========================"
 # What FerroGrid's walk-the-whole-queue dispatcher is worth against the strict
-# head-of-line FIFO it is usually assumed to be.
-"$SIM" run --out "$OUT/dispatch" --scenario D --scenario A --queue fifo --with-strict
+# head-of-line FIFO it is usually assumed to be, and what reservation costs to
+# bound the large-job tail that walking the whole queue leaves open. Reservation
+# can only hold a place for jobs whose submitters declared a duration, so the
+# scenarios' `estimate_fraction` is as much a part of that row as the mode is.
+"$SIM" run --out "$OUT/dispatch" --scenario D --scenario A --queue fifo \
+    --with-strict --with-reserved
 
 echo
 echo "=== 5/5  scheduler traces ===================================================="

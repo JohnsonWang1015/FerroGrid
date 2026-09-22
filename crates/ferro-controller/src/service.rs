@@ -6,7 +6,8 @@ use ferro_proto::node_agent_client::NodeAgentClient;
 use ferro_proto::*;
 use ferro_sched as scheduler;
 use ferro_sched::{
-    PlacementDecision, PlacementPolicy, PlacementRequest, SchedulerConfig, SchedulingContext, Shape,
+    Dispatch, PlacementDecision, PlacementPolicy, PlacementRequest, SchedulerConfig,
+    SchedulingContext, Shape,
 };
 use std::collections::{BTreeSet, VecDeque};
 use std::pin::Pin;
@@ -1278,78 +1279,135 @@ async fn dispatch_ranks(
 /// One pass per tick, in whatever order the registry's queue policy ranks the
 /// waiting jobs. The order itself is not decided here -- that is the queue
 /// policy's job, and keeping it there is what lets the position a user was
-/// told stay consistent with the order they are actually served in.
+/// told stay consistent with the order they are actually served in. *Who may
+/// go now*, out of that order, is [`Dispatch`]'s decision and equally not this
+/// function's.
 pub async fn run_queue(
     registry: std::sync::Arc<Registry>,
     placement: Arc<dyn PlacementPolicy>,
     sched: SchedulerConfig,
+    dispatch: Dispatch,
 ) {
     let mut tick = tokio::time::interval(std::time::Duration::from_secs(5));
     loop {
         tick.tick().await;
-        for (job_id, req, deadline) in registry.queued_jobs().await {
-            if deadline > 0 && now_s() > deadline {
-                tracing::warn!(job = %job_id, "gave up waiting for capacity");
-                registry
-                    .dequeue(&job_id, JobPhase::Failed, "gave up waiting for capacity")
-                    .await;
-                continue;
-            }
+        queue_pass(&registry, &placement, &sched, dispatch).await;
+    }
+}
 
-            // Re-read the cluster for every job: the one placed a moment ago
-            // took GPUs the next one must not be handed as well.
-            let nodes = registry.node_states().await;
-            let network = registry.network_snapshot().await;
-            let (plan_result, verdicts) =
-                plan_for(&nodes, &network, &req, &*placement, &sched, now_s());
-            let (plan, verdicts, explanation) = match plan_result {
-                Ok(decision) => {
-                    let plan = decision.plan.clone();
-                    if let Err(message) = validate_image_overrides(&req, &plan) {
-                        registry
-                            .update_queue_assessment(&job_id, verdicts, message.clone(), Vec::new())
-                            .await;
-                        registry.dequeue(&job_id, JobPhase::Failed, &message).await;
-                        continue;
-                    }
+/// One dispatcher pass, returning the jobs it started.
+///
+/// Split out of [`run_queue`]'s loop so that what a dispatch mode does to the
+/// queue can be asserted without a cluster to launch on: the return value is
+/// what this pass promoted, whether or not the agents were reachable
+/// afterwards.
+pub async fn queue_pass(
+    registry: &std::sync::Arc<Registry>,
+    placement: &Arc<dyn PlacementPolicy>,
+    sched: &SchedulerConfig,
+    dispatch: Dispatch,
+) -> Vec<String> {
+    // Patience runs out whether or not the dispatch mode would have let this
+    // job try: a queued job past its deadline has to end, and deciding that
+    // only for the admissible ones would strand the rest forever.
+    let mut waiting = Vec::new();
+    for (job, req, deadline) in registry.waiting_jobs().await {
+        if deadline > 0 && now_s() > deadline {
+            tracing::warn!(job = %job.job_id, "gave up waiting for capacity");
+            registry
+                .dequeue(
+                    &job.job_id,
+                    JobPhase::Failed,
+                    "gave up waiting for capacity",
+                )
+                .await;
+            continue;
+        }
+        waiting.push((job, req));
+    }
+    if waiting.is_empty() {
+        return Vec::new();
+    }
 
-                    let explanation = explain(&decision);
-                    let warnings = compatibility_warnings(&nodes, &plan);
+    let ranked: Vec<ferro_sched::QueuedJob> = waiting.iter().map(|(j, _)| j.clone()).collect();
+    let running = registry.running_jobs().await;
+    let free = scheduler::dispatch::free_gpus(&registry.node_states().await, sched.min_free_vram_b);
+    // One [`Admission`] per ranked job, in the same order, which is what makes
+    // the zip below sound.
+    let admissions = scheduler::admissible(&ranked, &running, free, now_s(), dispatch);
+
+    let mut started = Vec::new();
+    for (admission, (_, req)) in admissions.iter().zip(waiting.iter()) {
+        let job_id = &admission.job_id;
+        if !admission.allowed {
+            // The dispatcher is why this job is waiting, so that is what the
+            // job says. Leaving the last placement attempt's verdict there
+            // would answer a question nobody asked this tick.
+            registry
+                .update_queue_assessment(
+                    job_id,
+                    Vec::new(),
+                    admission.reason.to_string(),
+                    Vec::new(),
+                )
+                .await;
+            continue;
+        }
+
+        // Re-read the cluster for every job: the one placed a moment ago
+        // took GPUs the next one must not be handed as well.
+        let nodes = registry.node_states().await;
+        let network = registry.network_snapshot().await;
+        let (plan_result, verdicts) = plan_for(&nodes, &network, req, &**placement, sched, now_s());
+        let (plan, verdicts, explanation) = match plan_result {
+            Ok(decision) => {
+                let plan = decision.plan.clone();
+                if let Err(message) = validate_image_overrides(req, &plan) {
                     registry
-                        .update_queue_assessment(&job_id, verdicts.clone(), String::new(), warnings)
+                        .update_queue_assessment(job_id, verdicts, message.clone(), Vec::new())
                         .await;
-                    (plan, verdicts, Some(explanation))
-                }
-                Err(e) => {
-                    let message = e.to_string();
-                    registry
-                        .update_queue_assessment(&job_id, verdicts, message.clone(), Vec::new())
-                        .await;
-                    if !retryable_schedule_error(&e) {
-                        registry.dequeue(&job_id, JobPhase::Failed, &message).await;
-                    }
+                    registry.dequeue(job_id, JobPhase::Failed, &message).await;
                     continue;
                 }
-            };
-            // Reserve before promoting. A job that lost the cards to a racing
-            // submission belongs back in line, not in the failed list: it did
-            // nothing wrong, and it is still waiting for exactly what it asked
-            // for. The next tick plans it again against fresh state.
-            if let Err(conflict) = registry.reserve_exact(&plan, &job_id).await {
-                tracing::info!(job = %job_id, "still waiting: {conflict}");
+
+                let explanation = explain(&decision);
+                let warnings = compatibility_warnings(&nodes, &plan);
                 registry
-                    .update_queue_assessment(&job_id, verdicts, conflict.to_string(), Vec::new())
+                    .update_queue_assessment(job_id, verdicts.clone(), String::new(), warnings)
                     .await;
+                (plan, verdicts, Some(explanation))
+            }
+            Err(e) => {
+                let message = e.to_string();
+                registry
+                    .update_queue_assessment(job_id, verdicts, message.clone(), Vec::new())
+                    .await;
+                if !retryable_schedule_error(&e) {
+                    registry.dequeue(job_id, JobPhase::Failed, &message).await;
+                }
                 continue;
             }
+        };
+        // Reserve before promoting. A job that lost the cards to a racing
+        // submission belongs back in line, not in the failed list: it did
+        // nothing wrong, and it is still waiting for exactly what it asked
+        // for. The next tick plans it again against fresh state.
+        if let Err(conflict) = registry.reserve_exact(&plan, job_id).await {
+            tracing::info!(job = %job_id, "still waiting: {conflict}");
+            registry
+                .update_queue_assessment(job_id, verdicts, conflict.to_string(), Vec::new())
+                .await;
+            continue;
+        }
 
-            registry.promote(&job_id, plan.clone(), explanation).await;
-            tracing::info!(job = %job_id, world_size = plan.world_size, "capacity freed, launching");
-            if let Err(e) = dispatch_ranks(&registry, &req, &job_id, &plan).await {
-                tracing::error!(job = %job_id, "queued job failed to launch: {e}");
-            }
+        registry.promote(job_id, plan.clone(), explanation).await;
+        started.push(job_id.clone());
+        tracing::info!(job = %job_id, world_size = plan.world_size, "capacity freed, launching");
+        if let Err(e) = dispatch_ranks(registry, req, job_id, &plan).await {
+            tracing::error!(job = %job_id, "queued job failed to launch: {e}");
         }
     }
+    started
 }
 
 /// Notices nodes going quiet, and coming back.
