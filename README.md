@@ -638,6 +638,38 @@ forwarded verbatim to the script.
 | `--env K=V` | extra environment, e.g. `--env NCCL_DEBUG=INFO` (repeatable) |
 | `--workdir` | working directory, relative to the agent workspace |
 | `--name` | label shown in `ferro jobs` |
+| `--priority N` | 0-100, higher goes first. Ignored by the default FIFO policy |
+| `--estimated-duration D` | how long you expect it to take, for the `sjf` policy |
+| `--project NAME` | accounting bucket |
+
+### Choosing who runs next
+
+The controller's queue policy decides the order jobs leave the waiting list.
+It is chosen at startup and applies to new scheduling decisions only:
+
+```bash
+ferro-controller --queue-policy aging --aging-interval-secs 60 --aging-increment 1
+```
+
+| Policy | Orders by | Notable property |
+|---|---|---|
+| `fifo` (default) | submission order | no starvation from priority; head-of-line blocking |
+| `priority` | `--priority`, then arrival | urgent work gets through; the bottom of the queue can starve |
+| `aging` | priority plus a bonus per interval waited | bounded waiting: a low-priority job eventually outranks new urgent ones |
+| `fair-share` | weighted priority + waiting − the submitter's GPU-seconds | evens out between users over time |
+| `sjf` | shortest `--estimated-duration` first | lowest mean wait when estimates exist. A job with **no** estimate is ordered last rather than guessed at, so long and unestimated jobs can starve — offered for experiments, not as a default |
+
+`ferro queue` shows the resulting order and the arithmetic behind it:
+
+```
+Queue policy: aging
+ POS  JOB           USER     PRIORITY  SCORE   WAIT  REQUEST  WHY WAITING
+ 1    j18670e3350   alice    10        100.00  17m   2 GPU    no nodes are registered
+ 2    ja46c306db5   bob      90        95.00   2m    1 GPU    no nodes are registered
+
+  j18670e3350  base priority +10.00  aging bonus +90.00  = 100.00
+  ja46c306db5  base priority +90.00  aging bonus +5.00   = 95.00
+```
 
 The controller computes the placement and prints it before launching:
 
@@ -1375,10 +1407,12 @@ Phase 1 is deliberately small. Known gaps, in rough priority order:
 
 - Controller state is in memory: node registrations self-heal after a restart,
   job history does not.
-- Queue policy is FIFO only; no priority, aging or fair sharing yet. Without
-  `--wait`, a job that cannot be placed is still rejected rather than held.
+- Without `--wait`, a job that cannot be placed is still rejected rather than
+  held. Queue policy is selectable (`fifo`, `priority`, `aging`, `fair-share`,
+  `sjf`); placement is not yet.
 - No authentication or TLS on the gRPC endpoints; run it on a trusted network.
-- No quotas, preemption or per-user accounting.
+- Fair share tracks GPU-seconds per user, but there are no quotas, no
+  preemption and no `ferro usage` report yet.
 - Elastic/fault-tolerant training is not wired up; a rank failure fails the job.
 - `--gpus-per-node` is uniform across nodes, as torchrun expects.
 

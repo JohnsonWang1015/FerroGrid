@@ -233,14 +233,13 @@ impl Controller for ControllerService {
     async fn get_job(&self, req: Request<GetJobRequest>) -> Result<Response<JobSummary>, Status> {
         let id = req.into_inner().job_id;
         let g = self.registry.inner.lock().await;
-        g.jobs
-            .get(&id)
-            .map(|j| {
-                let mut summary = j.to_summary();
-                summary.queue_position = g.queue_position(&id);
-                Response::new(summary)
-            })
-            .ok_or_else(|| Status::not_found(format!("no such job {id}")))
+        let Some(job) = g.jobs.get(&id) else {
+            return Err(Status::not_found(format!("no such job {id}")));
+        };
+        let mut summary = [job.to_summary()];
+        g.annotate_queue(&mut summary, now_s());
+        let [summary] = summary;
+        Ok(Response::new(summary))
     }
 
     async fn list_jobs(
@@ -254,12 +253,9 @@ impl Controller for ControllerService {
             .iter()
             .rev()
             .filter_map(|id| g.jobs.get(id))
-            .map(|j| {
-                let mut summary = j.to_summary();
-                summary.queue_position = g.queue_position(&j.job_id);
-                summary
-            })
+            .map(|j| j.to_summary())
             .collect();
+        g.annotate_queue(&mut jobs, now_s());
         if limit > 0 {
             jobs.truncate(limit as usize);
         }
@@ -1033,6 +1029,14 @@ fn new_job(
         job_id: job_id.to_string(),
         name,
         submitted_by: req.submitted_by.clone(),
+        project: req.project.clone(),
+        // Unset means "no opinion", which is the middle of the dial -- not
+        // zero, which would mean "run me last".
+        priority: req
+            .priority
+            .unwrap_or(ferro_sched::DEFAULT_PRIORITY)
+            .min(ferro_sched::MAX_PRIORITY),
+        estimated_duration_s: req.estimated_duration_s,
         timeout_s: req.timeout_s,
         plan,
         per_node: Default::default(),

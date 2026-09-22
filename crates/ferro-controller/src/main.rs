@@ -37,6 +37,31 @@ struct Args {
     #[arg(long, default_value = "fifo", value_name = "POLICY")]
     queue_policy: String,
 
+    /// Aging: seconds a job must wait to earn one step of priority.
+    #[arg(long, default_value_t = 60, value_name = "SECONDS")]
+    aging_interval_secs: u32,
+
+    /// Aging: priority added per completed interval. 0 disables aging, which
+    /// makes `--queue-policy aging` behave exactly like `priority`.
+    #[arg(long, default_value_t = 1)]
+    aging_increment: u32,
+
+    /// Aging: effective priority may not exceed this, however long the wait.
+    #[arg(long, default_value_t = ferro_sched::MAX_PRIORITY)]
+    aging_ceiling: u32,
+
+    /// Fair share: weight on the submitted priority.
+    #[arg(long, default_value_t = 1.0, value_name = "W")]
+    fair_priority_weight: f64,
+
+    /// Fair share: weight on how long the job has waited.
+    #[arg(long, default_value_t = 1.0, value_name = "W")]
+    fair_wait_weight: f64,
+
+    /// Fair share: weight on the submitter's GPU-seconds already consumed.
+    #[arg(long, default_value_t = 1.0, value_name = "W")]
+    fair_usage_weight: f64,
+
     /// Where a job runs, once it has been chosen to run.
     #[arg(long, default_value = "performance", value_name = "POLICY")]
     placement_policy: String,
@@ -52,7 +77,19 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
     let min_free_vram_b = args.min_free_vram_gib << 30;
-    let queue_policy = ferro_sched::queue_policy(&args.queue_policy)?;
+    let tuning = ferro_sched::QueueTuning {
+        aging: ferro_sched::queue::aging::AgingConfig {
+            interval_s: args.aging_interval_secs,
+            increment: args.aging_increment,
+            ceiling: args.aging_ceiling,
+        },
+        fair_share: ferro_sched::queue::fair_share::FairShareConfig {
+            priority_weight: args.fair_priority_weight,
+            wait_weight: args.fair_wait_weight,
+            usage_weight: args.fair_usage_weight,
+        },
+    };
+    let queue_policy = ferro_sched::queue_policy(&args.queue_policy, &tuning)?;
     let registry = Arc::new(Registry::with_queue_policy(min_free_vram_b, queue_policy));
     let plugins = plugins::Registry::load(args.plugins.as_deref())?;
     match &plugins.source {

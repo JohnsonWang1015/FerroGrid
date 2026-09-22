@@ -139,6 +139,11 @@ enum Cmd {
         #[arg(short, long)]
         follow: bool,
     },
+    /// Show the jobs waiting for capacity, in the order they will be served.
+    Queue {
+        #[command(flatten)]
+        watch: WatchArgs,
+    },
     /// Cancel a running job.
     Cancel { job_id: String },
 }
@@ -259,6 +264,34 @@ struct TrainArgs {
     #[arg(long, value_parser = parse_duration, num_args = 0..=1,
           default_missing_value = "0", value_name = "GIVE-UP-AFTER")]
     wait: Option<u32>,
+
+    /// Scheduling priority, 0-100. Higher goes first. Only meaningful under a
+    /// priority-aware queue policy; the default FIFO ignores it.
+    #[arg(long, value_parser = parse_priority)]
+    priority: Option<u32>,
+
+    /// How long you expect this to run: 90s, 30m, 2h. Used by the `sjf` queue
+    /// policy, which orders jobs with no estimate *last* rather than guessing
+    /// one for them.
+    #[arg(long, value_parser = parse_duration, value_name = "DURATION")]
+    estimated_duration: Option<u32>,
+
+    /// Accounting bucket for `ferro usage`, e.g. --project adni.
+    #[arg(long)]
+    project: Option<String>,
+}
+
+/// 0-100, rejected loudly outside that range rather than silently clamped: a
+/// user who typed 500 meant something, and it was not 100.
+fn parse_priority(s: &str) -> Result<u32, String> {
+    let n: u32 = s
+        .trim()
+        .parse()
+        .map_err(|_| format!("priority must be a whole number 0-100, got `{s}`"))?;
+    if n > 100 {
+        return Err(format!("priority must be 0-100, got {n}"));
+    }
+    Ok(n)
 }
 
 /// Accepts a bare number of seconds, or a value suffixed s/m/h.
@@ -453,6 +486,19 @@ async fn main() -> Result<()> {
         }
         Cmd::Logs { job_id, follow } => {
             stream_logs(&mut client, &job_id, follow).await?;
+        }
+        Cmd::Queue { watch } => {
+            repeat(watch, cli.json, || async {
+                // The whole queue, not a page of it: a waiting list you cannot
+                // see the end of does not answer "when is my turn".
+                let mut c = client.clone();
+                let r = c
+                    .list_jobs(ListJobsRequest { limit: 0 })
+                    .await?
+                    .into_inner();
+                Ok(render::queue(&r.jobs, cli.json))
+            })
+            .await?;
         }
         Cmd::Cancel { job_id } => {
             let r = client
@@ -754,6 +800,9 @@ async fn train(client: &mut ControllerClient<Channel>, args: TrainArgs, json: bo
         submitted_by: std::env::var("USER")
             .or_else(|_| std::env::var("LOGNAME"))
             .unwrap_or_default(),
+        priority: args.priority,
+        estimated_duration_s: args.estimated_duration,
+        project: args.project.unwrap_or_default(),
     };
 
     let resp = client.submit_job(req).await?.into_inner();

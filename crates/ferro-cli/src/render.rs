@@ -435,6 +435,122 @@ pub fn jobs(list: &[JobSummary], json: bool) -> String {
     out
 }
 
+/// The waiting list, in the order the scheduler will serve it.
+///
+/// Separate from `ferro jobs` because they answer different questions. `jobs`
+/// is a history; this is a prediction, and the only column that matters is the
+/// first one. The effective score is shown next to the submitted priority
+/// because under aging or fair share they differ, and a user whose position
+/// does not match their priority deserves to see why.
+pub fn queue(list: &[JobSummary], json: bool) -> String {
+    let mut waiting: Vec<&JobSummary> = list.iter().filter(|j| j.queued).collect();
+    waiting.sort_by_key(|j| j.queue_position);
+
+    if json {
+        let v: Vec<_> = waiting
+            .iter()
+            .map(|j| {
+                serde_json::json!({
+                    "position": j.queue_position,
+                    "job_id": j.job_id,
+                    "name": j.name,
+                    "user": j.submitted_by,
+                    "project": j.project,
+                    "priority": j.priority,
+                    "waited_s": (now_s() - j.submitted_unix_s).max(0),
+                    "estimated_duration_s": j.estimated_duration_s,
+                    "request": request_shape(j),
+                    "queue_message": j.queue_message,
+                    "score": j.queue_score.as_ref().map(|s| serde_json::json!({
+                        "policy": s.policy,
+                        "total": s.total,
+                        "components": s.components.iter()
+                            .map(|c| serde_json::json!({"name": c.name, "value": c.value}))
+                            .collect::<Vec<_>>(),
+                    })),
+                })
+            })
+            .collect();
+        return dump(&v);
+    }
+
+    if waiting.is_empty() {
+        return "Nothing is waiting for capacity.\n".into();
+    }
+
+    let policy = waiting
+        .iter()
+        .find_map(|j| j.queue_score.as_ref().map(|s| s.policy.clone()))
+        .unwrap_or_default();
+
+    let mut t = table(&[
+        "POS",
+        "JOB",
+        "USER",
+        "PRIORITY",
+        "SCORE",
+        "WAIT",
+        "REQUEST",
+        "WHY WAITING",
+    ]);
+    for j in &waiting {
+        t.add_row(vec![
+            Cell::new(j.queue_position),
+            Cell::new(&j.job_id),
+            Cell::new(short_or(&j.submitted_by, "-")),
+            Cell::new(j.priority),
+            Cell::new(
+                j.queue_score
+                    .as_ref()
+                    .map(|s| format!("{:.2}", s.total))
+                    .unwrap_or_else(|| "-".into()),
+            ),
+            Cell::new(short_dur((now_s() - j.submitted_unix_s).max(0))),
+            Cell::new(request_shape(j)),
+            Cell::new(short_or(&j.queue_message, "-")),
+        ]);
+    }
+
+    let mut out = String::new();
+    if !policy.is_empty() {
+        out.push_str(&format!("Queue policy: {policy}\n"));
+    }
+    out.push_str(&t.to_string());
+    out.push('\n');
+
+    // The breakdown behind the score, for whoever is asking why they are third.
+    for j in &waiting {
+        let Some(score) = j.queue_score.as_ref() else {
+            continue;
+        };
+        if score.components.is_empty() {
+            continue;
+        }
+        let parts: Vec<String> = score
+            .components
+            .iter()
+            .map(|c| format!("{} {:+.2}", c.name, c.value))
+            .collect();
+        out.push_str(&format!(
+            "  {}  {}  = {:.2}\n",
+            j.job_id,
+            parts.join("  "),
+            score.total
+        ));
+    }
+    out
+}
+
+/// What a queued job is asking for, as a human reads it.
+fn request_shape(j: &JobSummary) -> String {
+    match j.plan.as_ref() {
+        // A queued job has no plan yet; the world size it will get is not
+        // decided, so say what was asked for rather than inventing a shape.
+        Some(p) if p.world_size > 0 => format!("{} GPU", p.world_size),
+        _ => "pending".into(),
+    }
+}
+
 pub fn job_detail(j: &JobSummary, json: bool) -> String {
     if json {
         let m = j.metrics.unwrap_or_default();
@@ -610,7 +726,10 @@ pub fn submit(r: &SubmitJobResponse, json: bool) -> String {
         for warning in &r.warnings {
             line!(out, "  warning: {warning}");
         }
-        line!(out, "  ferro jobs            # where it sits in line");
+        line!(
+            out,
+            "  ferro queue           # where it sits in line, and why"
+        );
         line!(out, "  ferro cancel {}  # give up", r.job_id);
         return out;
     };

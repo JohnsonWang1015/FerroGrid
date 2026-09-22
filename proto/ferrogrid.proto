@@ -168,6 +168,17 @@ message SubmitJobRequest {
   uint32 queue_timeout_s = 15;
   // Per-node image overrides. These win over `image` for the matching node.
   map<string, string> node_images = 16;
+  // Scheduling priority, 0-100, higher goes first. `optional` because proto3
+  // cannot otherwise tell "the user asked for 0" from "the user said nothing",
+  // and those deserve different answers: unset takes the controller default.
+  optional uint32 priority = 17;
+  // How long the submitter expects this to run. Absent means *unknown*, and a
+  // shortest-job-first policy must treat that as unknown rather than inventing
+  // a duration -- a guessed estimate is how SJF starves the jobs it mis-guesses.
+  optional uint32 estimated_duration_s = 18;
+  // Accounting bucket, orthogonal to the submitting user: one person works on
+  // several projects and one project has several people.
+  string project = 19;
 }
 
 // Why a node was or was not considered for a placement attempt. The ledger is
@@ -250,6 +261,28 @@ message JobSummary {
   repeated NodeVerdict node_verdicts = 12;
   repeated string warnings = 13;
   string queue_message = 14;
+  // As submitted. `priority` is the base the user asked for; what the queue
+  // actually ordered by is `queue_score`, which for an aging policy drifts
+  // above the base the longer a job waits.
+  uint32 priority              = 15;
+  string project               = 16;
+  uint32 estimated_duration_s  = 17;
+  // Why this job sits where it sits. Present only while queued.
+  QueueScore queue_score       = 18;
+}
+
+// A queue policy's assessment of one job, kept in the shape it was computed
+// rather than a pre-rendered string: a scheduler nobody can audit is a
+// scheduler nobody should trust.
+message QueueScore {
+  string policy = 1;
+  double total  = 2;
+  repeated ScoreComponent components = 3;
+}
+
+message ScoreComponent {
+  string name  = 1;
+  double value = 2;
 }
 
 message TrainingMetrics {

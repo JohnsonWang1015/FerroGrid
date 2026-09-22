@@ -6,9 +6,10 @@
 
 use ferro_proto::{
     Gpu, GpuEntry, GpuOccupant, GpuProcess, JobPhase, JobPlan, JobStatus, JobSummary, LogLine,
-    NodeInfo, NodeState, NodeVerdict, SubmitJobRequest, TrainingMetrics,
+    NodeInfo, NodeState, NodeVerdict, QueueScore, ScoreComponent, SubmitJobRequest,
+    TrainingMetrics,
 };
-use ferro_sched::{QueueContext, QueuePolicy, QueuedJob};
+use ferro_sched::{QueueContext, QueuePolicy, QueueRanking, QueuedJob, UsageSnapshot, UserUsage};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex};
@@ -63,6 +64,13 @@ pub struct Job {
     pub job_id: String,
     pub name: String,
     pub submitted_by: String,
+    /// Accounting bucket, orthogonal to the submitter.
+    pub project: String,
+    /// 0-100 as submitted, with the controller's default already substituted.
+    pub priority: u32,
+    /// What the submitter said this would take. `None` means they did not say,
+    /// which is a different thing from saying zero.
+    pub estimated_duration_s: Option<u32>,
     /// Wall-clock limit in seconds; 0 disables it.
     pub timeout_s: u32,
     pub plan: JobPlan,
@@ -139,7 +147,54 @@ impl Job {
             node_verdicts: self.node_verdicts.clone(),
             warnings: self.warnings.clone(),
             queue_message: self.queue_message.clone(),
+            priority: self.priority,
+            project: self.project.clone(),
+            estimated_duration_s: self.estimated_duration_s.unwrap_or(0),
+            // Filled in by the registry, which is the only place that can run
+            // the queue policy over the whole waiting list.
+            queue_score: None,
         }
+    }
+
+    /// GPU-seconds this job has consumed as of `now`.
+    ///
+    /// Derived from the job records rather than kept in a running ledger, so
+    /// there is one source of truth: a counter maintained alongside the jobs
+    /// would be a second one, and the two would eventually disagree.
+    ///
+    /// A job that never started has consumed nothing, however long it sat in
+    /// the queue -- waiting is not usage, and charging for it would penalise
+    /// exactly the users fair share is meant to protect.
+    pub fn gpu_seconds(&self, now: i64) -> f64 {
+        let gpus: usize = self
+            .plan
+            .placements
+            .iter()
+            .map(|p| p.gpu_indices.len())
+            .sum();
+        if gpus == 0 {
+            return 0.0;
+        }
+        let Some(started) = self
+            .per_node
+            .values()
+            .map(|s| s.started_unix_s)
+            .filter(|t| *t > 0)
+            .min()
+        else {
+            return 0.0;
+        };
+        let ended = if self.phase().is_terminal() {
+            self.per_node
+                .values()
+                .map(|s| s.ended_unix_s)
+                .filter(|t| *t > 0)
+                .max()
+                .unwrap_or(now)
+        } else {
+            now
+        };
+        (ended - started).max(0) as f64 * gpus as f64
     }
 
     pub fn record_util(&mut self, pct: f64) {
@@ -327,7 +382,7 @@ impl Registry {
         // Order is the queue policy's decision, not this function's. The same
         // ranking backs `queue_position`, so what a user is told and what the
         // dispatcher does cannot drift apart.
-        let ranked = g.ranked_queue();
+        let ranked = g.queue_order(now_s());
         out.sort_by_key(|(id, _, _)| ranked.iter().position(|j| j == id).unwrap_or(usize::MAX));
         out
     }
@@ -584,8 +639,33 @@ impl RegistryInner {
             .collect()
     }
 
-    /// Every waiting job, in the order the queue policy would serve them.
-    pub fn ranked_queue(&self) -> Vec<String> {
+    /// What each user has consumed, as of `now`.
+    ///
+    /// Recomputed from the job records on demand. That is O(jobs) per call and
+    /// entirely affordable at this scale, and it buys the property that
+    /// matters: the numbers a scheduling decision used and the numbers
+    /// `ferro usage` reports cannot drift apart, because they are the same
+    /// numbers.
+    pub fn usage_snapshot(&self, now: i64) -> UsageSnapshot {
+        let mut per_user: HashMap<String, UserUsage> = HashMap::new();
+        for job in self.jobs.values() {
+            let entry = per_user.entry(job.submitted_by.clone()).or_default();
+            entry.gpu_seconds += job.gpu_seconds(now);
+            if !job.phase().is_terminal() && !job.queued {
+                entry.running_jobs += 1;
+                entry.gpus_held += job
+                    .plan
+                    .placements
+                    .iter()
+                    .map(|p| p.gpu_indices.len() as u32)
+                    .sum::<u32>();
+            }
+        }
+        UsageSnapshot { per_user }
+    }
+
+    /// Every waiting job, scored and ordered by the queue policy.
+    pub fn ranked_queue(&self, now: i64) -> Vec<QueueRanking> {
         let waiting: Vec<QueuedJob> = self
             .job_order
             .iter()
@@ -599,11 +679,51 @@ impl RegistryInner {
                     order_seq: seq as u64,
                     submitted_unix_s: job.submitted,
                     submitted_by: job.submitted_by.clone(),
+                    priority: job.priority,
+                    estimated_duration_s: job.estimated_duration_s,
+                    gpus: job.queue_req.as_ref().map(requested_gpus).unwrap_or(0),
                 })
             })
             .collect();
+        let usage = self.usage_snapshot(now);
         self.queue_policy
-            .rank(&waiting, &QueueContext { now: now_s() })
+            .rank(&waiting, &QueueContext::new(now, &usage))
+    }
+
+    /// Just the ids, in served order.
+    pub fn queue_order(&self, now: i64) -> Vec<String> {
+        self.ranked_queue(now)
+            .into_iter()
+            .map(|r| r.job_id)
+            .collect()
+    }
+
+    /// Fill in the queue view of these summaries from a single ranking pass.
+    ///
+    /// Position and score come from the same evaluation on purpose. Computing
+    /// them separately would let a heartbeat land in between and produce a
+    /// position that the score next to it does not justify -- which is exactly
+    /// the sort of inconsistency that makes users stop believing the queue.
+    pub fn annotate_queue(&self, summaries: &mut [JobSummary], now: i64) {
+        let policy = self.queue_policy.name();
+        for (index, ranking) in self.ranked_queue(now).into_iter().enumerate() {
+            let Some(summary) = summaries.iter_mut().find(|s| s.job_id == ranking.job_id) else {
+                continue;
+            };
+            summary.queue_position = index as u32 + 1;
+            summary.queue_score = Some(QueueScore {
+                policy: policy.to_string(),
+                total: ranking.score,
+                components: ranking
+                    .components
+                    .iter()
+                    .map(|(name, value)| ScoreComponent {
+                        name: (*name).to_string(),
+                        value: *value,
+                    })
+                    .collect(),
+            });
+        }
     }
 
     /// Where a job sits in line, 1-based. 0 when it is not queued.
@@ -611,11 +731,22 @@ impl RegistryInner {
         if !self.jobs.get(job_id).map(|j| j.queued).unwrap_or(false) {
             return 0;
         }
-        self.ranked_queue()
+        self.queue_order(now_s())
             .iter()
             .position(|id| id == job_id)
             .map(|i| i as u32 + 1)
             .unwrap_or(0)
+    }
+}
+
+/// How many GPUs a request is asking for, for the fair-share weighting.
+/// Auto mode has not chosen a shape yet, so it counts as the one GPU it is
+/// guaranteed to take.
+fn requested_gpus(req: &SubmitJobRequest) -> u32 {
+    if req.auto_place {
+        req.gpus_per_node.max(1)
+    } else {
+        req.nodes.max(1) * req.gpus_per_node.max(1)
     }
 }
 
@@ -680,6 +811,9 @@ mod tests {
             job_id: id.into(),
             name: id.into(),
             submitted_by: "tester".into(),
+            project: String::new(),
+            priority: ferro_sched::DEFAULT_PRIORITY,
+            estimated_duration_s: None,
             timeout_s: 0,
             plan: JobPlan::default(),
             per_node: Default::default(),

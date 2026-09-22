@@ -22,7 +22,10 @@ pub use placement::{
     node_verdicts, PerformancePlacement, PlacementDecision, PlacementPolicy, PlacementRequest,
     Shape,
 };
-pub use queue::{QueueContext, QueuePolicy, QueuedJob};
+pub use queue::{
+    jain_index, QueueContext, QueuePolicy, QueueRanking, QueuedJob, UsageSnapshot, UserUsage,
+    DEFAULT_PRIORITY, MAX_PRIORITY,
+};
 
 /// Why a placement could not be made.
 ///
@@ -84,20 +87,41 @@ impl<'a> SchedulingContext<'a> {
     }
 }
 
+/// Everything the queue policies can be tuned with, in one place.
+///
+/// Gathered into a struct rather than threaded through as arguments because
+/// the set grows with every policy, and a scheduler whose knobs are scattered
+/// across call sites is one nobody can reproduce an experiment with.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct QueueTuning {
+    pub aging: queue::aging::AgingConfig,
+    pub fair_share: queue::fair_share::FairShareConfig,
+}
+
 /// Build a queue policy by name.
 ///
 /// One registry rather than a `match` at each call site, so adding a policy is
 /// a one-line change and the error message can always list what actually
 /// exists instead of guessing at what the operator meant.
-pub fn queue_policy(name: &str) -> Result<std::sync::Arc<dyn QueuePolicy>, UnknownPolicy> {
-    match name {
-        "fifo" => Ok(std::sync::Arc::new(queue::Fifo)),
-        _ => Err(UnknownPolicy {
-            kind: "queue",
-            given: name.to_string(),
-            known: QUEUE_POLICIES,
-        }),
-    }
+pub fn queue_policy(
+    name: &str,
+    tuning: &QueueTuning,
+) -> Result<std::sync::Arc<dyn QueuePolicy>, UnknownPolicy> {
+    let policy: std::sync::Arc<dyn QueuePolicy> = match name {
+        "fifo" => std::sync::Arc::new(queue::Fifo),
+        "priority" => std::sync::Arc::new(queue::Priority),
+        "aging" => std::sync::Arc::new(queue::Aging::new(tuning.aging)),
+        "fair-share" => std::sync::Arc::new(queue::FairShare::new(tuning.fair_share)),
+        "sjf" => std::sync::Arc::new(queue::Sjf),
+        _ => {
+            return Err(UnknownPolicy {
+                kind: "queue",
+                given: name.to_string(),
+                known: QUEUE_POLICIES,
+            })
+        }
+    };
+    Ok(policy)
 }
 
 /// Build a placement policy by name.
@@ -113,7 +137,7 @@ pub fn placement_policy(name: &str) -> Result<std::sync::Arc<dyn PlacementPolicy
 }
 
 /// Every queue policy this build knows, for `--help` and error messages.
-pub const QUEUE_POLICIES: &[&str] = &["fifo"];
+pub const QUEUE_POLICIES: &[&str] = &["fifo", "priority", "aging", "fair-share", "sjf"];
 /// Every placement policy this build knows.
 pub const PLACEMENT_POLICIES: &[&str] = &["performance"];
 
