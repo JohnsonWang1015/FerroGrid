@@ -110,6 +110,11 @@ const NO_ROOM_LEFT: &str = "does not fit in the GPUs left free";
 const NO_DECLARED_DURATION: &str = "no declared duration, so it cannot prove it would finish \
                                     in time";
 const WOULD_OVERRUN: &str = "would still be running when the reserved job is due to start";
+// The two ways past a reservation are kept apart on purpose: "it will be gone
+// in time" and "nobody wanted these cards" are different promises, and an
+// operator reading the queue is entitled to know which one let a job through.
+const BACKFILLS_IN_TIME: &str = "backfill: finishes before the reserved job is due to start";
+const FITS_IN_SLACK: &str = "backfill: uses GPUs the reserved job will not need";
 const RESERVATION_UNKNOWN: &str = "the reservation's earliest start is unknown: a running job \
                                    declared nothing";
 
@@ -203,7 +208,30 @@ fn strict(ranked: &[QueuedJob], free_gpus: u32) -> Vec<Admission> {
     out
 }
 
+/// What the job holding the reservation is waiting for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Reservation {
+    /// The soonest the holder could start.
+    earliest_start_s: i64,
+    /// GPUs free at that instant *over and above* what the holder needs.
+    ///
+    /// Whatever unblocks a reservation rarely releases exactly the shortfall:
+    /// a wide job giving back four cards to cover a two-card gap leaves two
+    /// that the holder was never going to use. Those two can be held straight
+    /// through the reservation, for any length of time, without delaying it.
+    slack: u32,
+}
+
 /// EASY backfilling: one reservation, and only provably harmless overtaking.
+///
+/// EASY admits a backfill candidate on either of two grounds, and both are
+/// here. The first is temporal -- the candidate will have handed the GPUs back
+/// before the holder wants them. The second is that the holder does not want
+/// *these* GPUs at all, which is what [`Reservation::slack`] counts. Keeping
+/// only the first condition would refuse jobs that provably cannot delay
+/// anybody, for no better reason than that their submitter declined to say how
+/// long they run, and would make the whole mode hostage to a declaration it
+/// does not actually need.
 fn reserved(
     ranked: &[QueuedJob],
     running: &[RunningJob],
@@ -212,25 +240,32 @@ fn reserved(
 ) -> Vec<Admission> {
     let mut out = Vec::with_capacity(ranked.len());
     let mut free = free_gpus;
-    // `None` until somebody fails to fit; then `Some(earliest)`, where the
+    // `None` until somebody fails to fit; then `Some(reservation)`, where the
     // inner `None` is an earliest start nobody can compute.
-    let mut reservation: Option<Option<i64>> = None;
+    let mut held: Option<Option<Reservation>> = None;
+    // Drawn down only by the candidates admitted on the second condition:
+    // those are the ones that may still be holding cards when the reservation
+    // comes due. A candidate admitted on the first has given its cards back by
+    // then, so it costs the holder nothing.
+    let mut slack = 0;
 
     for job in ranked {
-        let Some(earliest) = reservation else {
+        let Some(reservation) = held else {
             // Still ahead of any reservation: fitting is the only question.
             if job.gpus <= free {
                 free -= job.gpus;
                 out.push(verdict(job, true, FITS_NOW));
             } else {
-                reservation = Some(earliest_start(running, free, job.gpus));
+                let held_by = reservation_for(running, free, job.gpus);
+                slack = held_by.map_or(0, |r| r.slack);
+                held = Some(held_by);
                 out.push(verdict(job, false, HOLDS_RESERVATION));
             }
             continue;
         };
 
         // Past the reservation. Overtaking is now something a job has to earn.
-        let Some(earliest) = earliest else {
+        let Some(reservation) = reservation else {
             out.push(verdict(job, false, RESERVATION_UNKNOWN));
             continue;
         };
@@ -238,29 +273,43 @@ fn reserved(
             out.push(verdict(job, false, NO_ROOM_LEFT));
             continue;
         }
-        let Some(duration) = declared_duration_s(job) else {
-            out.push(verdict(job, false, NO_DECLARED_DURATION));
-            continue;
-        };
-        if now.saturating_add(duration as i64) <= earliest {
+        let declared = declared_duration_s(job);
+        if declared.is_some_and(|d| now.saturating_add(d as i64) <= reservation.earliest_start_s) {
             free -= job.gpus;
-            out.push(verdict(job, true, FITS_NOW));
-        } else {
-            out.push(verdict(job, false, WOULD_OVERRUN));
+            out.push(verdict(job, true, BACKFILLS_IN_TIME));
+            continue;
         }
+        if job.gpus <= slack {
+            slack -= job.gpus;
+            free -= job.gpus;
+            out.push(verdict(job, true, FITS_IN_SLACK));
+            continue;
+        }
+        // Neither condition. Which one it failed is still worth saying: "you
+        // never declared" and "you declared, and it is too long" send the
+        // submitter to different places.
+        out.push(verdict(
+            job,
+            false,
+            if declared.is_some() {
+                WOULD_OVERRUN
+            } else {
+                NO_DECLARED_DURATION
+            },
+        ));
     }
     out
 }
 
-/// The soonest `needed` GPUs could be free, given `free` now and what the
-/// running jobs say they will release.
+/// What a job needing `needed` GPUs is waiting for, given `free` now and what
+/// the running jobs say they will release.
 ///
 /// `None` means unknowable, which is the answer whenever the running jobs run
 /// out before the count is reached -- including the case where they run out
 /// because one of them declared nothing. An unknown end sorts last and is
 /// never passed: a job that will free its GPUs at a time nobody knows cannot
 /// be counted on to free them at all.
-fn earliest_start(running: &[RunningJob], free: u32, needed: u32) -> Option<i64> {
+fn reservation_for(running: &[RunningJob], free: u32, needed: u32) -> Option<Reservation> {
     let mut order: Vec<&RunningJob> = running.iter().collect();
     // `Option`'s own ordering puts `None` first, which is exactly backwards
     // here. Ties break on the job id so that two runs over the same cluster
@@ -274,14 +323,35 @@ fn earliest_start(running: &[RunningJob], free: u32, needed: u32) -> Option<i64>
     });
 
     let mut available = free as u64;
+    let mut earliest = None;
     for r in order {
         let end = r.expected_end_s?;
         available += r.gpus as u64;
         if available >= needed as u64 {
-            return Some(end);
+            earliest = Some(end);
+            break;
         }
     }
-    None
+    let earliest_start_s = earliest?;
+
+    // Counted from the instant, not from the prefix the loop happened to stop
+    // on: two jobs ending together both release at `earliest_start_s`, and
+    // which of them the tie-break put second is not a reason to treat its GPUs
+    // as spoken for.
+    let at_earliest = free as u64
+        + running
+            .iter()
+            .filter(|r| r.expected_end_s.is_some_and(|e| e <= earliest_start_s))
+            .map(|r| r.gpus as u64)
+            .sum::<u64>();
+
+    Some(Reservation {
+        earliest_start_s,
+        slack: at_earliest
+            .saturating_sub(needed as u64)
+            .try_into()
+            .unwrap_or(u32::MAX),
+    })
 }
 
 /// How long a waiting job says it will run for, or `None` if it never said.
@@ -571,6 +641,121 @@ mod tests {
     }
 
     #[test]
+    fn slack_admits_a_job_that_could_never_finish_in_time() {
+        // Two free, and `big` is two short -- but the job that covers the
+        // shortfall releases four, so two of the four were never spoken for.
+        // `long` runs far past the reservation and takes one of those anyway,
+        // which is the whole of EASY's second condition.
+        let queue = vec![wanting("big", 0, 4), lasting("long", 1, 1, 9_000)];
+        let out = admissible(
+            &queue,
+            &[running("wide", 4, Some(2_000))],
+            2,
+            1_000,
+            Dispatch::Reserved,
+        );
+        assert_eq!(allowed(&out), ["long"]);
+        assert_eq!(reason_for(&out, "long"), FITS_IN_SLACK);
+    }
+
+    #[test]
+    fn the_same_job_is_refused_when_there_is_no_slack() {
+        // The only change from the test above: the incumbent releases exactly
+        // the shortfall, so every GPU arriving at 2000 is already promised.
+        let queue = vec![wanting("big", 0, 4), lasting("long", 1, 1, 9_000)];
+        let out = admissible(
+            &queue,
+            &[running("exact", 2, Some(2_000))],
+            2,
+            1_000,
+            Dispatch::Reserved,
+        );
+        assert!(allowed(&out).is_empty());
+        assert_eq!(reason_for(&out, "long"), WOULD_OVERRUN);
+    }
+
+    #[test]
+    fn slack_is_spent_by_the_jobs_that_take_it() {
+        // `big` is three short of five and `wide` releases four, so there is
+        // one spare GPU past the reservation and exactly one taker for it.
+        // The second candidate fits in the free cards and is refused anyway.
+        let queue = vec![
+            wanting("big", 0, 5),
+            lasting("l1", 1, 1, 9_000),
+            lasting("l2", 2, 1, 9_000),
+        ];
+        let out = admissible(
+            &queue,
+            &[running("wide", 4, Some(2_000))],
+            2,
+            1_000,
+            Dispatch::Reserved,
+        );
+        assert_eq!(allowed(&out), ["l1"]);
+        assert_eq!(reason_for(&out, "l2"), WOULD_OVERRUN);
+    }
+
+    #[test]
+    fn a_job_admitted_on_time_does_not_spend_the_slack() {
+        // One GPU of slack, and two candidates for it. `short` gives its card
+        // back at 1500, before the reservation comes due at 2000, so it is not
+        // holding anything the reservation wanted -- and `long`, which is, may
+        // still have the spare.
+        let queue = vec![
+            wanting("big", 0, 5),
+            lasting("short", 1, 1, 500),
+            lasting("long", 2, 1, 9_000),
+        ];
+        let out = admissible(
+            &queue,
+            &[running("wide", 4, Some(2_000))],
+            2,
+            1_000,
+            Dispatch::Reserved,
+        );
+        assert_eq!(allowed(&out), ["short", "long"]);
+        assert_eq!(reason_for(&out, "short"), BACKFILLS_IN_TIME);
+        assert_eq!(reason_for(&out, "long"), FITS_IN_SLACK);
+    }
+
+    #[test]
+    fn slack_is_measured_against_what_the_reservation_needs() {
+        // Same cluster, same candidate, same six GPUs free at 2000 -- and the
+        // answer turns entirely on how many of them the holder wants. Slack is
+        // a property of the reservation, not of the capacity arriving.
+        let cluster = [running("wide", 4, Some(2_000))];
+        let spare = vec![wanting("big", 0, 4), lasting("long", 1, 1, 9_000)];
+        let none = vec![wanting("big", 0, 6), lasting("long", 1, 1, 9_000)];
+        assert_eq!(
+            allowed(&admissible(&spare, &cluster, 2, 1_000, Dispatch::Reserved)),
+            ["long"],
+            "a holder wanting four of the six leaves two spare"
+        );
+        assert!(
+            allowed(&admissible(&none, &cluster, 2, 1_000, Dispatch::Reserved)).is_empty(),
+            "a holder wanting all six leaves none"
+        );
+    }
+
+    #[test]
+    fn slack_counts_everything_freed_at_that_instant() {
+        // `big` needs three and is satisfied the moment `a` ends -- but `b`
+        // ends at the same instant, and its GPUs are free then too. Counting
+        // only as far as the tie-break happened to walk would put the slack at
+        // zero and refuse `long` on the strength of an arbitrary ordering.
+        let queue = vec![wanting("big", 0, 3), lasting("long", 1, 1, 9_000)];
+        let out = admissible(
+            &queue,
+            &[running("a", 2, Some(2_000)), running("b", 2, Some(2_000))],
+            1,
+            1_000,
+            Dispatch::Reserved,
+        );
+        assert_eq!(allowed(&out), ["long"]);
+        assert_eq!(reason_for(&out, "long"), FITS_IN_SLACK);
+    }
+
+    #[test]
     fn identical_input_gives_identical_output() {
         // Including the sort inside `earliest_start`, which is why two running
         // jobs share an end time here.
@@ -589,6 +774,37 @@ mod tests {
         for _ in 0..8 {
             assert_eq!(
                 admissible(&queue, &running, 2, 1_000, Dispatch::Reserved),
+                first,
+                "identical input must give an identical answer"
+            );
+        }
+    }
+
+    #[test]
+    fn the_slack_path_is_deterministic_too() {
+        // Same guarantee as above over the branch that tie-breaking can reach:
+        // `r1` and `r2` end together, so which one the sort walks second
+        // decides nothing. One GPU of slack, taken by the job that declared
+        // nothing, leaving `c` too wide for what is left.
+        let queue = vec![
+            wanting("big", 0, 6),
+            lasting("a", 1, 1, 100),
+            wanting("b", 2, 1),
+            lasting("c", 3, 2, 9_000),
+        ];
+        let running = vec![
+            running("r1", 2, Some(2_000)),
+            running("r2", 2, Some(2_000)),
+            running("r3", 1, None),
+        ];
+        let first = admissible(&queue, &running, 3, 1_000, Dispatch::Reserved);
+        assert_eq!(allowed(&first), ["a", "b"]);
+        assert_eq!(reason_for(&first, "a"), BACKFILLS_IN_TIME);
+        assert_eq!(reason_for(&first, "b"), FITS_IN_SLACK);
+        assert_eq!(reason_for(&first, "c"), NO_ROOM_LEFT);
+        for _ in 0..8 {
+            assert_eq!(
+                admissible(&queue, &running, 3, 1_000, Dispatch::Reserved),
                 first,
                 "identical input must give an identical answer"
             );
