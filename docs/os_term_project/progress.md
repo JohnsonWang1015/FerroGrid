@@ -5,6 +5,112 @@ specification (§91). Newest entry first.
 
 ---
 
+## Phase 2 — OS Scheduling Algorithms
+
+**Phase:** 2 — Priority, aging, fair share, SJF
+**Status:** ✅ Complete. Gate met.
+
+### Implemented
+
+Four new queue policies in `ferro-sched`, all pure, all selectable by name:
+
+| Policy | Orders by | The property it is there to demonstrate |
+|---|---|---|
+| `priority` | priority desc, then arrival | urgent work gets through a full cluster; the bottom can starve |
+| `aging` | `min(base + floor(wait/interval)*increment, ceiling)` | bounded waiting — starvation is impossible |
+| `fair-share` | `a*priority + b*wait − c*usage`, each term normalised 0..1 | evens out between users over time |
+| `sjf` | shortest declared duration, **unestimated last** | lowest mean wait where estimates exist; long-job starvation |
+
+Supporting work:
+
+- **Protocol** — `SubmitJobRequest` gains `priority`, `estimated_duration_s`
+  (both `optional`, so "unset" is distinguishable from a real zero) and
+  `project`; `JobSummary` gains those plus a `QueueScore` breakdown. All at new
+  field numbers; old clients are unaffected.
+- **Usage accounting** — `RegistryInner::usage_snapshot` derives GPU-seconds per
+  user from the job records themselves rather than maintaining a parallel
+  ledger, so the numbers a scheduling decision used and the numbers a report
+  shows cannot drift apart.
+- **Jain fairness index** — `ferro_sched::jain_index`, returning `None` rather
+  than a number for input it cannot describe (empty, negative, NaN).
+- **`ferro queue`** — the waiting list in served order, with the score
+  breakdown underneath. `--json` and `-w` supported.
+- **`ferro train --priority / --estimated-duration / --project`**; the
+  controller gains `--aging-interval-secs`, `--aging-increment`,
+  `--aging-ceiling` and the three `--fair-*-weight` knobs. No magic numbers.
+
+### Files changed
+
+```
+NEW  crates/ferro-sched/src/queue/{priority,aging,fair_share,sjf}.rs
+MOD  crates/ferro-sched/src/queue/{mod,fifo}.rs     QueuedJob, QueueContext, QueueRanking
+MOD  crates/ferro-sched/src/lib.rs                  policy registry + QueueTuning
+NEW  crates/ferro-controller/tests/queue_policy.rs  registry <-> policy wiring
+MOD  crates/ferro-controller/src/{registry,service,main}.rs
+MOD  crates/ferro-cli/src/{main,render}.rs          flags + `ferro queue`
+MOD  proto/ferrogrid.proto                          new fields, new numbers
+MOD  README.md
+```
+
+### Tests
+
+| Check | Result |
+|---|---|
+| `cargo test --workspace` | **103 passed, 0 failed** (was 64; +32 policy, +7 wiring) |
+| `uv run --all-extras pytest -q` | **19 passed** |
+| `cargo fmt --check` / `clippy -D warnings` | ✅ clean |
+
+The §5 requirements are covered explicitly: a waiting job's priority rises
+(`a_waiting_jobs_priority_rises`), a newer high-priority job still overtakes
+(`a_newer_high_priority_job_still_overtakes`), an old low-priority job
+eventually runs (`an_old_low_priority_job_eventually_runs`), and ties are
+deterministic (`ties_break_on_arrival_and_stay_deterministic`). Strict priority
+carries the opposite assertion — `a_low_priority_job_never_advances_on_its_own`
+— so the baseline aging has to beat is pinned down rather than assumed.
+
+### Demonstrated end to end
+
+A live controller, `--queue-policy aging --aging-interval-secs 1
+--aging-increment 5`, with `starved` (base 10) queued two seconds before
+`urgent` (base 90):
+
+```
+  --- immediately after urgent arrives ---
+    #1 urgent   base=90  +aging=0    effective=90
+    #2 starved  base=10  +aging=10   effective=20
+  --- 16s later ---
+    #1 starved  base=10  +aging=90   effective=100
+    #2 urgent   base=90  +aging=10   effective=100
+```
+
+Anti-starvation on a real system, not only in a unit test.
+
+### Known limitations
+
+1. **No `ferro usage` or `ferro stats fairness` yet.** The data exists and
+   fair share consumes it; exposing it over gRPC belongs with the accounting
+   work in a later phase.
+2. **`--priority` is inert under the default FIFO policy**, by design. The CLI
+   help says so, but a cluster running FIFO will silently ignore the flag.
+3. **Usage is recomputed from all job records on every ranking pass** — O(jobs)
+   per call. Correct and affordable here, and a deliberate choice over a
+   running counter that could drift; it will want revisiting once history is
+   persisted rather than bounded by process lifetime.
+4. **SJF depends on self-reported estimates.** Nothing verifies them, and a
+   user who under-declares is rewarded. Recorded rather than papered over:
+   this is why SJF ships as an experiment.
+5. **Policy is fixed at controller startup.** §67 hot switching is untouched.
+
+### Next
+
+Phase 3 — placement algorithms: refactor the existing composite policy into
+named `first-fit`, `best-fit`, `vram-aware`, `performance-aware`,
+`homogeneous` and `topology-aware` strategies, persist `ferro net` results so
+measured throughput reaches the scheduler, and add the unified cost function
+behind `ferro explain`.
+
+---
+
 ## Phase 1 — Scheduler Refactor
 
 **Phase:** 1 — Pluggable scheduler architecture, no behaviour change

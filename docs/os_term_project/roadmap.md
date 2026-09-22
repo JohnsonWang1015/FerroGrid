@@ -263,7 +263,7 @@ and pre-existing). Cleaning those is the first commit of Phase 1, so that the
 
 ---
 
-### Phase 2 — OS scheduling algorithms
+### Phase 2 — OS scheduling algorithms ✅ *complete*
 
 Queue policies, in the order they should be built:
 
