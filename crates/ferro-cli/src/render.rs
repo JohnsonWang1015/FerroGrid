@@ -294,6 +294,11 @@ pub fn gpus(entries: &[GpuEntry], json: bool) -> String {
 
 /// A queued job's phase is "pending" as far as the enum goes, which says
 /// nothing useful; where it sits in line does.
+///
+/// A job the controller is still reconciling gets a `?`, because its phase is
+/// the last thing written down rather than anything an agent has confirmed
+/// since the restart -- it may be running, and it may have died while the
+/// controller was not there to hear it.
 fn job_phase_cell(j: &JobSummary) -> Cell {
     if j.queued {
         let label = match j.queue_position {
@@ -301,6 +306,9 @@ fn job_phase_cell(j: &JobSummary) -> Cell {
             n => format!("queued #{n}"),
         };
         return Cell::new(label).fg(Color::Blue);
+    }
+    if j.reconciling {
+        return Cell::new(format!("{}?", j.phase().label())).fg(Color::Yellow);
     }
     phase_cell(j.phase())
 }
@@ -375,6 +383,7 @@ pub fn jobs(list: &[JobSummary], json: bool) -> String {
                     "job_id": j.job_id,
                     "name": j.name,
                     "phase": if j.queued { "queued" } else { j.phase().label() },
+                    "reconciling": j.reconciling,
                     "queue_position": j.queue_position,
                     "queue_message": j.queue_message,
                     "world_size": j.plan.as_ref().map(|p| p.world_size).unwrap_or(0),
@@ -431,6 +440,16 @@ pub fn jobs(list: &[JobSummary], json: bool) -> String {
         .filter(|j| j.queued && !j.queue_message.is_empty())
     {
         line!(out, "{} waiting: {}", j.job_id, j.queue_message);
+    }
+    // One line for all of them rather than one each: they share a single cause
+    // -- the controller restarted -- and it resolves for all of them at once.
+    let unconfirmed = list.iter().filter(|j| j.reconciling).count();
+    if unconfirmed > 0 {
+        line!(
+            out,
+            "{unconfirmed} job(s) marked ? came back after a controller restart; \
+             no agent has confirmed them yet"
+        );
     }
     out
 }
@@ -740,6 +759,7 @@ pub fn job_detail(j: &JobSummary, json: bool) -> String {
             "name": j.name,
             "phase": j.phase().label(),
             "queued": j.queued,
+            "reconciling": j.reconciling,
             "queue_position": j.queue_position,
             "queue_message": j.queue_message,
             "master_addr": p.master_addr,
@@ -787,6 +807,14 @@ pub fn job_detail(j: &JobSummary, json: bool) -> String {
         }
     } else {
         line!(out, "Phase   {}", j.phase().label());
+    }
+    if j.reconciling {
+        line!(
+            out,
+            "Recover restored from disk after a controller restart; the phase \
+             above is the last thing written down, not something an agent has \
+             confirmed since"
+        );
     }
     append_verdicts(&mut out, &j.node_verdicts);
     line!(

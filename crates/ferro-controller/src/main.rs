@@ -47,6 +47,15 @@ struct Args {
     #[arg(long, conflicts_with = "state")]
     no_state: bool,
 
+    /// How long after startup to keep waiting for an agent to account for each
+    /// restored job before writing it off as lost. Must comfortably exceed the
+    /// 15 s a node may go unheard before it counts as unhealthy: an agent that
+    /// is merely slow to reconnect -- 3 s heartbeats behind a 3 s reconnect
+    /// backoff, plus whatever the network was doing -- must not lose its job
+    /// for it.
+    #[arg(long, default_value_t = 30, value_name = "SECONDS")]
+    reconcile_window_secs: u64,
+
     /// Which job runs next, out of those waiting for capacity.
     #[arg(long, default_value = "fifo", value_name = "POLICY")]
     queue_policy: String,
@@ -138,8 +147,9 @@ async fn main() -> Result<()> {
         let path = args.state.clone().unwrap_or_else(default_state_path);
         let state = Store::load(&path)?;
         let store = Store::open(&path)?;
-        // Restored, not reconciled: a job that was running when this process
-        // died comes back running until an agent says otherwise.
+        // Restored as written down, not as verified: a job that was running
+        // when this process died comes back running. What is still true is
+        // settled afterwards, by the agents, inside the reconcile window.
         tracing::info!(
             state = %path.display(),
             "restored {} job(s), {} GPU benchmark(s), {} measured link(s)",
@@ -202,6 +212,13 @@ async fn main() -> Result<()> {
     );
 
     tokio::spawn(service::reap_expired(registry.clone()));
+    // Restored jobs come back exactly as they were written down. This is what
+    // decides, once the agents have had their say, which of them are still
+    // true.
+    tokio::spawn(service::reconcile_recovery(
+        registry.clone(),
+        args.reconcile_window_secs,
+    ));
     // Nothing else notices a node going quiet: heartbeats simply stop.
     tokio::spawn(service::watch_node_health(registry.clone()));
     // Jobs submitted with `--wait` sit here until the cluster frees up.

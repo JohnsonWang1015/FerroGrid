@@ -7,8 +7,8 @@
 //! see `store` for which fields and why.
 
 use ferro_proto::{
-    Gpu, GpuEntry, GpuOccupant, GpuProcess, JobPhase, JobPlan, JobStatus, JobSummary, LogLine,
-    NodeInfo, NodeState, NodeVerdict, PlacementExplanation, QueueScore, ScoreComponent,
+    Gpu, GpuEntry, GpuOccupant, GpuProcess, JobPhase, JobPlacement, JobPlan, JobStatus, JobSummary,
+    LogLine, NodeInfo, NodeState, NodeVerdict, PlacementExplanation, QueueScore, ScoreComponent,
     SubmitJobRequest, TrainingMetrics,
 };
 use ferro_sched::{
@@ -165,6 +165,9 @@ impl Job {
             // Filled in by the registry, which is the only place that can run
             // the queue policy over the whole waiting list.
             queue_score: None,
+            // Likewise: whether a job is still being reconciled is recovery
+            // bookkeeping the registry holds, not something the job knows.
+            reconciling: false,
         }
     }
 
@@ -277,6 +280,28 @@ impl Job {
     }
 }
 
+/// What became of the jobs that came back off disk.
+///
+/// Counted rather than inferred afterwards, because nothing reconstructs it:
+/// once a lost job has been failed it is indistinguishable from a job that
+/// failed on its own, and once a claimed one is running it looks like any
+/// other running job.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Recovery {
+    /// Every job read off disk, terminal ones included -- the same number
+    /// `CONTROLLER_RECOVERED` reports, so the two lines can be read together.
+    pub restored: usize,
+    /// Non-terminal restored jobs an agent accounted for.
+    pub claimed: usize,
+    /// Restored as queued, found already running, and given back the plan the
+    /// crash lost.
+    pub adopted: usize,
+    /// Nobody accounted for these before the window closed.
+    pub failed: usize,
+    /// The window has closed and the counts above are final.
+    pub settled: bool,
+}
+
 pub struct RegistryInner {
     /// GPU uuid -> measured TFLOP/s. Heartbeats overwrite the GPU list, so the
     /// scores live here and are re-applied on every update.
@@ -305,6 +330,22 @@ pub struct RegistryInner {
     /// actually served in are computed by the same object -- they are the same
     /// promise, and a scheduler that breaks it is worse than one with no queue.
     pub queue_policy: Arc<dyn QueuePolicy>,
+    /// Restored jobs no agent has accounted for yet.
+    ///
+    /// A set beside the jobs rather than a field on one: this is a claim about
+    /// how much the *controller* currently knows, not about the job, and it is
+    /// empty for the entire life of a controller that never restarted.
+    pub reconciling: HashSet<String>,
+    /// Jobs adopted during this recovery, remembered only until the window
+    /// closes.
+    ///
+    /// A job is adopted from the cards the agents have reported *so far*, and
+    /// a peer that has not reconnected yet is a placement missing from the
+    /// rebuilt plan -- a rank nobody could afterwards cancel or time out. So a
+    /// later heartbeat naming the same job may still complete it, and only
+    /// while the window that owns this question is open.
+    pub adopted: HashSet<String>,
+    pub recovery: Recovery,
 }
 
 impl Default for RegistryInner {
@@ -319,6 +360,9 @@ impl Default for RegistryInner {
             next_event_id: 1,
             node_health: HashMap::new(),
             queue_policy: Arc::new(ferro_sched::queue::Fifo),
+            reconciling: HashSet::new(),
+            adopted: HashSet::new(),
+            recovery: Recovery::default(),
         }
     }
 }
@@ -389,6 +433,13 @@ impl Registry {
         // order and the tie-break between two jobs submitted in one second.
         for LoadedJob { record, per_node } in state.jobs {
             let job = Job::from_record(record, per_node);
+            inner.recovery.restored += 1;
+            // Every non-terminal job starts unaccounted for. A terminal one is
+            // finished business: no agent will mention it again, it owns
+            // nothing, and there is nothing left to decide about it.
+            if !job.phase().is_terminal() {
+                inner.reconciling.insert(job.job_id.clone());
+            }
             inner.job_order.push(job.job_id.clone());
             inner.jobs.insert(job.job_id.clone(), job);
         }
@@ -589,7 +640,230 @@ impl Registry {
                 job.record_util(sum / n as f64);
             }
         }
+
+        // A card carrying a restored job's id is that job accounted for, even
+        // when this heartbeat reports no status for it: ownership is the
+        // agent's own answer to "what is running here". Skipped entirely once
+        // nothing is being reconciled, which is every heartbeat of a
+        // controller that has not just restarted.
+        if !g.reconciling.is_empty() || !g.adopted.is_empty() {
+            let mut named: Vec<String> = g
+                .nodes
+                .get(node_id)
+                .map(|n| {
+                    n.info
+                        .gpus
+                        .iter()
+                        .map(|gpu| gpu.allocated_job_id.clone())
+                        .filter(|id| {
+                            !id.is_empty() && (g.reconciling.contains(id) || g.adopted.contains(id))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            named.sort();
+            named.dedup();
+            for job_id in named {
+                if g.reconciling.contains(&job_id) {
+                    self.account_for(&mut g, &job_id);
+                } else {
+                    self.complete_adopted_plan(&mut g, &job_id);
+                }
+            }
+        }
         true
+    }
+
+    /// A peer of an adopted job has reconnected: put it in the plan.
+    ///
+    /// The plan a job is adopted with names the nodes that had reported by
+    /// then, which for a multi-node job is not necessarily all of them --
+    /// agents come back one at a time. A rank missing from the plan is a rank
+    /// `ferro cancel` and the reaper cannot reach, so the picture is allowed
+    /// to fill in for as long as the recovery window is open.
+    fn complete_adopted_plan(&self, g: &mut RegistryInner, job_id: &str) {
+        let Some(job) = g.jobs.get(job_id) else {
+            return;
+        };
+        let rebuilt = adopt_plan(&g.nodes, job_id, &job.plan);
+        if rebuilt.placements.len() <= job.plan.placements.len() {
+            return;
+        }
+        let actor = job.submitted_by.clone();
+        let placed = where_it_runs(&rebuilt);
+        if let Some(job) = g.jobs.get_mut(job_id) {
+            job.plan = rebuilt;
+        }
+        self.write_job(g, job_id);
+        // Its own line rather than a silent correction: the log is what says
+        // how the controller arrived at the plan it is now using, and it
+        // arrived at this one in two steps.
+        self.emit(
+            g,
+            Event::new(EventKind::JobScheduled)
+                .job(job_id)
+                .actor(&actor)
+                .detail(format!("adopted after restart: {placed}")),
+        );
+    }
+
+    /// An agent has accounted for a restored job: stop reconciling it, and if
+    /// the database and the cluster disagree about whether it was ever
+    /// launched, believe the cluster.
+    ///
+    /// The disagreement is narrow but real. A job is promoted, dispatched, and
+    /// the controller dies before the promote reaches disk -- write-behind is
+    /// milliseconds wide, and a crash can land in it. What comes back is a
+    /// queued job that is in fact already running, and re-placing it would put
+    /// a second copy on cards the first one is still holding.
+    ///
+    /// So it is adopted rather than failed: the GPUs the agents say it holds
+    /// are enough to rebuild the plan, and from there the agent's own status
+    /// reports drive its phase exactly as they would for any other job.
+    fn account_for(&self, g: &mut RegistryInner, job_id: &str) {
+        if !g.reconciling.contains(job_id) {
+            return;
+        }
+        let Some(job) = g.jobs.get(job_id) else {
+            return;
+        };
+        if !job.queued {
+            g.reconciling.remove(job_id);
+            g.recovery.claimed += 1;
+            return;
+        }
+
+        let actor = job.submitted_by.clone();
+        let plan = adopt_plan(&g.nodes, job_id, &job.plan);
+        if plan.placements.is_empty() {
+            // Something named this job without holding a card for it, so there
+            // is no plan to rebuild. Leave it queued and still reconciling: a
+            // later heartbeat may name the GPUs, and if none ever does the
+            // dispatcher places it as it would any other waiting job.
+            return;
+        }
+        let placed = where_it_runs(&plan);
+
+        g.reconciling.remove(job_id);
+        g.adopted.insert(job_id.to_string());
+        g.recovery.adopted += 1;
+        if let Some(job) = g.jobs.get_mut(job_id) {
+            job.plan = plan;
+            job.queued = false;
+            job.queue_req = None;
+            job.queue_message.clear();
+            // The same clock `promote` starts, for the same reason: the
+            // wall-clock limit measures a run, not a wait. When this job
+            // actually started is not recoverable -- it was some time before
+            // the crash -- and now is the closest estimate that cannot reap a
+            // healthy job the moment it is adopted.
+            job.submitted = now_s();
+        }
+        self.write_job(g, job_id);
+        self.emit(
+            g,
+            Event::new(EventKind::JobScheduled)
+                .job(job_id)
+                .actor(&actor)
+                .detail(format!("adopted after restart: {placed}")),
+        );
+    }
+
+    /// Decide what became of the restored jobs nobody accounted for.
+    ///
+    /// Runs once, when the recovery window closes, and is idempotent
+    /// afterwards: a second call returns the same counts and writes nothing.
+    ///
+    /// Everything still unaccounted for and still supposed to be running is
+    /// failed. That is a decision rather than an observation, and it is made
+    /// because the alternative is worse: a job left `Running` forever is a
+    /// lie an operator plans around -- they wait for output that is not
+    /// coming, and they do not resubmit. A job failed in error costs one
+    /// resubmission. The message says which of the two cases it was, because
+    /// they are not the same news: a node that is up and never mentioned the
+    /// job is not running it, while a node that never came back leaves the
+    /// question genuinely open.
+    ///
+    /// The GPUs go back through the ordinary terminal path -- a terminal job
+    /// owns nothing -- which is why the releases happen outside the lock.
+    pub async fn close_recovery_window(&self, elapsed_s: i64) -> Recovery {
+        let (recovery, lost) = {
+            let mut g = self.inner.lock().await;
+            if g.recovery.settled {
+                return g.recovery;
+            }
+            g.recovery.settled = true;
+            let stranded = std::mem::take(&mut g.reconciling);
+            // Whatever an adopted job's plan says now is what it says: the
+            // agents have had their window, and a node that has not reported
+            // by now is not going to complete anybody's plan.
+            g.adopted.clear();
+
+            // Read the whole verdict out first: the reason depends on the node
+            // table and the statuses depend on the plan, and both live in the
+            // map the failures are about to write to.
+            let mut lost: Vec<(String, String, String, Vec<JobStatus>)> = stranded
+                .iter()
+                .filter_map(|id| g.jobs.get(id))
+                // A job still waiting for capacity is not missing. It holds
+                // nothing, it claims nothing, and the dispatcher will place it
+                // on its next tick exactly as if it had just been submitted --
+                // failing it would throw away the queue position that
+                // persistence exists to keep.
+                .filter(|j| !j.queued && !j.phase().is_terminal())
+                .map(|j| {
+                    let reason = lost_reason(&g, j);
+                    let ranks = lost_ranks(j, &reason);
+                    (j.job_id.clone(), j.submitted_by.clone(), reason, ranks)
+                })
+                .collect();
+            // A set has no order, and two runs of the same recovery should not
+            // number the same failures differently.
+            lost.sort_by(|a, b| a.0.cmp(&b.0));
+
+            for (job_id, actor, reason, ranks) in &lost {
+                if let Some(job) = g.jobs.get_mut(job_id) {
+                    for status in ranks {
+                        job.per_node.insert(status.node_id.clone(), status.clone());
+                    }
+                }
+                for status in ranks {
+                    self.write_status(status);
+                }
+                self.write_job(&g, job_id);
+                self.emit(
+                    &mut g,
+                    Event::new(EventKind::JobFailed)
+                        .job(job_id)
+                        .actor(actor)
+                        .detail(reason),
+                );
+            }
+            g.recovery.failed = lost.len();
+            let ids: Vec<String> = lost.into_iter().map(|(id, ..)| id).collect();
+            (g.recovery, ids)
+        };
+
+        for job_id in &lost {
+            self.release_if_done(job_id).await;
+        }
+
+        // Nothing came back off disk, so there was no recovery to time and no
+        // jobs to account for. A controller starting fresh does not need a
+        // line saying it reconciled nothing.
+        if recovery.restored > 0 {
+            self.record_event(Event::new(EventKind::Reconciled).detail(format!(
+                "restored {}, claimed {}, adopted {}, failed {} in {elapsed_s}s",
+                recovery.restored, recovery.claimed, recovery.adopted, recovery.failed
+            )))
+            .await;
+        }
+        recovery
+    }
+
+    /// The recovery counters as they stand.
+    pub async fn recovery(&self) -> Recovery {
+        self.inner.lock().await.recovery
     }
 
     /// Remember what `ferro net` measured, so a placement decision can prefer
@@ -883,6 +1157,13 @@ impl Registry {
     pub async fn update_job_status(&self, status: JobStatus) {
         let mut g = self.inner.lock().await;
         let job_id = status.job_id.clone();
+        if !g.jobs.contains_key(&job_id) {
+            return;
+        }
+        // An agent reporting on a job is that job accounted for, whatever
+        // phase it reports: what reconciliation asks is whether anybody still
+        // knows about it, not how it is going.
+        self.account_for(&mut g, &job_id);
         let Some(job) = g.jobs.get_mut(&job_id) else {
             return;
         };
@@ -1044,6 +1325,123 @@ impl Registry {
         );
         Ok(())
     }
+}
+
+/// Rebuild the plan a lost promote never wrote down, from the cards the agents
+/// say this job holds.
+///
+/// `master_addr` and `master_port` are carried over from the record rather
+/// than invented -- empty, for a plan that never reached disk. They exist to
+/// bring ranks up at a rendezvous, and these ranks are already up.
+///
+/// The rank numbering is not recoverable either: the dispatcher assigned it
+/// and only the ranks themselves still know it. What the plan is needed for
+/// from here is which node to stop and which cards to give back, so the nodes
+/// are ordered by id -- an arbitrary order that is at least the same every
+/// time, rather than a `HashMap`'s, which is not.
+fn adopt_plan(nodes: &HashMap<String, Node>, job_id: &str, restored: &JobPlan) -> JobPlan {
+    let mut holders: Vec<&Node> = nodes
+        .values()
+        .filter(|n| n.info.gpus.iter().any(|g| g.allocated_job_id == job_id))
+        .collect();
+    holders.sort_by(|a, b| a.info.node_id.cmp(&b.info.node_id));
+
+    let placements: Vec<JobPlacement> = holders
+        .into_iter()
+        .enumerate()
+        .map(|(rank, n)| {
+            let held: Vec<&Gpu> = n
+                .info
+                .gpus
+                .iter()
+                .filter(|g| g.allocated_job_id == job_id)
+                .collect();
+            JobPlacement {
+                node_id: n.info.node_id.clone(),
+                address: n.info.address.clone(),
+                node_rank: rank as u32,
+                gpu_indices: held.iter().map(|g| g.index).collect(),
+                gpu_uuids: held.iter().map(|g| g.uuid.clone()).collect(),
+            }
+        })
+        .collect();
+
+    JobPlan {
+        master_addr: restored.master_addr.clone(),
+        master_port: restored.master_port,
+        world_size: placements.iter().map(|p| p.gpu_indices.len() as u32).sum(),
+        placements,
+    }
+}
+
+/// Why a stranded job is being failed, in the words that tell the two cases
+/// apart.
+///
+/// A node that is up and did not mention the job is evidence: the job is gone.
+/// A node that never reported back is not, and saying so is the honest answer.
+/// Where a job straddles both, the silent node decides -- one node we cannot
+/// hear from is enough to make the whole job's fate a guess.
+fn lost_reason(g: &RegistryInner, job: &Job) -> String {
+    let mut placed: Vec<&str> = job
+        .plan
+        .placements
+        .iter()
+        .map(|p| p.node_id.as_str())
+        .collect();
+    placed.sort_unstable();
+    placed.dedup();
+    let silent: Vec<&str> = placed
+        .iter()
+        .copied()
+        .filter(|id| !g.nodes.get(*id).map(|n| n.healthy()).unwrap_or(false))
+        .collect();
+
+    if silent.is_empty() {
+        format!(
+            "lost while the controller was down: {} reported in without it",
+            placed.join(", ")
+        )
+    } else {
+        format!(
+            "fate unknown: {} has not reported since the controller restarted",
+            silent.join(", ")
+        )
+    }
+}
+
+/// The per-rank statuses that make a stranded job terminal.
+///
+/// One per placement rather than a single summary entry, because a job's phase
+/// is a vote of its ranks: one status under one key would leave a two-rank job
+/// `Launching` forever, which is the same lie in a different column. A rank
+/// that did report a terminal result keeps it -- that report was real, and
+/// this one is a decision.
+fn lost_ranks(job: &Job, reason: &str) -> Vec<JobStatus> {
+    let now = now_s();
+    job.plan
+        .placements
+        .iter()
+        .filter(|p| {
+            !job.per_node
+                .get(&p.node_id)
+                .map(|s| s.phase().is_terminal())
+                .unwrap_or(false)
+        })
+        .map(|p| JobStatus {
+            job_id: job.job_id.clone(),
+            node_id: p.node_id.clone(),
+            node_rank: p.node_rank,
+            phase: JobPhase::Failed as i32,
+            message: reason.to_string(),
+            started_unix_s: job
+                .per_node
+                .get(&p.node_id)
+                .map(|s| s.started_unix_s)
+                .unwrap_or(0),
+            ended_unix_s: now,
+            ..Default::default()
+        })
+        .collect()
 }
 
 /// `gpu-a[0,1]`, the shortest true answer to "which cards".
@@ -1222,6 +1620,20 @@ impl RegistryInner {
                     })
                     .collect(),
             });
+        }
+    }
+
+    /// Mark the jobs the controller is still making up its mind about.
+    ///
+    /// Alongside `annotate_queue` and for the same reason: this is something
+    /// only the registry knows, and a job asked for its own summary cannot
+    /// answer it.
+    pub fn annotate_recovery(&self, summaries: &mut [JobSummary]) {
+        if self.reconciling.is_empty() {
+            return;
+        }
+        for summary in summaries.iter_mut() {
+            summary.reconciling = self.reconciling.contains(&summary.job_id);
         }
     }
 

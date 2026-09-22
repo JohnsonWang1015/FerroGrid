@@ -271,6 +271,10 @@ message JobSummary {
   QueueScore queue_score       = 18;
   // Why the scheduler chose these GPUs. Present once the job has a plan.
   PlacementExplanation placement = 19;
+  // This job came back off disk after a controller restart and no agent has
+  // accounted for it yet. Not a phase: the phase is whatever was last written
+  // down, and this says how much that is currently worth.
+  bool reconciling = 20;
 }
 
 // What a placement is worth, in the vocabulary every strategy shares, so that

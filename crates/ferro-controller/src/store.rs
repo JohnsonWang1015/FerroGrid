@@ -188,11 +188,16 @@ pub enum EventKind {
     GpuReleased,
     ControllerStarted,
     ControllerRecovered,
+    /// The recovery window closed: what became of the jobs that came back off
+    /// disk, counted. One line rather than a mechanism of its own, because
+    /// "how long did recovery take and how many jobs did it lose" is a
+    /// question about something that happened, which is what the log is for.
+    Reconciled,
 }
 
 impl EventKind {
     /// Every kind, for the "did you mean" an unknown filter deserves.
-    pub const ALL: [EventKind; 14] = [
+    pub const ALL: [EventKind; 15] = [
         EventKind::JobSubmitted,
         EventKind::JobQueued,
         EventKind::JobScheduled,
@@ -207,6 +212,7 @@ impl EventKind {
         EventKind::GpuReleased,
         EventKind::ControllerStarted,
         EventKind::ControllerRecovered,
+        EventKind::Reconciled,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -225,6 +231,7 @@ impl EventKind {
             EventKind::GpuReleased => "GPU_RELEASED",
             EventKind::ControllerStarted => "CONTROLLER_STARTED",
             EventKind::ControllerRecovered => "CONTROLLER_RECOVERED",
+            EventKind::Reconciled => "RECONCILED",
         }
     }
 

@@ -263,6 +263,7 @@ impl Controller for ControllerService {
         };
         let mut summary = [job.to_summary()];
         g.annotate_queue(&mut summary, now_s());
+        g.annotate_recovery(&mut summary);
         let [summary] = summary;
         Ok(Response::new(summary))
     }
@@ -281,6 +282,7 @@ impl Controller for ControllerService {
             .map(|j| j.to_summary())
             .collect();
         g.annotate_queue(&mut jobs, now_s());
+        g.annotate_recovery(&mut jobs);
         if limit > 0 {
             jobs.truncate(limit as usize);
         }
@@ -1363,6 +1365,38 @@ pub async fn watch_node_health(registry: std::sync::Arc<Registry>) {
         tick.tick().await;
         registry.sweep_node_health().await;
     }
+}
+
+/// Settles what became of the jobs that came back off disk.
+///
+/// A restored job the agents never mention is either gone or on a node that
+/// has not come back, and either way `ferro jobs` is currently lying about it.
+/// Deciding that at startup would be worse: agents reconnect on their own
+/// schedule, and a job whose node is merely slow to reappear would be killed
+/// for it. So the question is asked once, after a window long enough for every
+/// reachable agent to have been heard from -- comfortably more than the 15 s
+/// it takes to call a node unhealthy in the first place, so that a node that
+/// is going to be declared silent has already been declared silent before its
+/// jobs are judged.
+///
+/// One shot, not a tick: reconciliation is about the restart, and after it has
+/// happened there is nothing left to reconcile.
+pub async fn reconcile_recovery(registry: std::sync::Arc<Registry>, window_s: u64) {
+    let started = std::time::Instant::now();
+    tokio::time::sleep(std::time::Duration::from_secs(window_s)).await;
+    let r = registry
+        .close_recovery_window(started.elapsed().as_secs() as i64)
+        .await;
+    if r.restored == 0 {
+        return;
+    }
+    tracing::info!(
+        restored = r.restored,
+        claimed = r.claimed,
+        adopted = r.adopted,
+        failed = r.failed,
+        "recovery window closed"
+    );
 }
 
 pub async fn reap_expired(registry: std::sync::Arc<Registry>) {
