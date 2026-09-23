@@ -465,7 +465,7 @@ form · `MISSING` = no code exists.
 | 26 | GPU leak detection | PARTIAL | `release_if_done` covers the happy path; no invariant test |
 | 27 | Job timeout | **DONE** | |
 | 28 | Queue timeout | PARTIAL | Recorded as `Failed`, not `EXPIRED` |
-| 29 | Graceful cancellation | MISSING | Immediate SIGKILL (`state.rs:169`) |
+| 29 | Graceful cancellation | **DONE** *(after the audit)* | SIGTERM → configurable grace → SIGKILL, over the whole descendant tree. The audit's diagnosis was incomplete: `job.child` was always `None`, so under `--no-docker` the stop path killed nothing at all |
 | 30–32 | Preemption / checkpointing / cost model | MISSING | |
 | 33–35 | Backfill / reservation / gang scheduling | MISSING | Gang behaviour is implicit in the all-or-nothing plan, undocumented and untested |
 | 36 | Atomic allocation | **DEFECT** | Lost update under concurrent submit; the agent prevents actual double-execution. See §5.2 |

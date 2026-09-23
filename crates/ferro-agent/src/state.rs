@@ -1,5 +1,6 @@
 //! Shared agent state: GPU monitor, node identity, and the running job table.
 
+use crate::launcher::{self, StopOutcome};
 use crate::procs::{self, Lookups};
 use crate::Args;
 use anyhow::{Context, Result};
@@ -7,7 +8,9 @@ use ferro_gpu::GpuMonitor;
 use ferro_proto::{Gpu, GpuProcess, JobPhase, JobStatus, NodeInfo};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
 
 pub struct RunningJob {
     pub job_id: String,
@@ -15,13 +18,29 @@ pub struct RunningJob {
     pub node_rank: u32,
     pub gpu_indices: Vec<u32>,
     pub status: JobStatus,
-    /// Container name when running under Docker; used by `docker kill`.
+    /// Container name when running under Docker; the container is stopped by
+    /// name because killing the docker CLI would orphan it.
     pub container: Option<String>,
-    /// Pid of the process we spawned (torchrun, or the docker CLI). Only the
-    /// no-docker case is useful for attribution: a container's workers descend
-    /// from containerd, not from us.
+    /// Pid of the process we spawned (torchrun, or the docker CLI); also its
+    /// process group id, since the launcher spawns with `process_group(0)`.
+    /// Only the no-docker case is useful for attribution or teardown: a
+    /// container's workers descend from containerd, not from us.
     pub launcher_pid: Option<u32>,
-    pub child: Option<tokio::process::Child>,
+    /// The in-flight teardown, taken by whoever waits for it -- normally the
+    /// supervisor, so that the final status can say how the job stopped.
+    pub stopper: Option<JoinHandle<StopOutcome>>,
+    /// Set from the moment a stop is asked for until the teardown finishes.
+    pub stopping: bool,
+}
+
+impl RunningJob {
+    /// Whether this job's GPUs are still spoken for. The phase turns terminal
+    /// the instant a cancellation is accepted, but the processes holding the
+    /// devices are only on their way out: "free" means *placeable*, and a card
+    /// whose previous tenant is still exiting is not.
+    pub fn holds_gpus(&self) -> bool {
+        !self.status.phase().is_terminal() || self.stopping
+    }
 }
 
 pub struct AgentState {
@@ -34,6 +53,8 @@ pub struct AgentState {
     pub default_image: String,
     pub workspace: String,
     pub no_docker: bool,
+    /// How long a cancelled job gets to exit on SIGTERM before it is killed.
+    pub grace: Duration,
     pub controller: String,
     pub monitor: GpuMonitor,
     pub jobs: Mutex<HashMap<String, RunningJob>>,
@@ -82,6 +103,7 @@ impl AgentState {
             default_image: args.default_image.clone(),
             workspace: args.workspace.clone().unwrap_or_else(default_workspace),
             no_docker: args.no_docker,
+            grace: Duration::from_secs(args.termination_grace_period_secs),
             controller: args.controller.clone(),
             monitor: GpuMonitor::new(),
             jobs: Mutex::new(HashMap::new()),
@@ -94,7 +116,7 @@ impl AgentState {
         let jobs = self.jobs.lock().await;
         let mut map = HashMap::new();
         for job in jobs.values() {
-            if job.status.phase().is_terminal() {
+            if !job.holds_gpus() {
                 continue;
             }
             for idx in &job.gpu_indices {
@@ -167,26 +189,42 @@ impl AgentState {
             return (false, "job already finished".into());
         }
 
-        // Killing the docker CLI process would orphan the container, so stop
-        // the container by name first and let the CLI exit on its own.
-        if let Some(name) = job.container.clone() {
-            let _ = tokio::process::Command::new("docker")
-                .args(["kill", &name])
-                .output()
-                .await;
-        }
-        if let Some(child) = job.child.as_mut() {
-            let _ = child.start_kill();
-        }
         job.status.phase = JobPhase::Cancelled as i32;
         job.status.message = "cancelled by controller".into();
+        // The teardown runs as its own task and the lock is released here: it
+        // may sit through the whole grace period, and neither the other jobs'
+        // supervision nor the controller -- which stops each rank in turn --
+        // can afford to wait for it.
+        job.stopping = true;
+        job.stopper = Some(tokio::spawn(launcher::terminate(
+            job.container.clone(),
+            job.launcher_pid,
+            self.grace,
+        )));
         (true, format!("stopped {job_id}"))
     }
 
     pub async fn stop_all(&self) {
         let ids: Vec<String> = self.jobs.lock().await.keys().cloned().collect();
-        for id in ids {
-            self.stop_job(&id).await;
+        for id in &ids {
+            self.stop_job(id).await;
+        }
+
+        // The agent is on its way out, so it waits here rather than exiting
+        // part-way through a grace period and leaving the workers behind. The
+        // teardowns are already running in parallel, so this costs one grace
+        // period, not one per job.
+        let stoppers: Vec<(String, JoinHandle<StopOutcome>)> = {
+            let mut jobs = self.jobs.lock().await;
+            jobs.iter_mut()
+                .filter_map(|(id, j)| j.stopper.take().map(|s| (id.clone(), s)))
+                .collect()
+        };
+        for (id, stopper) in stoppers {
+            let _ = stopper.await;
+            if let Some(job) = self.jobs.lock().await.get_mut(&id) {
+                job.stopping = false;
+            }
         }
     }
 }

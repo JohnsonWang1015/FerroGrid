@@ -5,6 +5,70 @@ specification (§91). Newest entry first.
 
 ---
 
+## Graceful cancellation, and the workers that never died
+
+**Status:** ✅ Closes the `--no-docker` leak found during the RQ3 experiment, and
+§29 from the Phase 0 audit, which had been open since the beginning.
+
+### The bug was worse than either description of it
+
+The audit recorded §29 as "immediate SIGKILL". The RQ3 write-up recorded that
+`child.start_kill()` "does not reach the workers". Both were too kind.
+
+`launcher.rs` inserted `child: None` and moved the `Child` into the supervisor,
+so `stop_job`'s `child.start_kill()` was **unreachable dead code**. Under
+`--no-docker`, cancelling a job killed *nothing* — not the workers, not even
+torchrun. A baseline run with the fix stashed shows both processes still alive
+after `ferro cancel`, the rendezvous port still bound, and `ferro nodes`
+cheerfully reporting the GPU as free.
+
+### The process group was not the answer either
+
+The brief for this work assumed the fix was to signal the existing process
+group. It was not: `torch/distributed/elastic/.../subprocess_handler.py:66` sets
+`start_new_session=True`, so every worker is the leader of its own session and
+group. `kill(-pgid)` reaches torchrun and nothing else.
+
+So teardown walks the descendant tree **before** signalling anything — once
+torchrun dies its workers are reparented to init and parentage finds nothing —
+keeping `(pid, start_time)` pairs so pid reuse cannot make it kill a stranger.
+
+### Verified live, on real torchrun
+
+| | SIGTERM-deaf script | SIGTERM-honouring script |
+|---|---|---|
+| teardown | **10 s** (the full grace) | **0.5 s** |
+| surviving processes | none | none |
+| GPU released | yes | yes |
+| message | `cancelled by controller; did not exit in 10 s and was killed` | `cancelled by controller; exited on SIGTERM` |
+
+The message distinction is the useful part: it tells an operator whether their
+training script honours signals at all, which is the prerequisite for any
+cooperative checkpointing (§31) later.
+
+Independently re-verified by watching the status message over a timeline:
+`cancelled by controller` from t+0.5 s through t+9 s, becoming
+`…did not exit in 10 s and was killed` at t+11 s. The grace period is real.
+
+### Docker path
+
+`docker kill` became `docker stop --time <grace>`, so the same SIGTERM → wait →
+SIGKILL contract applies under Docker, where the runtime implements it.
+
+### Known limitations
+
+1. **The grace period is per-job, not per-cluster.** Cancelling twenty jobs whose
+   scripts all ignore SIGTERM takes ten seconds, not two hundred — teardowns run
+   concurrently — but a slow node still holds its own for the full window.
+2. **Nothing verifies the worker actually honoured the signal**, only that it
+   exited. A script that exits on SIGTERM without checkpointing looks identical
+   to one that saved its state first.
+3. **`--no-docker` remains the weaker path.** Docker gives cgroup-level
+   containment; the descendant walk is a best effort that a process deliberately
+   escaping its tree could still defeat.
+
+---
+
 ## RQ3 measurement — controller crash recovery
 
 **Status:** ✅ The last research question now has data.

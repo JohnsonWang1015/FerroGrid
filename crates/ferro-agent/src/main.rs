@@ -75,6 +75,12 @@ pub struct Args {
     /// Run training directly on the host instead of inside Docker.
     #[arg(long, env = "FERRO_NO_DOCKER", default_value_t = false)]
     no_docker: bool,
+
+    /// How long a cancelled job gets to exit on SIGTERM before it is killed.
+    /// A training script that checkpoints on the way out needs this; one that
+    /// ignores signals only delays its own death by it.
+    #[arg(long, env = "FERRO_GRACE_SECS", default_value_t = 10)]
+    termination_grace_period_secs: u64,
 }
 
 #[tokio::main]
@@ -179,5 +185,30 @@ async fn heartbeat_loop(state: Arc<AgentState>, args: Args) {
                 tokio::time::sleep(Duration::from_secs(3)).await;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Args;
+    use clap::Parser;
+
+    fn args(extra: &[&str]) -> Args {
+        let mut argv = vec!["ferro-agent", "--controller", "http://127.0.0.1:7070"];
+        argv.extend_from_slice(extra);
+        Args::parse_from(argv)
+    }
+
+    #[test]
+    fn cancellation_gets_ten_seconds_of_grace_by_default() {
+        assert_eq!(args(&[]).termination_grace_period_secs, 10);
+    }
+
+    #[test]
+    fn the_grace_period_is_configurable() {
+        assert_eq!(
+            args(&["--termination-grace-period-secs", "45"]).termination_grace_period_secs,
+            45
+        );
     }
 }

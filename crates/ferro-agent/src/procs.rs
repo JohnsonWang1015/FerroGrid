@@ -61,7 +61,7 @@ pub async fn snapshot(state: &AgentState) -> Vec<GpuProcess> {
         let mut pids = HashMap::new();
         let mut images = HashMap::new();
         for job in jobs.values() {
-            if job.status.phase().is_terminal() {
+            if !job.holds_gpus() {
                 continue;
             }
             if let Some(c) = &job.container {
@@ -396,6 +396,82 @@ fn parse_uid(status: &str) -> Option<u32> {
 
 fn read_stat(pid: u32) -> Option<(u32, u64)> {
     parse_stat(&std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?)
+}
+
+/// A process identified by pid *and* start time, so that a pid the kernel has
+/// since handed to somebody else cannot be mistaken for the one recorded.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ProcId {
+    pub pid: u32,
+    pub started_ticks: u64,
+}
+
+/// Every live descendant of `root`, however deep.
+///
+/// Needed for teardown: torchrun starts each worker with
+/// `start_new_session=True`, so the workers are session and process-group
+/// leaders of their own and signalling the launcher's group never reaches
+/// them. Parentage is the only link left -- and it survives only while the
+/// launcher does, because the kernel reparents the workers to init the moment
+/// it exits. The walk therefore has to happen before anything is killed.
+pub fn descendants(root: u32) -> Vec<ProcId> {
+    let Ok(dir) = std::fs::read_dir("/proc") else {
+        return Vec::new();
+    };
+
+    let mut children: HashMap<u32, Vec<ProcId>> = HashMap::new();
+    for entry in dir.flatten() {
+        let Some(pid) = entry
+            .file_name()
+            .to_str()
+            .and_then(|n| n.parse::<u32>().ok())
+        else {
+            continue;
+        };
+        // Racy by nature: a process may exit between the readdir and the read.
+        let Some((ppid, started_ticks)) = read_stat(pid) else {
+            continue;
+        };
+        children
+            .entry(ppid)
+            .or_default()
+            .push(ProcId { pid, started_ticks });
+    }
+
+    // Taking each parent's list out as it is visited bounds the walk even if
+    // /proc hands back a cycle.
+    let mut out = Vec::new();
+    let mut queue = vec![root];
+    while let Some(pid) = queue.pop() {
+        for child in children.remove(&pid).unwrap_or_default() {
+            queue.push(child.pid);
+            out.push(child);
+        }
+    }
+    out
+}
+
+/// Whether that exact process is still running. A zombie counts as gone: it
+/// holds no GPU and no port, it is only waiting to be reaped.
+pub fn is_alive(p: ProcId) -> bool {
+    let Ok(stat) = std::fs::read_to_string(format!("/proc/{}/stat", p.pid)) else {
+        return false;
+    };
+    let Some((_, started_ticks)) = parse_stat(&stat) else {
+        return false;
+    };
+    started_ticks == p.started_ticks && parse_state(&stat) != Some('Z')
+}
+
+/// Process state, field 3 of `/proc/<pid>/stat`. Counted from the last `)` for
+/// the same reason as `parse_stat`: field 2 is the executable name and may
+/// contain spaces and parentheses itself.
+fn parse_state(stat: &str) -> Option<char> {
+    stat[stat.rfind(')')? + 1..]
+        .split_whitespace()
+        .next()?
+        .chars()
+        .next()
 }
 
 /// `(ppid, starttime)` from `/proc/<pid>/stat`.
