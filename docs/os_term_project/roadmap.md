@@ -353,7 +353,7 @@ checkpointing, power/thermal, auth/TLS/RBAC) only if everything above is stable.
 |---|---|---|
 | RQ1 | How do FIFO, priority, aging and fair-share affect waiting time and fairness in a shared GPU cluster? | Phase 2 + Phase 4 |
 | RQ2 | How does heterogeneous GPU-aware placement affect throughput and utilisation? | Phase 3 + Phase 4 (and the existing `ferro bench` data) |
-| RQ3 | Can persistent state and reconciliation let FerroGrid recover from controller failure without losing scheduling state? | Phases 5–6 |
+| RQ3 | Can persistent state and reconciliation let FerroGrid recover from controller failure without losing scheduling state? | Phases 5–6, measured in `experiments.md` §5 — **0 of 21 jobs lost against 21 of 21** |
 | RQ4 | Can backfilling improve utilisation without significantly delaying large distributed jobs? | Phase 7 |
 
 ---

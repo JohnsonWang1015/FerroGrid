@@ -5,6 +5,48 @@ specification (§91). Newest entry first.
 
 ---
 
+## RQ3 measurement — controller crash recovery
+
+**Status:** ✅ The last research question now has data.
+
+`scripts/run_recovery_experiment.sh` drives the real binaries — controller,
+agent, 20 queued jobs and one genuinely running job — **SIGKILLs** the
+controller and restarts it. SIGKILL rather than SIGTERM because a clean
+shutdown is not the failure being studied.
+
+| Metric | persistent | in-memory |
+|---|---|---|
+| Jobs known after restart | **21 / 21** | **0 / 21** |
+| Lost jobs | **0** | **21** |
+| Incorrect allocations | **0** | **1** |
+| Queue order preserved | yes | n/a |
+| Recovery time (controller-timed) | **30 s** | never reconciles |
+
+Three runs agree on every count. Written up in
+[`experiments.md`](experiments.md) §5, including two caveats that matter more
+than the numbers:
+
+- **`failed_by_reconcile = 0` does not mean reconciliation found nothing.** The
+  agent survives the crash, so the running job is claimed and the queued ones
+  are exempt. The "job nobody claims" path is *not* exercised by this
+  experiment.
+- **Two recovery times are reported, not one.** The controller's monotonic
+  measure says 30 s; wall clock says 32–35 s, because this WSL2 host inflates
+  30.000 s of monotonic time to 35.6 s of wall time. Quoting only the wall
+  figure would report a scheduler overrunning its own configuration.
+
+### A FerroGrid gap the harness exposed
+
+Under `--no-docker`, torchrun puts its workers in a fresh session, so neither
+the agent's `child.start_kill()` nor a process-group kill reaches them.
+**Stopping an agent leaves its workers running and its GPUs held.** Docker mode
+is covered by `docker kill`, which is presumably why it has not bitten. Worse,
+the leftover worker holds the rendezvous port, so the next run's rank 0 dies
+with `EADDRINUSE` — which from outside is indistinguishable from a job lost to
+a crash. Not fixed; recorded.
+
+---
+
 ## Phase 7 — Backfilling and reservation
 
 **Phase:** 7 — Dispatch modes, EASY backfilling with reservation

@@ -1,0 +1,8 @@
+2026-09-23T06:11:04.598708Z  INFO ferro_agent::state: NCCL will use interface lo (127.0.0.1)
+2026-09-23T06:11:04.638293Z  INFO ferro_gpu: NVML initialised, 1 GPU(s) detected
+2026-09-23T06:11:04.638314Z  INFO ferro_agent: starting ferro-agent node_id=WangChiaWei gpus=1 advertise=127.0.0.1:7171 nccl_ip=127.0.0.1
+2026-09-23T06:11:04.644367Z  INFO ferro_agent: registered with controller: welcome WangChiaWei, 1 GPU(s) known
+2026-09-23T06:11:05.187638Z  INFO ferro_agent::launcher: launching: torchrun --nnodes=1 --nproc_per_node=1 --node_rank=0 --master_addr=127.0.0.1 --master_port=29600 recovery_job_145546.py job=j33a4c63430 rank=0
+2026-09-23T06:11:13.662404Z  INFO ferro_agent: controller does not know us, re-registering
+2026-09-23T06:11:13.666379Z  INFO ferro_agent: registered with controller: welcome WangChiaWei, 1 GPU(s) known
+2026-09-23T06:12:23.558829Z  INFO ferro_agent: shutdown requested, stopping running jobs

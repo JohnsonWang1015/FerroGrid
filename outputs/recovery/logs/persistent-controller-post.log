@@ -1,0 +1,5 @@
+2026-09-23T06:10:25.081997Z  INFO ferro_controller: restored 21 job(s), 0 GPU benchmark(s), 0 measured link(s) state=/tmp/tmp.rVIhDZoRUB/controller.db
+2026-09-23T06:10:25.085442Z  INFO ferro_controller: loaded 3 plugin(s) from /home/chiawei/.config/ferrogrid/plugins.toml: nextcloud, nextcloud-file, nextcloud-public
+2026-09-23T06:10:25.085451Z  INFO ferro_controller: ferro-controller listening bind=127.0.0.1:7170 master_port=29500 min_free_vram_gib=1 queue_policy=fifo placement_policy=performance dispatch="opportunistic"
+2026-09-23T06:10:25.605960Z  INFO ferro_controller::service: node registered node=WangChiaWei gpus=1 addr=127.0.0.1:7171
+2026-09-23T06:10:57.175339Z  INFO ferro_controller::service: recovery window closed restored=21 claimed=1 adopted=0 failed=0

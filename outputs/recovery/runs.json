@@ -1,0 +1,1812 @@
+[
+  {
+    "arm": "persistent",
+    "commit": "59e63d7-dirty",
+    "jobs_before": 21,
+    "jobs_after": 21,
+    "lost_jobs": 0,
+    "failed_by_reconcile": 0,
+    "incorrect_allocations": 0,
+    "recovery_time_log_s": 32,
+    "window_self_timed_s": 30,
+    "wall_to_serving_s": 0.11,
+    "wall_to_reconciled_s": 32.13,
+    "reconciled": true,
+    "queue_order_held": true,
+    "queued_before": 20,
+    "queued_after": 20,
+    "running_job_half": true,
+    "reconcile_window_s": 30,
+    "running_job_half_skipped_because": null,
+    "reconciled_detail": "restored 21, claimed 1, adopted 0, failed 0 in 30s",
+    "start_event": "CONTROLLER_RECOVERED",
+    "running_job": "jec67701960",
+    "lost_job_ids": [],
+    "phase_changes": {},
+    "incorrect_allocations_detail": [],
+    "before_jobs": [
+      {
+        "job_id": "ja4d4b6ff08",
+        "name": "recovery-q20",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 20,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j3219c9e956",
+        "name": "recovery-q19",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 19,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j87642e6954",
+        "name": "recovery-q18",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 18,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j4f7de341cc",
+        "name": "recovery-q17",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 17,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "je85977eeed",
+        "name": "recovery-q16",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 16,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j473bd0bce5",
+        "name": "recovery-q15",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 15,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j031d381d28",
+        "name": "recovery-q14",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 14,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "jd9913cae85",
+        "name": "recovery-q13",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 13,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j9da1bd1f5f",
+        "name": "recovery-q12",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 12,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "jba622c1a01",
+        "name": "recovery-q11",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 11,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j1d6527805a",
+        "name": "recovery-q10",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 10,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "jabcbe5dcd4",
+        "name": "recovery-q9",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 9,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "jd9b415eb2d",
+        "name": "recovery-q8",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 8,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "jc69c1438ed",
+        "name": "recovery-q7",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 7,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j6cadf29af4",
+        "name": "recovery-q6",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 6,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "jbcd173a850",
+        "name": "recovery-q5",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 5,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "jcd38ed34c9",
+        "name": "recovery-q4",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 4,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "jc345707e20",
+        "name": "recovery-q3",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 3,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j3379ea1d40",
+        "name": "recovery-q2",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 2,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j0619d8186b",
+        "name": "recovery-q1",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 1,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "jec67701960",
+        "name": "recovery-runner",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": true,
+            "free_gpus": 1,
+            "free_vram_b": 6311813120,
+            "node_id": "WangChiaWei",
+            "reasons": []
+          }
+        ],
+        "phase": "running",
+        "queue_message": "",
+        "queue_position": 0,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 1,
+        "submitted_unix_s": 1790143813,
+        "warnings": [],
+        "world_size": 1
+      }
+    ],
+    "after_jobs": [
+      {
+        "job_id": "ja4d4b6ff08",
+        "name": "recovery-q20",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 20,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j3219c9e956",
+        "name": "recovery-q19",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 19,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j87642e6954",
+        "name": "recovery-q18",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 18,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j4f7de341cc",
+        "name": "recovery-q17",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 17,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "je85977eeed",
+        "name": "recovery-q16",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 16,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j473bd0bce5",
+        "name": "recovery-q15",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 15,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j031d381d28",
+        "name": "recovery-q14",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 14,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "jd9913cae85",
+        "name": "recovery-q13",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 13,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j9da1bd1f5f",
+        "name": "recovery-q12",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 12,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "jba622c1a01",
+        "name": "recovery-q11",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 11,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j1d6527805a",
+        "name": "recovery-q10",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 10,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "jabcbe5dcd4",
+        "name": "recovery-q9",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 9,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "jd9b415eb2d",
+        "name": "recovery-q8",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 8,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "jc69c1438ed",
+        "name": "recovery-q7",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 7,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j6cadf29af4",
+        "name": "recovery-q6",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 6,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "jbcd173a850",
+        "name": "recovery-q5",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 5,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "jcd38ed34c9",
+        "name": "recovery-q4",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 4,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "jc345707e20",
+        "name": "recovery-q3",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 3,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j3379ea1d40",
+        "name": "recovery-q2",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 2,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j0619d8186b",
+        "name": "recovery-q1",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 1,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143824,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "jec67701960",
+        "name": "recovery-runner",
+        "nccl_errors": 0,
+        "node_verdicts": [],
+        "phase": "running",
+        "queue_message": "",
+        "queue_position": 0,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143813,
+        "warnings": [],
+        "world_size": 1
+      }
+    ],
+    "queue_before": [
+      "j0619d8186b",
+      "j3379ea1d40",
+      "jc345707e20",
+      "jcd38ed34c9",
+      "jbcd173a850",
+      "j6cadf29af4",
+      "jc69c1438ed",
+      "jd9b415eb2d",
+      "jabcbe5dcd4",
+      "j1d6527805a",
+      "jba622c1a01",
+      "j9da1bd1f5f",
+      "jd9913cae85",
+      "j031d381d28",
+      "j473bd0bce5",
+      "je85977eeed",
+      "j4f7de341cc",
+      "j87642e6954",
+      "j3219c9e956",
+      "ja4d4b6ff08"
+    ],
+    "queue_after": [
+      "j0619d8186b",
+      "j3379ea1d40",
+      "jc345707e20",
+      "jcd38ed34c9",
+      "jbcd173a850",
+      "j6cadf29af4",
+      "jc69c1438ed",
+      "jd9b415eb2d",
+      "jabcbe5dcd4",
+      "j1d6527805a",
+      "jba622c1a01",
+      "j9da1bd1f5f",
+      "jd9913cae85",
+      "j031d381d28",
+      "j473bd0bce5",
+      "je85977eeed",
+      "j4f7de341cc",
+      "j87642e6954",
+      "j3219c9e956",
+      "ja4d4b6ff08"
+    ],
+    "gpus_after": [
+      {
+        "allocated_job_id": "jec67701960",
+        "cuda_capability": "8.6",
+        "healthy": true,
+        "index": 0,
+        "memory_total_b": 6442450944,
+        "memory_used_b": 395587584,
+        "name": "NVIDIA GeForce RTX 3060 Laptop GPU",
+        "node_id": "WangChiaWei",
+        "power_limit_w": 105,
+        "power_usage_w": 11,
+        "temperature_c": 49,
+        "utilization_pct": 0,
+        "uuid": "GPU-d702c2f8-0b10-e2a0-84af-59da558b717a"
+      }
+    ]
+  },
+  {
+    "arm": "in-memory",
+    "commit": "59e63d7-dirty",
+    "jobs_before": 21,
+    "jobs_after": 0,
+    "lost_jobs": 21,
+    "failed_by_reconcile": 0,
+    "incorrect_allocations": 1,
+    "recovery_time_log_s": "",
+    "window_self_timed_s": "",
+    "wall_to_serving_s": 0.11,
+    "wall_to_reconciled_s": "",
+    "reconciled": false,
+    "queue_order_held": "",
+    "queued_before": 20,
+    "queued_after": 0,
+    "running_job_half": true,
+    "reconcile_window_s": 30,
+    "running_job_half_skipped_because": null,
+    "reconciled_detail": null,
+    "start_event": "CONTROLLER_STARTED",
+    "running_job": "j33a4c63430",
+    "lost_job_ids": [
+      "j3cf08061ce",
+      "j9781cab796",
+      "j00bef48786",
+      "j7f5d6e558f",
+      "jf272792446",
+      "j10f44a93a8",
+      "j5de9803a7a",
+      "j618f6cf05d",
+      "jc4e9d5318f",
+      "je56f112423",
+      "jd4a6796016",
+      "j89b1ea95a8",
+      "j82c434f106",
+      "j0519f95ce6",
+      "j4f3ba053aa",
+      "j1897f0c059",
+      "j347f4580f7",
+      "j76bc303ed0",
+      "j3ed30c598f",
+      "j95246effad",
+      "j33a4c63430"
+    ],
+    "phase_changes": {},
+    "incorrect_allocations_detail": [
+      {
+        "node_id": "WangChiaWei",
+        "index": 0,
+        "allocated_job_id": "j33a4c63430",
+        "why": "unknown job"
+      }
+    ],
+    "before_jobs": [
+      {
+        "job_id": "j3cf08061ce",
+        "name": "recovery-q20",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 20,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143870,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j9781cab796",
+        "name": "recovery-q19",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 19,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143870,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j00bef48786",
+        "name": "recovery-q18",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 18,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143870,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j7f5d6e558f",
+        "name": "recovery-q17",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 17,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143870,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "jf272792446",
+        "name": "recovery-q16",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 16,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143870,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j10f44a93a8",
+        "name": "recovery-q15",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 15,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143870,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j5de9803a7a",
+        "name": "recovery-q14",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 14,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143870,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j618f6cf05d",
+        "name": "recovery-q13",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 13,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143870,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "jc4e9d5318f",
+        "name": "recovery-q12",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 12,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143870,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "je56f112423",
+        "name": "recovery-q11",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 11,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143870,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "jd4a6796016",
+        "name": "recovery-q10",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 10,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143870,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j89b1ea95a8",
+        "name": "recovery-q9",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 9,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143870,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j82c434f106",
+        "name": "recovery-q8",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 8,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143870,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j0519f95ce6",
+        "name": "recovery-q7",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 7,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143870,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j4f3ba053aa",
+        "name": "recovery-q6",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 6,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143870,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j1897f0c059",
+        "name": "recovery-q5",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 5,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143870,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j347f4580f7",
+        "name": "recovery-q4",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 4,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143870,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j76bc303ed0",
+        "name": "recovery-q3",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 3,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143870,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j3ed30c598f",
+        "name": "recovery-q2",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 2,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143870,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j95246effad",
+        "name": "recovery-q1",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": false,
+            "free_gpus": 0,
+            "free_vram_b": 0,
+            "node_id": "WangChiaWei",
+            "reasons": [
+              "1 GPU(s) allocated by FerroGrid",
+              "only 0 free GPU(s), need 2"
+            ]
+          }
+        ],
+        "phase": "queued",
+        "queue_message": "requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify",
+        "queue_position": 1,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 0,
+        "submitted_unix_s": 1790143870,
+        "warnings": [],
+        "world_size": 0
+      },
+      {
+        "job_id": "j33a4c63430",
+        "name": "recovery-runner",
+        "nccl_errors": 0,
+        "node_verdicts": [
+          {
+            "eligible": true,
+            "free_gpus": 1,
+            "free_vram_b": 6311813120,
+            "node_id": "WangChiaWei",
+            "reasons": []
+          }
+        ],
+        "phase": "running",
+        "queue_message": "",
+        "queue_position": 0,
+        "reconciling": false,
+        "samples_per_s": 0.0,
+        "step": 1,
+        "submitted_unix_s": 1790143865,
+        "warnings": [],
+        "world_size": 1
+      }
+    ],
+    "after_jobs": [],
+    "queue_before": [
+      "j95246effad",
+      "j3ed30c598f",
+      "j76bc303ed0",
+      "j347f4580f7",
+      "j1897f0c059",
+      "j4f3ba053aa",
+      "j0519f95ce6",
+      "j82c434f106",
+      "j89b1ea95a8",
+      "jd4a6796016",
+      "je56f112423",
+      "jc4e9d5318f",
+      "j618f6cf05d",
+      "j5de9803a7a",
+      "j10f44a93a8",
+      "jf272792446",
+      "j7f5d6e558f",
+      "j00bef48786",
+      "j9781cab796",
+      "j3cf08061ce"
+    ],
+    "queue_after": [],
+    "gpus_after": [
+      {
+        "allocated_job_id": "j33a4c63430",
+        "cuda_capability": "8.6",
+        "healthy": true,
+        "index": 0,
+        "memory_total_b": 6442450944,
+        "memory_used_b": 395587584,
+        "name": "NVIDIA GeForce RTX 3060 Laptop GPU",
+        "node_id": "WangChiaWei",
+        "power_limit_w": 101,
+        "power_usage_w": 11,
+        "temperature_c": 49,
+        "utilization_pct": 0,
+        "uuid": "GPU-d702c2f8-0b10-e2a0-84af-59da558b717a"
+      }
+    ]
+  }
+]

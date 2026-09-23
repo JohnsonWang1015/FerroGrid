@@ -1,0 +1,25 @@
+2026-09-23T06:10:11.493490Z  INFO ferro_controller: restored 0 job(s), 0 GPU benchmark(s), 0 measured link(s) state=/tmp/tmp.rVIhDZoRUB/controller.db
+2026-09-23T06:10:11.493559Z  INFO ferro_controller: loaded 3 plugin(s) from /home/chiawei/.config/ferrogrid/plugins.toml: nextcloud, nextcloud-file, nextcloud-public
+2026-09-23T06:10:11.493563Z  INFO ferro_controller: ferro-controller listening bind=127.0.0.1:7170 master_port=29500 min_free_vram_gib=1 queue_policy=fifo placement_policy=performance dispatch="opportunistic"
+2026-09-23T06:10:12.545921Z  INFO ferro_controller::service: node registered node=WangChiaWei gpus=1 addr=127.0.0.1:7171
+2026-09-23T06:10:13.089122Z  INFO ferro_controller::service: job launched job=jec67701960 world_size=1 master=127.0.0.1
+2026-09-23T06:10:24.917539Z  INFO ferro_controller::service: queued at #1: requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify job=j0619d8186b
+2026-09-23T06:10:24.921524Z  INFO ferro_controller::service: queued at #2: requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify job=j3379ea1d40
+2026-09-23T06:10:24.925651Z  INFO ferro_controller::service: queued at #3: requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify job=jc345707e20
+2026-09-23T06:10:24.929284Z  INFO ferro_controller::service: queued at #4: requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify job=jcd38ed34c9
+2026-09-23T06:10:24.932894Z  INFO ferro_controller::service: queued at #5: requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify job=jbcd173a850
+2026-09-23T06:10:24.936641Z  INFO ferro_controller::service: queued at #6: requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify job=j6cadf29af4
+2026-09-23T06:10:24.940588Z  INFO ferro_controller::service: queued at #7: requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify job=jc69c1438ed
+2026-09-23T06:10:24.944787Z  INFO ferro_controller::service: queued at #8: requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify job=jd9b415eb2d
+2026-09-23T06:10:24.948682Z  INFO ferro_controller::service: queued at #9: requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify job=jabcbe5dcd4
+2026-09-23T06:10:24.952720Z  INFO ferro_controller::service: queued at #10: requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify job=j1d6527805a
+2026-09-23T06:10:24.956975Z  INFO ferro_controller::service: queued at #11: requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify job=jba622c1a01
+2026-09-23T06:10:24.961236Z  INFO ferro_controller::service: queued at #12: requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify job=j9da1bd1f5f
+2026-09-23T06:10:24.964779Z  INFO ferro_controller::service: queued at #13: requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify job=jd9913cae85
+2026-09-23T06:10:24.968682Z  INFO ferro_controller::service: queued at #14: requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify job=j031d381d28
+2026-09-23T06:10:24.972398Z  INFO ferro_controller::service: queued at #15: requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify job=j473bd0bce5
+2026-09-23T06:10:24.976011Z  INFO ferro_controller::service: queued at #16: requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify job=je85977eeed
+2026-09-23T06:10:24.979686Z  INFO ferro_controller::service: queued at #17: requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify job=j4f7de341cc
+2026-09-23T06:10:24.983360Z  INFO ferro_controller::service: queued at #18: requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify job=j87642e6954
+2026-09-23T06:10:24.987125Z  INFO ferro_controller::service: queued at #19: requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify job=j3219c9e956
+2026-09-23T06:10:24.991202Z  INFO ferro_controller::service: queued at #20: requested 1 nodes with 2 free GPU(s) each, but only 0 node(s) qualify job=ja4d4b6ff08

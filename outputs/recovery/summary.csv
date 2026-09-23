@@ -1,0 +1,3 @@
+arm,commit,jobs_before,jobs_after,lost_jobs,failed_by_reconcile,incorrect_allocations,recovery_time_log_s,window_self_timed_s,wall_to_serving_s,wall_to_reconciled_s,reconciled,queue_order_held,queued_before,queued_after,running_job_half,reconcile_window_s
+persistent,59e63d7-dirty,21,21,0,0,0,32,30,0.11,32.13,True,True,20,20,True,30
+in-memory,59e63d7-dirty,21,0,21,0,1,,,0.11,,False,,20,0,True,30

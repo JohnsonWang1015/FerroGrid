@@ -286,7 +286,102 @@ the simulator knows and the controller never will.
 
 ---
 
-## 5. Node failure
+## 5. RQ3 — surviving a controller crash
+
+The only experiment here that cannot run in the simulator: there is no
+controller in a simulator to restart. `./scripts/run_recovery_experiment.sh`
+drives the real binaries — one controller, one agent, 20 queued jobs and one
+genuinely running job — kills the controller with **SIGKILL**, and restarts it.
+
+SIGKILL rather than SIGTERM on purpose. A clean shutdown is not the failure
+being studied, and the write-behind design's worst case is precisely the one
+where it gets no chance to finish.
+
+| Metric | `--state` (persistent) | `--no-state` (in-memory) |
+|---|---|---|
+| Jobs known before the kill | 21 | 21 |
+| Jobs known after the restart | **21** | **0** |
+| **Lost jobs** | **0** | **21** |
+| **Incorrect allocations** | **0** | **1** |
+| Queue order preserved | yes — all 20, identical | n/a, queue empty |
+| Recovery time, controller-timed | **30 s** | n/a, never reconciles |
+| Recovery time, wall clock | 32–35 s | n/a |
+| Process start → serving requests | 0.11 s | 0.11 s |
+
+`RECONCILED` reports `restored 21, claimed 1, adopted 0, failed 0 in 30s`, and
+not one restored job changed phase.
+
+The in-memory arm's single incorrect allocation is the failure the design
+predicts, caught in the act: GPU 0 still reports `allocated_job_id=j2568d21e73`
+to a controller that has never heard of that job. The card is held by work the
+scheduler cannot see, cancel, or account for.
+
+Three runs — two by the implementer, one independent — agree on every count.
+
+### Two numbers for recovery time, and why
+
+The controller's own measure is monotonic and says 30 s. The event log and a
+stopwatch are wall-clock and say 32–35 s. Both are reported because on this
+WSL2 host they genuinely differ: `time.sleep(30)` measures 30.000 s of monotonic
+time and 35.6 s of wall time, a 19 % inflation, because the VM is descheduled
+while idle. A 5 s sleep shows none of it, so the effect is not even linear.
+
+**30 s is the honest figure** — it is the window the controller was asked for
+and the one it enforced. The wall-clock numbers are an artefact of the host and
+would not appear on a real server. Quoting only the wall figure would report a
+scheduler overrunning its own configuration by 15 %, which is not what happened.
+
+### What this experiment does *not* show
+
+`failed_by_reconcile` is **0**, and that is not the same as "reconciliation
+found nothing wrong". The agent survives a controller crash, so the running job
+is claimed inside the window, and the 20 queued jobs are explicitly exempt from
+being failed. **The "job nobody claims" path from [`recovery.md`](recovery.md)
+§2.1 is never exercised here.** Testing it needs the agent killed too; it is
+covered by unit tests and by the live check recorded in `progress.md` under
+Phase 6, not by this measurement.
+
+Log loss is confirmed rather than assumed: after the restart, `ferro logs` on
+the restored job returns nothing, and on the in-memory job returns
+`no such job`. That is [`persistence.md`](persistence.md) §6 behaving exactly as
+documented, and it is the clearest remaining gap.
+
+### Three ways this experiment nearly lied
+
+Worth recording, because each produced plausible-looking wrong numbers before it
+was caught:
+
+1. **The controller reports a job `running` the instant it dispatches**, before
+   the agent has exec'd anything. A liveness gate that trusted that killed the
+   controller ~200 ms after launch, and the job died *afterwards* — which reads
+   exactly like persistence losing it. The script now waits for a
+   `FERRO_METRIC` line to travel the whole job → agent → controller path.
+2. **Leftover workers hold the rendezvous port.** In `--no-docker` mode
+   torchrun puts its workers in a fresh session, so neither the agent's
+   `child.start_kill()` nor a process-group kill reaches them. A surviving
+   python from an earlier run makes the next run's rank 0 die with
+   `EADDRINUSE` — indistinguishable, from the outside, from "the job was lost
+   to the crash". **This is a real FerroGrid gap, not a harness artefact**:
+   under `--no-docker`, stopping an agent leaves its workers running and its
+   GPUs held. Docker mode is covered by `docker kill`, which is presumably why
+   it has not bitten before.
+3. A bare `/dev/tcp` port check hung rather than failing, stalling the run in a
+   way that looked like a slow recovery.
+
+### The answer to RQ3
+
+Persistent state and reconciliation let the controller lose **nothing** across
+an unclean crash: 21 of 21 jobs restored, queue order intact, no phase changed,
+no allocation left dangling, and the cluster served requests again in 0.11 s.
+The same run without persistence loses all 21 jobs and strands a GPU.
+
+The qualification is the one above: this measures *restoring and claiming*, not
+*adjudicating*. The harder half of recovery — deciding about work nobody claims
+— is implemented and tested, but is not what these numbers show.
+
+---
+
+## 6. Node failure
 
 Workload **G** removes `gpu-b` 1 500 s into the run. Utilisation drops to 55 %
 — half the cluster is gone and the makespan stretches to cover the same work on
@@ -301,7 +396,7 @@ work.
 
 ---
 
-## 6. Limitations of these results
+## 7. Limitations of these results
 
 1. **One seed per scenario.** Each row is a single run. Confidence intervals
    would need repeated seeds, which the runner supports (`seed` is a workload

@@ -1,0 +1,4 @@
+2026-09-23T06:11:10.720994Z  WARN ferro_controller: --no-state: jobs and measurements will not survive a restart
+2026-09-23T06:11:10.721063Z  INFO ferro_controller: loaded 3 plugin(s) from /home/chiawei/.config/ferrogrid/plugins.toml: nextcloud, nextcloud-file, nextcloud-public
+2026-09-23T06:11:10.721067Z  INFO ferro_controller: ferro-controller listening bind=127.0.0.1:7170 master_port=29600 min_free_vram_gib=1 queue_policy=fifo placement_policy=performance dispatch="opportunistic"
+2026-09-23T06:11:13.666203Z  INFO ferro_controller::service: node registered node=WangChiaWei gpus=1 addr=127.0.0.1:7171
