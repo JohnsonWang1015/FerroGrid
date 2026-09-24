@@ -11,6 +11,11 @@ specification (§91). Newest entry first.
 
 **Status:** ✅ Primary paired-seed evaluation complete; no PR merged.
 
+**Stacked review:** DRAFT [KageRyo/FerroGrid PR #1](https://github.com/KageRyo/FerroGrid/pull/1),
+`eval/quota-fairness` → `feat/user-gpu-quota`. The fork's PR numbering is
+independent of upstream; upstream PR #1 was still OPEN and unmerged when this
+draft was created.
+
 The quota evaluation reuses `ferro-admission::QuotaTable` and
 `QuotaDecision`, shared with the controller. CLI parsing, registry locking,
 atomic GPU reservation, persistence, and networking remain in the controller.
