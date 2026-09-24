@@ -6,6 +6,7 @@
 //! benchmarks and `ferro net` measurements exist nowhere else, so they are --
 //! see `store` for which fields and why.
 
+use crate::quota::{QuotaDecision, QuotaTable};
 use ferro_proto::{
     Gpu, GpuEntry, GpuOccupant, GpuProcess, JobPhase, JobPlacement, JobPlan, JobStatus, JobSummary,
     LogLine, NodeInfo, NodeState, NodeVerdict, PlacementExplanation, QueueScore, ScoreComponent,
@@ -396,6 +397,8 @@ pub struct Registry {
     /// The scheduler's VRAM floor, kept here too so "free" means the same
     /// thing in `ferro nodes` as it does at placement time.
     pub min_free_vram_b: u64,
+    /// Immutable admission limits supplied by controller configuration.
+    pub quotas: Arc<QuotaTable>,
     /// Where durable state goes. `None` is a controller running entirely in
     /// memory, which is what `--no-state` and every test that does not care
     /// about restarts get.
@@ -408,8 +411,15 @@ impl Registry {
         Self {
             inner: Mutex::new(RegistryInner::default()),
             min_free_vram_b,
+            quotas: Arc::new(QuotaTable::default()),
             store: None,
         }
+    }
+
+    /// Attach controller-configured user quotas to this registry.
+    pub fn with_quotas(mut self, quotas: Arc<QuotaTable>) -> Self {
+        self.quotas = quotas;
+        self
     }
 
     pub fn with_queue_policy(min_free_vram_b: u64, queue_policy: Arc<dyn QueuePolicy>) -> Self {
@@ -419,6 +429,7 @@ impl Registry {
                 ..Default::default()
             }),
             min_free_vram_b,
+            quotas: Arc::new(QuotaTable::default()),
             store: None,
         }
     }
@@ -470,6 +481,7 @@ impl Registry {
         Self {
             inner: Mutex::new(inner),
             min_free_vram_b,
+            quotas: Arc::new(QuotaTable::default()),
             store: Some(store),
         }
     }
@@ -1097,6 +1109,42 @@ impl Registry {
         }
     }
 
+    /// Put an already persisted, not-yet-launched submission into the queue
+    /// after its final reservation loses a capacity race.
+    pub async fn enqueue_after_reservation_race(
+        &self,
+        job_id: &str,
+        req: SubmitJobRequest,
+        deadline: i64,
+        node_verdicts: Vec<NodeVerdict>,
+        message: String,
+    ) -> bool {
+        let mut g = self.inner.lock().await;
+        let Some(job) = g.jobs.get_mut(job_id) else {
+            return false;
+        };
+        let actor = job.submitted_by.clone();
+        job.plan = JobPlan::default();
+        job.per_node.clear();
+        job.queued = true;
+        job.queue_req = Some(req);
+        job.queue_deadline = deadline;
+        job.node_verdicts = node_verdicts;
+        job.warnings.clear();
+        job.queue_message = message;
+        job.placement = None;
+        self.write_job(&g, job_id);
+        let position = g.queue_position(job_id);
+        self.emit(
+            &mut g,
+            Event::new(EventKind::JobQueued)
+                .job(job_id)
+                .actor(&actor)
+                .detail(format!("position {position} after a reservation race")),
+        );
+        true
+    }
+
     /// Take a job out of the queue without ever launching it. The status is
     /// what makes it terminal -- a queued job has no ranks to report one.
     pub async fn dequeue(&self, job_id: &str, phase: JobPhase, message: &str) -> bool {
@@ -1319,6 +1367,15 @@ impl Registry {
         }
     }
 
+    /// Number of GPUs currently reserved by jobs attributed to `user`.
+    ///
+    /// This reads the registry's ownership table, the same state checked and
+    /// changed by `reserve_exact_with_quota` under the same mutex.
+    pub async fn user_gpus_held(&self, user: &str) -> u32 {
+        let g = self.inner.lock().await;
+        reserved_gpus_for_user(&g, user, None)
+    }
+
     /// Take exactly the GPUs in `plan`, or take none of them.
     ///
     /// Placement runs outside this lock -- it is pure CPU work over a snapshot,
@@ -1336,6 +1393,58 @@ impl Registry {
     pub async fn reserve_exact(&self, plan: &JobPlan, job_id: &str) -> Result<(), ReserveConflict> {
         let mut g = self.inner.lock().await;
 
+        self.check_reservation(&g, plan, job_id)?;
+        self.apply_reservation(&mut g, plan, job_id);
+        Ok(())
+    }
+
+    /// Reserve GPUs and enforce the submitting user's quota in one registry
+    /// critical section. Placement stays outside the lock; neither a GPU
+    /// ownership change nor a quota decision can interleave with this check.
+    pub async fn reserve_exact_with_quota(
+        &self,
+        plan: &JobPlan,
+        job_id: &str,
+    ) -> Result<(), QuotaReservationError> {
+        let mut g = self.inner.lock().await;
+
+        // Validate physical availability before any mutation. The quota check
+        // below observes the same locked registry state as the final writes.
+        self.check_reservation(&g, plan, job_id)?;
+
+        if !self.quotas.is_empty() {
+            let user = g
+                .jobs
+                .get(job_id)
+                .map(|job| job.submitted_by.clone())
+                .ok_or_else(|| QuotaReservationError::UnknownJob {
+                    job_id: job_id.to_string(),
+                })?;
+            let held = reserved_gpus_for_user(&g, &user, Some(job_id));
+            let requested = plan_gpu_count(plan);
+            let decision = self.quotas.decide(&user, held, requested);
+            if matches!(
+                decision,
+                QuotaDecision::Wait { .. } | QuotaDecision::Reject { .. }
+            ) {
+                return Err(QuotaReservationError::Quota {
+                    user: user.clone(),
+                    message: decision.message(&user).unwrap_or_default(),
+                    decision,
+                });
+            }
+        }
+
+        self.apply_reservation(&mut g, plan, job_id);
+        Ok(())
+    }
+
+    fn check_reservation(
+        &self,
+        g: &RegistryInner,
+        plan: &JobPlan,
+        job_id: &str,
+    ) -> Result<(), ReserveConflict> {
         // Check everything before touching anything.
         for p in &plan.placements {
             let node = g
@@ -1364,6 +1473,10 @@ impl Registry {
             }
         }
 
+        Ok(())
+    }
+
+    fn apply_reservation(&self, g: &mut RegistryInner, plan: &JobPlan, job_id: &str) {
         for p in &plan.placements {
             if let Some(node) = g.nodes.get_mut(&p.node_id) {
                 for gpu in node.info.gpus.iter_mut() {
@@ -1383,14 +1496,36 @@ impl Registry {
             .map(|j| j.submitted_by.clone())
             .unwrap_or_default();
         self.emit(
-            &mut g,
+            g,
             Event::new(EventKind::GpuAllocated)
                 .job(job_id)
                 .actor(&actor)
                 .detail(where_it_runs(plan)),
         );
-        Ok(())
     }
+}
+
+fn plan_gpu_count(plan: &JobPlan) -> u32 {
+    plan.placements
+        .iter()
+        .flat_map(|placement| placement.gpu_indices.iter())
+        .fold(0u32, |count, _| count.saturating_add(1))
+}
+
+fn reserved_gpus_for_user(g: &RegistryInner, user: &str, exclude_job_id: Option<&str>) -> u32 {
+    g.nodes
+        .values()
+        .flat_map(|node| node.info.gpus.iter())
+        .filter(|gpu| {
+            !gpu.allocated_job_id.is_empty()
+                && Some(gpu.allocated_job_id.as_str()) != exclude_job_id
+        })
+        .filter(|gpu| {
+            g.jobs
+                .get(&gpu.allocated_job_id)
+                .is_some_and(|job| job.submitted_by == user)
+        })
+        .fold(0u32, |count, _| count.saturating_add(1))
 }
 
 /// Rebuild the plan a lost promote never wrote down, from the cards the agents
@@ -1587,6 +1722,35 @@ pub enum ReserveConflict {
     NodeGone { node_id: String },
     #[error("{node_id} no longer reports GPU {gpu_index}")]
     GpuGone { node_id: String, gpu_index: u32 },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum QuotaReservationError {
+    #[error(transparent)]
+    Conflict(#[from] ReserveConflict),
+    #[error("{message}")]
+    Quota {
+        user: String,
+        message: String,
+        decision: QuotaDecision,
+    },
+    #[error("job `{job_id}` is not registered; cannot determine its quota owner")]
+    UnknownJob { job_id: String },
+}
+
+impl QuotaReservationError {
+    /// A queued job may retry physical reservation races and quota capacity
+    /// that can become available after another job releases its GPUs.
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            Self::Conflict(_) => true,
+            Self::Quota {
+                decision: QuotaDecision::Wait { .. },
+                ..
+            } => true,
+            Self::Quota { .. } | Self::UnknownJob { .. } => false,
+        }
+    }
 }
 
 impl RegistryInner {

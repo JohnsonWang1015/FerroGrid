@@ -328,6 +328,19 @@ message GpuBenchmark {
 }
 
 message GetJobRequest { string job_id = 1; }
+message GetUsageRequest {}
+message UserUsageReport {
+  string user = 1;
+  uint32 gpus_held = 2;
+  uint32 running_jobs = 3;
+  double gpu_seconds = 4;
+  // Absent means unlimited; present zero is a configured zero-GPU quota.
+  optional uint32 gpu_quota = 5;
+}
+message GetUsageResponse {
+  repeated UserUsageReport users = 1;
+  int64 sampled_unix_s = 2;
+}
 message ListJobsRequest { uint32 limit = 1; }
 
 // `ferro ps`: what is running right now, and on which GPUs -- including
@@ -557,6 +570,7 @@ service Controller {
 
   rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
   rpc GetJob(GetJobRequest) returns (JobSummary);
+  rpc GetUsage(GetUsageRequest) returns (GetUsageResponse);
   rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
   rpc ListProcesses(ListProcessesRequest) returns (ListProcessesResponse);
   rpc DescribeProcess(DescribeProcessRequest) returns (DescribeProcessResponse);
