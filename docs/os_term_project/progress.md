@@ -5,6 +5,65 @@ specification (§91). Newest entry first.
 
 ---
 
+## Per-user GPU quota admission and usage accounting
+
+**Status:** ✅ Controller-configured concurrent GPU limits, atomic admission,
+queue retry behavior, `Controller.GetUsage`, and `ferro usage` are implemented.
+
+`ferro-controller --user-quota USER=N` is repeatable. Duplicate identities and
+malformed limits fail startup; an omitted user is unlimited and zero is a valid
+limit. Exact requests that can never fit are rejected, temporary quota blocks
+are rejected without `--wait` or retained in the queue with it, and automatic
+placement is capped by remaining quota. Quota blocking has its own message,
+separate from cluster capacity.
+
+The race was prevented at the allocation boundary: `reserve_exact_with_quota`
+holds the registry mutex while it checks physical GPU ownership, counts GPUs
+already allocated to the submitter, checks the quota, and applies the full
+reservation or none of it. The preflight check only supplies early feedback;
+both immediate and queued jobs repeat admission at the atomic reservation.
+Placement remains outside the critical section, and the agent's launch-time
+GPU validation remains in place.
+
+Usage reuses `RegistryInner::usage_snapshot`, the same job-derived data used by
+fair-share, rather than maintaining a second cumulative ledger. The API reports
+held GPUs, current nonqueued jobs, accumulated GPU-seconds, and an optional
+quota; the CLI displays an absent quota as `unlimited` and preserves quota zero
+as zero in JSON. Job-derived GPU-seconds remain available after restart from
+persisted job records. The controller's quota flags are startup configuration
+and must be supplied again after a restart.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `cargo fmt --all -- --check` | ✅ clean |
+| `PROTOC=/tmp/ferro-protoc/bin/protoc cargo clippy --workspace --all-targets -- -D warnings` | ✅ clean |
+| `PROTOC=/tmp/ferro-protoc/bin/protoc cargo test --workspace` | ✅ 289 passed, 0 failed |
+| `uv run --all-extras pytest -q` | ✅ 14 passed, 5 skipped; one CUDA driver-version warning |
+
+The first full Rust test run hit two unchanged `ferro-agent` process-fixture
+assertions before `setsid` had moved the child into its own session. Both tests
+passed when isolated and on the complete workspace rerun. The new mandatory
+16-way same-user reservation test admits exactly two GPUs under a quota of two.
+A mocked NodeAgent gRPC integration test also leaves a quota-blocked job queued,
+releases the incumbent job, then dispatches and launches the waiting job. RPC
+and renderer tests verify current usage and the difference between unlimited
+and a zero-GPU limit. No real GPU result is claimed.
+
+### Known limitations
+
+- `submitted_by` is client supplied; quota enforcement is resource management,
+  not an authentication or security boundary. The controller gRPC endpoint is
+  still unauthenticated.
+- Quota definitions are supplied at controller startup rather than persisted
+  in the state database; operators must pass the same limits after restart.
+- GPU-seconds and current job counts are derived from retained durable job
+  records and the existing registry lifecycle semantics. There is no separate
+  accounting ledger, identity provider, project quota, or GPU preemption.
+
+---
+
 ## Graceful cancellation, and the workers that never died
 
 **Status:** ✅ Closes the `--no-docker` leak found during the RQ3 experiment, and

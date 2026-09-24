@@ -129,12 +129,16 @@ uv run --all-extras ferro-setup --portable   # or: ./scripts/build.sh portable
 ### 2. Start the controller
 
 ```bash
-ferro-controller --bind 0.0.0.0:7070
+ferro-controller --bind 0.0.0.0:7070 \
+  --user-quota alice=2 \
+  --user-quota bob=4
 ```
 
 Useful flags: `--master-port` (rendezvous port, default 29500),
 `--min-free-vram-gib` (default 8, see *Scheduling* below), `--default-image`,
-and `--heartbeat-secs` (default 3; lower it for a snappier `ferro watch`).
+`--heartbeat-secs` (default 3; lower it for a snappier `ferro watch`), and
+repeatable `--user-quota USER=N` (concurrent GPU limits; see below). Duplicate
+user definitions and malformed values are rejected at startup.
 
 Start it before registering nodes — registration confirms itself by waiting
 for the node to appear in the controller's registry. For a permanent setup,
@@ -306,6 +310,7 @@ ferro push  <plugin> <local> <remote>   # send results back
 ferro train --nodes 2 --gpus-per-node 2 train.py
 ferro train --wait ... train.py # queue instead of failing when the cluster is full
 ferro jobs                      # recent jobs
+ferro usage                     # per-user held GPUs, running jobs, GPU-seconds, quota
 ferro job <job-id>              # placement, per-rank status, metrics, NCCL errors
 ferro logs <job-id> [-f]        # merged logs, tagged by rank and node
 ferro cancel <job-id>           # stop every rank and free the GPUs
@@ -359,6 +364,43 @@ until it starts, and `--timeout` (above) only starts counting then.
 
 With `-f/--follow` the CLI says it is waiting and starts streaming logs when
 the job actually launches.
+
+### Per-user GPU quotas and usage
+
+Set a concurrent GPU limit for each user at controller startup:
+
+```bash
+ferro-controller --user-quota alice=2 --user-quota bob=4
+ferro usage
+ferro usage --json
+ferro usage --watch
+```
+
+`USER=N` sets the maximum number of GPUs the user may hold at once. A user
+without a configured quota is unlimited; `USER=0` prevents that user from
+holding GPUs. Quotas are independent between users and count GPUs reserved for
+their active jobs. If one request can never fit under its user's quota, it is
+rejected even with `--wait`. If it could fit after current work finishes, a
+submission without `--wait` gets a quota-specific error, while `--wait` keeps it
+queued for a later retry. Auto placement is capped by the user's remaining
+quota. Quota messages are distinct from physical cluster-capacity messages.
+Quota flags are controller startup configuration; pass the same flags again
+after a restart.
+
+The registry checks physical GPU ownership and the user's total allocation,
+then makes the reservation in one critical section. Queue dispatch uses the same
+check, so concurrent submissions cannot both consume the same remaining quota.
+`ferro usage` reports current GPU holdings and running jobs alongside
+GPU-seconds derived from the same persisted job records used by fair-share
+scheduling. Queued jobs hold no GPUs and accrue no GPU-seconds; a terminal job
+stops accruing time. GPU-seconds are elapsed runtime multiplied by the GPUs in
+the job's placement.
+
+**Quota enforcement is a resource-management mechanism, not an authentication
+boundary.** `submitted_by` is currently supplied by the client, and gRPC has no
+authentication; a client can claim another username. Use quotas to manage
+cooperative users on a trusted controller network, not to enforce identity or
+security.
 
 ### Measuring the fabric
 
@@ -1497,8 +1539,10 @@ Phase 1 is deliberately small. Known gaps, in rough priority order:
   placement policy (`performance`, `first-fit`, `best-fit`, `vram`, `topology`)
   are selectable at controller startup, but not while it runs.
 - No authentication or TLS on the gRPC endpoints; run it on a trusted network.
-- Fair share tracks GPU-seconds per user, but there are no quotas, no
-  preemption and no `ferro usage` report yet.
+  `submitted_by` is client supplied, so per-user quotas are not a security
+  boundary. There is no preemption.
+- Fair share and `ferro usage` use job-derived GPU-seconds. Usage history is
+  limited to the durable job records retained by the controller.
 - Elastic/fault-tolerant training is not wired up; a rank failure fails the job.
 - `--gpus-per-node` is uniform across nodes, as torchrun expects.
 

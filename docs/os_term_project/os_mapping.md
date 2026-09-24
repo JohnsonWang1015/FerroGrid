@@ -53,7 +53,7 @@ a mapping table that quietly promises unbuilt features would be worse than none.
 | First-fit / best-fit | *Not named as strategies* — Phase 3 | — |
 | Multi-resource allocation (CPU + RAM + GPU) | Node CPU and RAM **are advertised** but never used in placement — Phase 7 | `proto` `NodeInfo.cpu_count:8, memory_total_b:9` |
 | Dominant Resource Fairness | *Not implemented* — Phase 7 | — |
-| Quota / rlimit | *Not implemented* — Phase 7 | — |
+| Quota / rlimit | Optional per-user concurrent GPU limit; controller admission and reservation share one atomic registry check. Unconfigured users are unlimited; requests larger than the hard limit are rejected and temporary quota blocks can queue | `quota.rs::QuotaTable`; `registry.rs::reserve_exact_with_quota`; controller `--user-quota USER=N` |
 
 ## 4. Isolation and protection
 
@@ -64,7 +64,7 @@ a mapping table that quietly promises unbuilt features would be worse than none.
 | File-system namespace | Explicit bind mounts; only the agent workspace is mounted by default, datasets need `--mount` | `proto` `SubmitJobRequest.mounts:10` |
 | User / uid | Containers run **not as root**, but as the *agent's* uid/gid (`getuid()`/`getgid()` on the node), **not** the submitter's. All FerroGrid jobs on a node therefore share one uid: no per-user isolation between them | `launcher.rs:401-405`; `proto` `ProcessEntry.runs_as` |
 | Information leak prevention | Credential-looking flags are **redacted** before a command line leaves the node | `procs::redact_secrets` |
-| Authentication / access control | *Not implemented* — Phase 8. gRPC is unauthenticated; run on a trusted network | README §"Scope and limitations" |
+| Authentication / access control | *Not implemented* — Phase 8. gRPC is unauthenticated; `submitted_by` is client supplied, so quotas are resource management, not a security boundary | README §"Scope and limitations" |
 
 ## 5. Inter-process communication
 
@@ -100,7 +100,7 @@ a mapping table that quietly promises unbuilt features would be worse than none.
 | `uptime` / load | *Not implemented* — cluster utilisation metrics arrive in Phase 4 | |
 | `dmesg` / audit log | *Not implemented* — event log is Phase 5 | |
 | `iperf` | `ferro net` | Measures real pairwise TCP throughput, strictly one pair at a time |
-| accounting (`sa`, `acct`) | *Not implemented* — `ferro usage` is Phase 7 | |
+| accounting (`sa`, `acct`) | `ferro usage` reports current GPU holdings and running jobs plus job-derived GPU-seconds and optional per-user quota; usage and fair-share share `RegistryInner::usage_snapshot` | `Controller.GetUsage`; `ferro usage [--json] [--watch]` |
 
 ---
 
