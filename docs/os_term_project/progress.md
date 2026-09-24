@@ -11,10 +11,11 @@ specification (§91). Newest entry first.
 
 **Status:** ✅ Primary paired-seed evaluation complete; no PR merged.
 
-**Stacked review:** DRAFT [KageRyo/FerroGrid PR #1](https://github.com/KageRyo/FerroGrid/pull/1),
-`eval/quota-fairness` → `feat/user-gpu-quota`. The fork's PR numbering is
-independent of upstream; upstream PR #1 was still OPEN and unmerged when this
-draft was created.
+**Stacked review:** OPEN [upstream PR #2](https://github.com/JohnsonWang1015/FerroGrid/pull/2),
+`KageRyo:eval/quota-fairness` → `main`. Upstream PR #1 was OPEN and unmerged
+when PR #2 was created. The PR body requests that #1 merge first, then this
+branch be rebased and PR #2 updated before it is merged. The temporary
+fork-local draft was closed to avoid duplicate review threads.
 
 The quota evaluation reuses `ferro-admission::QuotaTable` and
 `QuotaDecision`, shared with the controller. CLI parsing, registry locking,
