@@ -1,7 +1,7 @@
 # FerroGrid: Evaluating Scheduling and Resource Allocation Policies for Shared GPU Clusters
 
 - **Course:** Operating Systems Term Project
-- **Team members:** [Add team member names]
+- **Team members:** 王嘉暐、張健勳、陳育哲
 - **Abstract submission:** September 29, 2026
 
 ## Project abstract
