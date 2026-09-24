@@ -12,6 +12,7 @@
 //! the *scheduler*, not about the hardware.
 
 pub mod metrics;
+pub mod quota_evaluation;
 pub mod rng;
 pub mod sim;
 pub mod workload;
