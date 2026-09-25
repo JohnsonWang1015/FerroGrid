@@ -1,14 +1,8 @@
 # FerroGrid ↔ Operating Systems: concept mapping
 
-FerroGrid is a **distributed resource manager**. The machine it manages is a
-cluster rather than a single host, and the processor it schedules is a GPU
-rather than a core, but the problems are the textbook ones: who runs, when, on
-which processor, with how much memory, under what isolation, and what happens
-when something dies.
+FerroGrid is a **distributed resource manager**. The machine it manages is a cluster rather than a single host, and the processor it schedules is a GPU rather than a core, but the problems are the textbook ones: who runs, when, on which processor, with how much memory, under what isolation, and what happens when something dies.
 
-This document maps each OS concept onto the concrete FerroGrid code that
-implements it. Where a row is aspirational rather than implemented, it says so —
-a mapping table that quietly promises unbuilt features would be worse than none.
+This document maps each OS concept onto the concrete FerroGrid code that implements it. Where a row is aspirational rather than implemented, it says so — a mapping table that quietly promises unbuilt features would be worse than none.
 
 ---
 
@@ -106,19 +100,9 @@ a mapping table that quietly promises unbuilt features would be worse than none.
 
 ## 8. Where FerroGrid differs from a classic OS
 
-Worth stating plainly, because the differences are what make the project
-interesting rather than a re-implementation:
+Worth stating plainly, because the differences are what make the project interesting rather than a re-implementation:
 
-1. **No preemption by default.** A GPU job holds its device until it finishes.
-   There is no cheap context switch: swapping out a training job means
-   checkpointing gigabytes. This is why aging and backfilling matter *more* here
-   than in a CPU scheduler — starvation cannot be fixed by a time slice.
-2. **The scheduler does not own the machine.** Other users, notebooks and
-   desktop compositors hold GPUs FerroGrid never allocated. "Free" therefore
-   means *placeable* — unallocated **and** with enough VRAM headroom — not
-   merely "not ours".
-3. **Heterogeneous processors are the normal case**, and their speed is
-   *measured*, not inferred from a model name.
-4. **The interconnect is part of the scheduling decision.** On 1 GbE, crossing
-   the network costs ~55× throughput, so placement must prefer one node — a
-   consideration with no real analogue in single-host CPU scheduling.
+1. **No preemption by default.** A GPU job holds its device until it finishes. There is no cheap context switch: swapping out a training job means checkpointing gigabytes. This is why aging and backfilling matter *more* here than in a CPU scheduler — starvation cannot be fixed by a time slice.
+2. **The scheduler does not own the machine.** Other users, notebooks and desktop compositors hold GPUs FerroGrid never allocated. "Free" therefore means *placeable* — unallocated **and** with enough VRAM headroom — not merely "not ours".
+3. **Heterogeneous processors are the normal case**, and their speed is *measured*, not inferred from a model name.
+4. **The interconnect is part of the scheduling decision.** On 1 GbE, crossing the network costs ~55× throughput, so placement must prefer one node — a consideration with no real analogue in single-host CPU scheduling.

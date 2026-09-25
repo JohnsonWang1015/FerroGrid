@@ -1,13 +1,8 @@
 # FerroGrid
 
-A small multi-server GPU training platform for a lab: a Rust control plane that
-discovers every GPU in the cluster, picks devices for a job, and launches
-**stock PyTorch FSDP2 + NCCL** through `torchrun` inside Docker on each node.
+A small multi-server GPU training platform for a lab: a Rust control plane that discovers every GPU in the cluster, picks devices for a job, and launches **stock PyTorch FSDP2 + NCCL** through `torchrun` inside Docker on each node.
 
-FerroGrid does **not** reimplement FSDP, NCCL or torchrun. Its job is the part
-around them: knowing what hardware exists, choosing where a job runs, setting
-`MASTER_ADDR` / `NODE_RANK` / `WORLD_SIZE` correctly, starting the containers,
-and collecting logs, GPU telemetry, throughput and NCCL errors in one place.
+FerroGrid does **not** reimplement FSDP, NCCL or torchrun. Its job is the part around them: knowing what hardware exists, choosing where a job runs, setting `MASTER_ADDR` / `NODE_RANK` / `WORLD_SIZE` correctly, starting the containers, and collecting logs, GPU telemetry, throughput and NCCL errors in one place.
 
 ```
                     ferro (CLI)
@@ -33,12 +28,7 @@ git clone <this repo> && cd FerroGrid
 uv run --all-extras ferro-setup
 ```
 
-That single command creates the virtualenv, installs PyTorch and Mojo/MAX,
-builds the Rust binaries, and links `ferro` / `ferro-agent` /
-`ferro-controller` into `~/.local/bin`. Re-run it any time; it is idempotent.
-If `~/.local/bin` is not on your PATH it says so at the end and prints the
-`export` line; `--add-to-path` appends that line to your shell rc instead
-(bash, zsh and fish; also idempotent).
+That single command creates the virtualenv, installs PyTorch and Mojo/MAX, builds the Rust binaries, and links `ferro` / `ferro-agent` / `ferro-controller` into `~/.local/bin`. Re-run it any time; it is idempotent. If `~/.local/bin` is not on your PATH it says so at the end and prints the `export` line; `--add-to-path` appends that line to your shell rc instead (bash, zsh and fish; also idempotent).
 
 Lighter variants:
 
@@ -49,8 +39,7 @@ uv run --all-extras ferro-setup --portable      # binaries for older servers
 uv run --all-extras ferro-setup --add-to-path   # also extend PATH in your shell rc
 ```
 
-Requires [uv](https://docs.astral.sh/uv/) and a Rust toolchain
-(`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`).
+Requires [uv](https://docs.astral.sh/uv/) and a Rust toolchain (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`).
 
 ## Components
 
@@ -73,7 +62,7 @@ Requires [uv](https://docs.astral.sh/uv/) and a Rust toolchain
 | `crates/ferro-sim` | Offline scheduler evaluation: workload generator, simulator, experiment runner |
 | `python/examples/gpu_burn.py` | Instant-start GPU workload for scheduling demos |
 | `scripts/` | Build, deploy, sync, prepare, benchmark |
-| `docs/os_term_project/` | Scheduling design, experiments and results |
+| `docs/os_term_project/` | [Project abstract](docs/os_term_project/abstract.md) · [presentation outline](docs/os_term_project/abstract_presentation.md) · scheduling design, experiments and results |
 
 ## Requirements
 
@@ -96,11 +85,9 @@ Requires [uv](https://docs.astral.sh/uv/) and a Rust toolchain
 
 ## Deploying on two Ubuntu servers
 
-Two GPU servers, `gpu-a` and `gpu-b`, with the controller on a third machine
-at `10.0.0.1`. The controller can equally run on one of the GPU servers.
+Two GPU servers, `gpu-a` and `gpu-b`, with the controller on a third machine at `10.0.0.1`. The controller can equally run on one of the GPU servers.
 
-You need SSH access to each server and nothing else — no root, no
-`~/.ssh/config` entry, not even an SSH key (see *Password-only SSH* below).
+You need SSH access to each server and nothing else — no root, no `~/.ssh/config` entry, not even an SSH key (see *Password-only SSH* below).
 
 ### 1. Build and install
 
@@ -108,23 +95,15 @@ You need SSH access to each server and nothing else — no root, no
 uv run --all-extras ferro-setup
 ```
 
-This builds the binaries and links them into `~/.local/bin` (see *Quick
-start*). If `ferro --version` then prints `command not found`, `~/.local/bin`
-is not on your `PATH` — add `export PATH="$HOME/.local/bin:$PATH"` to your
-shell rc file.
+This builds the binaries and links them into `~/.local/bin` (see *Quick start*). If `ferro --version` then prints `command not found`, `~/.local/bin` is not on your `PATH` — add `export PATH="$HOME/.local/bin:$PATH"` to your shell rc file.
 
-**If the GPU servers are older than the controller host**, build portable
-binaries instead, inside a glibc-2.31 container, so one binary runs on Ubuntu
-20.04 and newer:
+**If the GPU servers are older than the controller host**, build portable binaries instead, inside a glibc-2.31 container, so one binary runs on Ubuntu 20.04 and newer:
 
 ```bash
 uv run --all-extras ferro-setup --portable   # or: ./scripts/build.sh portable
 ```
 
-> **Why not a static musl binary?** NVML is `dlopen`ed at runtime, and a
-> statically linked musl binary has no dynamic loader — the agent starts fine
-> but reports **zero GPUs**. The agent must be dynamically linked, so it is
-> built against the oldest glibc in the fleet instead.
+> **Why not a static musl binary?** NVML is `dlopen`ed at runtime, and a statically linked musl binary has no dynamic loader — the agent starts fine but reports **zero GPUs**. The agent must be dynamically linked, so it is built against the oldest glibc in the fleet instead.
 
 ### 2. Start the controller
 
@@ -134,15 +113,9 @@ ferro-controller --bind 0.0.0.0:7070 \
   --user-quota bob=4
 ```
 
-Useful flags: `--master-port` (rendezvous port, default 29500),
-`--min-free-vram-gib` (default 8, see *Scheduling* below), `--default-image`,
-`--heartbeat-secs` (default 3; lower it for a snappier `ferro watch`), and
-repeatable `--user-quota USER=N` (concurrent GPU limits; see below). Duplicate
-user definitions and malformed values are rejected at startup.
+Useful flags: `--master-port` (rendezvous port, default 29500), `--min-free-vram-gib` (default 8, see *Scheduling* below), `--default-image`, `--heartbeat-secs` (default 3; lower it for a snappier `ferro watch`), and repeatable `--user-quota USER=N` (concurrent GPU limits; see below). Duplicate user definitions and malformed values are rejected at startup.
 
-Start it before registering nodes — registration confirms itself by waiting
-for the node to appear in the controller's registry. For a permanent setup,
-run it under systemd the same way the agents do.
+Start it before registering nodes — registration confirms itself by waiting for the node to appear in the controller's registry. For a permanent setup, run it under systemd the same way the agents do.
 
 ### 3. Register the nodes
 
@@ -155,16 +128,10 @@ One command per server:
 
 Each run:
 
-1. checks `nvidia-smi`, Docker, the NVIDIA container runtime and docker-group
-   membership — the failure modes you want to find now, not during your first
-   training job;
+1. checks `nvidia-smi`, Docker, the NVIDIA container runtime and docker-group membership — the failure modes you want to find now, not during your first training job;
 2. pre-pulls the training image (`--no-image` to skip);
-3. installs the agent to `~/.local/bin/ferro-agent` and enables it as a
-   `systemd --user` service with `Restart=always` and lingering on, so it
-   survives logout and reboot;
-4. **waits for the node to appear in `ferro nodes`** and prints the table —
-   so a green result means it really registered, not merely that a process
-   started.
+3. installs the agent to `~/.local/bin/ferro-agent` and enables it as a `systemd --user` service with `Restart=always` and lingering on, so it survives logout and reboot;
+4. **waits for the node to appear in `ferro nodes`** and prints the table — so a green result means it really registered, not merely that a process started.
 
 #### Password-only SSH
 
@@ -174,12 +141,7 @@ Pass `user@host` directly. No `~/.ssh/config` entry and no key needed:
 ./scripts/register_node.sh user@10.0.0.12 10.0.0.1:7070 rtx5090
 ```
 
-You are prompted for the password **once**. The script opens a single
-authenticated SSH connection and multiplexes every later `scp`/`ssh` over it
-through a control socket, closed when the run finishes. The password goes into
-`ssh` itself: nothing is stored, and nothing lands on a command line or in an
-environment variable where `ps` could read it. That is deliberately not
-`sshpass`.
+You are prompted for the password **once**. The script opens a single authenticated SSH connection and multiplexes every later `scp`/`ssh` over it through a control socket, closed when the run finishes. The password goes into `ssh` itself: nothing is stored, and nothing lands on a command line or in an environment variable where `ps` could read it. That is deliberately not `sshpass`.
 
 To stop typing it, install your key on the first run:
 
@@ -187,14 +149,11 @@ To stop typing it, install your key on the first run:
 ./scripts/register_node.sh --copy-id user@10.0.0.12 10.0.0.1:7070 rtx5090
 ```
 
-After that, re-registration and `ferro sync` need no password at all — worth
-doing, because `ferro sync` uses SSH on every launch.
+After that, re-registration and `ferro sync` need no password at all — worth doing, because `ferro sync` uses SSH on every launch.
 
 #### Naming a node
 
-The third argument sets the node id, which is what `ferro nodes` shows and
-what `--node` matches. It defaults to the machine's hostname, so set it
-explicitly when that is unhelpful (`user`, `gpu`, `localhost`):
+The third argument sets the node id, which is what `ferro nodes` shows and what `--node` matches. It defaults to the machine's hostname, so set it explicitly when that is unhelpful (`user`, `gpu`, `localhost`):
 
 ```bash
 ./scripts/register_node.sh user@10.0.0.12 10.0.0.1:7070 rtx5090
@@ -202,17 +161,14 @@ explicitly when that is unhelpful (`user`, `gpu`, `localhost`):
 
 #### Re-running it
 
-`register_node.sh` is idempotent — re-run it to upgrade a node after
-`ferro-setup`, and it will restart the service and re-verify. Two narrower
-scripts exist for when that is more than you want:
+`register_node.sh` is idempotent — re-run it to upgrade a node after `ferro-setup`, and it will restart the service and re-verify. Two narrower scripts exist for when that is more than you want:
 
 | Script | Use when |
 |---|---|
 | `deploy_agent.sh <host> <controller>` | pushing a new binary to a node that is already registered |
 | `prepare_node.sh <host>` | checking a machine's prerequisites before you are ready to register it |
 
-Both take an SSH alias or `user@host`, and `deploy_agent.sh` takes optional
-NCCL-IP and node-id arguments for multi-homed machines:
+Both take an SSH alias or `user@host`, and `deploy_agent.sh` takes optional NCCL-IP and node-id arguments for multi-homed machines:
 
 ```bash
 ./scripts/deploy_agent.sh gpu-a 10.0.0.1:7070 192.168.50.11 gpu-a
@@ -225,10 +181,7 @@ export FERRO_CONTROLLER=http://10.0.0.1:7070
 ferro sync
 ```
 
-`ferro sync` copies the current directory to every registered node, using the
-login user and workspace root each node reported at registration — so no host
-list, and nodes with different home directories need no special handling. See
-*Running your own project*.
+`ferro sync` copies the current directory to every registered node, using the login user and workspace root each node reported at registration — so no host list, and nodes with different home directories need no special handling. See *Running your own project*.
 
 ### 5. Verify
 
@@ -243,16 +196,13 @@ ferro train --nodes 2 --gpus-per-node 1 -f python/examples/train_fsdp2.py --step
 
 ### 6. Moving to another machine
 
-Everything above lives on one workstation: the binaries, the SSH way in to
-each node, `plugins.toml`, and the controller address. One command carries the
-lot to a second machine:
+Everything above lives on one workstation: the binaries, the SSH way in to each node, `plugins.toml`, and the controller address. One command carries the lot to a second machine:
 
 ```bash
 ./scripts/migrate.sh esl@10.0.0.5
 ```
 
-It reads the node list **from the running controller** rather than from a host
-list -- the same source `ferro sync` uses -- and ships:
+It reads the node list **from the running controller** rather than from a host list -- the same source `ferro sync` uses -- and ships:
 
 | | |
 |---|---|
@@ -263,31 +213,17 @@ list -- the same source `ferro sync` uses -- and ships:
 | `FERRO_CONTROLLER` and `PATH` | sourced from `~/.config/ferrogrid/env.sh` by the login shell |
 | the checkout | `~/FerroGrid` by default (`--dest`, or `--no-source`) |
 
-Then it proves it worked from the far side: it runs `ferro nodes` **on the new
-machine** and checks every node came back, and SSHes from there to each node to
-confirm the key and `rsync` are in place. A green run means the new machine can
-actually drive the cluster, not merely that files were copied.
+Then it proves it worked from the far side: it runs `ferro nodes` **on the new machine** and checks every node came back, and SSHes from there to each node to confirm the key and `rsync` are in place. A green run means the new machine can actually drive the cluster, not merely that files were copied.
 
-By default the new machine is a second operator console: it talks to the
-controller still running here, and nothing on the GPU nodes changes. To hand
-the cluster over completely -- run the controller there under systemd and
-re-point every agent at it, after which the new machine needs nothing from this
-one:
+By default the new machine is a second operator console: it talks to the controller still running here, and nothing on the GPU nodes changes. To hand the cluster over completely -- run the controller there under systemd and re-point every agent at it, after which the new machine needs nothing from this one:
 
 ```bash
 ./scripts/migrate.sh esl@10.0.0.5 --takeover
 ```
 
-Useful flags: `--dry-run` (build the bundle, print exactly what would be sent,
-send nothing), `--no-key` (leave the private key behind; the new machine falls
-back to passwords), `--ssh-all` (carry every `Host` block in `~/.ssh/config`,
-not just the nodes'). Re-run it any time to push a new build -- managed blocks
-are replaced rather than appended, an existing FerroGrid checkout is refreshed
-in place, and anything else it finds is backed up beside itself.
+Useful flags: `--dry-run` (build the bundle, print exactly what would be sent, send nothing), `--no-key` (leave the private key behind; the new machine falls back to passwords), `--ssh-all` (carry every `Host` block in `~/.ssh/config`, not just the nodes'). Re-run it any time to push a new build -- managed blocks are replaced rather than appended, an existing FerroGrid checkout is refreshed in place, and anything else it finds is backed up beside itself.
 
-The private key is the one thing worth pausing over, so the script asks before
-copying it (`--yes` to skip the prompt) and deletes the staging bundle from the
-new machine once the install is done.
+The private key is the one thing worth pausing over, so the script asks before copying it (`--yes` to skip the prompt) and deletes the staging bundle from the new machine once the install is done.
 
 ---
 
@@ -324,15 +260,9 @@ Add `--json` to any command for scripting.
 ferro train --timeout 2h -f my_train.py      # 90s, 30m and 2h all parse
 ```
 
-A distributed job that **hangs** never fails: every rank sits in a collective
-waiting for a peer, reporting nothing, holding its GPUs. Nothing reclaims
-them, because from the outside a wedged job and a slow one look identical.
+A distributed job that **hangs** never fails: every rank sits in a collective waiting for a peer, reporting nothing, holding its GPUs. Nothing reclaims them, because from the outside a wedged job and a slow one look identical.
 
-`--timeout` is the backstop. The controller cancels the job once it exceeds
-the limit and the GPUs return to the pool. On a shared cluster, put one on
-anything you are not watching — it is the difference between losing an
-afternoon and losing a week. A rank that *fails* is handled without it: the
-controller tears down its surviving peers immediately.
+`--timeout` is the backstop. The controller cancels the job once it exceeds the limit and the GPUs return to the pool. On a shared cluster, put one on anything you are not watching — it is the difference between losing an afternoon and losing a week. A rank that *fails* is handled without it: the controller tears down its surviving peers immediately.
 
 ### Waiting for capacity
 
@@ -341,11 +271,7 @@ ferro train --wait -f my_train.py            # start when the GPUs come free
 ferro train --wait 2h -f my_train.py         # ... or give up after 2h
 ```
 
-Without `--wait`, a submission that does not fit fails on the spot, which on a
-shared cluster is most of the time. `--wait` puts the job in a queue instead:
-the controller retries the placement every few seconds and launches it the
-moment the GPUs it asked for come free — including GPUs freed by somebody
-else's job finishing at 03:00.
+Without `--wait`, a submission that does not fit fails on the spot, which on a shared cluster is most of the time. `--wait` puts the job in a queue instead: the controller retries the placement every few seconds and launches it the moment the GPUs it asked for come free — including GPUs freed by somebody else's job finishing at 03:00.
 
 ```
 $ ferro train --wait --auto -f my_train.py
@@ -355,15 +281,9 @@ Queued j9bf2c56ce2 at #1 in line
   ferro cancel j9bf2c56ce2  # give up
 ```
 
-`ferro jobs` shows queued jobs as `queued #N`; the queue is FIFO, so waiting
-longer is the only thing that improves your position. It also shows the latest
-capacity reason from the most recent scheduling attempt; `ferro job <job-id>`
-includes the per-node verdicts. `ferro cancel` takes a job out of the line, and
-`--wait 2h` gives up on its own. A queued job holds nothing: it has no placement
-until it starts, and `--timeout` (above) only starts counting then.
+`ferro jobs` shows queued jobs as `queued #N`; the queue is FIFO, so waiting longer is the only thing that improves your position. It also shows the latest capacity reason from the most recent scheduling attempt; `ferro job <job-id>` includes the per-node verdicts. `ferro cancel` takes a job out of the line, and `--wait 2h` gives up on its own. A queued job holds nothing: it has no placement until it starts, and `--timeout` (above) only starts counting then.
 
-With `-f/--follow` the CLI says it is waiting and starts streaming logs when
-the job actually launches.
+With `-f/--follow` the CLI says it is waiting and starts streaming logs when the job actually launches.
 
 ### Per-user GPU quotas and usage
 
@@ -376,31 +296,11 @@ ferro usage --json
 ferro usage --watch
 ```
 
-`USER=N` sets the maximum number of GPUs the user may hold at once. A user
-without a configured quota is unlimited; `USER=0` prevents that user from
-holding GPUs. Quotas are independent between users and count GPUs reserved for
-their active jobs. If one request can never fit under its user's quota, it is
-rejected even with `--wait`. If it could fit after current work finishes, a
-submission without `--wait` gets a quota-specific error, while `--wait` keeps it
-queued for a later retry. Auto placement is capped by the user's remaining
-quota. Quota messages are distinct from physical cluster-capacity messages.
-Quota flags are controller startup configuration; pass the same flags again
-after a restart.
+`USER=N` sets the maximum number of GPUs the user may hold at once. A user without a configured quota is unlimited; `USER=0` prevents that user from holding GPUs. Quotas are independent between users and count GPUs reserved for their active jobs. If one request can never fit under its user's quota, it is rejected even with `--wait`. If it could fit after current work finishes, a submission without `--wait` gets a quota-specific error, while `--wait` keeps it queued for a later retry. Auto placement is capped by the user's remaining quota. Quota messages are distinct from physical cluster-capacity messages. Quota flags are controller startup configuration; pass the same flags again after a restart.
 
-The registry checks physical GPU ownership and the user's total allocation,
-then makes the reservation in one critical section. Queue dispatch uses the same
-check, so concurrent submissions cannot both consume the same remaining quota.
-`ferro usage` reports current GPU holdings and running jobs alongside
-GPU-seconds derived from the same persisted job records used by fair-share
-scheduling. Queued jobs hold no GPUs and accrue no GPU-seconds; a terminal job
-stops accruing time. GPU-seconds are elapsed runtime multiplied by the GPUs in
-the job's placement.
+The registry checks physical GPU ownership and the user's total allocation, then makes the reservation in one critical section. Queue dispatch uses the same check, so concurrent submissions cannot both consume the same remaining quota. `ferro usage` reports current GPU holdings and running jobs alongside GPU-seconds derived from the same persisted job records used by fair-share scheduling. Queued jobs hold no GPUs and accrue no GPU-seconds; a terminal job stops accruing time. GPU-seconds are elapsed runtime multiplied by the GPUs in the job's placement.
 
-**Quota enforcement is a resource-management mechanism, not an authentication
-boundary.** `submitted_by` is currently supplied by the client, and gRPC has no
-authentication; a client can claim another username. Use quotas to manage
-cooperative users on a trusted controller network, not to enforce identity or
-security.
+**Quota enforcement is a resource-management mechanism, not an authentication boundary.** `submitted_by` is currently supplied by the client, and gRPC has no authentication; a client can claim another username. Use quotas to manage cooperative users on a trusted controller network, not to enforce identity or security.
 
 ### Measuring the fabric
 
@@ -410,10 +310,7 @@ ferro net -s 10 --both-ways     # longer, and both directions
 ferro net --node lab18 --node lab126
 ```
 
-`ferro nodes` shows what each node's interface **negotiated** (`LINK`), flagged
-red when it is behind the rest of the cluster. `ferro net` shows what two nodes
-actually **achieve**, which is a different number and the one a cross-node job
-runs at:
+`ferro nodes` shows what each node's interface **negotiated** (`LINK`), flagged red when it is behind the rest of the cluster. `ferro net` shows what two nodes actually **achieve**, which is a different number and the one a cross-node job runs at:
 
 ```
 FROM     TO       MEASURED   LINK       OF LINK
@@ -422,29 +319,15 @@ lab18    lab126    92 Mb/s   1000 Mb/s  9%
 lab126   lab199   942 Mb/s   1000 Mb/s  94%
 ```
 
-A row well under its link speed is the interesting one: the negotiated speed is
-between the node and whatever it is plugged into, and says nothing about the
-rest of the path. The example above is real — that node's NIC reports 1000
-Mb/s full duplex with zero errors and no traffic shaping, and still moves 37
-Mb/s inbound, which puts the bottleneck in the network between it and everyone
-else rather than in the machine.
+A row well under its link speed is the interesting one: the negotiated speed is between the node and whatever it is plugged into, and says nothing about the rest of the path. The example above is real — that node's NIC reports 1000 Mb/s full duplex with zero errors and no traffic shaping, and still moves 37 Mb/s inbound, which puts the bottleneck in the network between it and everyone else rather than in the machine.
 
-Plain TCP rather than an NCCL benchmark: it needs no GPUs, no image and no
-rendezvous, so it still works on a node whose CUDA is broken — which is exactly
-when you want to know whether the network is to blame. Pairs are measured one
-at a time, because two probes at once would each be measuring the other. It
-saturates the link while it runs, so it is a diagnostic, not something to leave
-in a loop.
+Plain TCP rather than an NCCL benchmark: it needs no GPUs, no image and no rendezvous, so it still works on a node whose CUDA is broken — which is exactly when you want to know whether the network is to blame. Pairs are measured one at a time, because two probes at once would each be measuring the other. It saturates the link while it runs, so it is a diagnostic, not something to leave in a loop.
 
 ### Moving data: plugins
 
-FerroGrid does not speak WebDAV, S3 or anything else — moving bytes is a
-solved problem. What it adds is running an existing tool **on every node at
-once**, so each node pulls its own copy instead of relaying a dataset through
-the controller.
+FerroGrid does not speak WebDAV, S3 or anything else — moving bytes is a solved problem. What it adds is running an existing tool **on every node at once**, so each node pulls its own copy instead of relaying a dataset through the controller.
 
-A plugin is an argv template in `~/.config/ferrogrid/plugins.toml` on the
-controller host (see `plugins.example.toml`):
+A plugin is an argv template in `~/.config/ferrogrid/plugins.toml` on the controller host (see `plugins.example.toml`):
 
 ```toml
 [nextcloud]
@@ -461,19 +344,9 @@ ferro fetch nextcloud Datasets/adni /data/adni --node gpu-a
 ferro push  nextcloud runs/exp1 Backups/ferrogrid/exp1 --node gpu-a
 ```
 
-`{remote}` and `{local}` are substituted as **whole argv elements** and the
-command is exec'd directly, never through a shell — a path containing spaces
-or `;` is a path, not an injection. Anything with a command line works;
-`plugins.example.toml` also sketches rclone and rsync.
+`{remote}` and `{local}` are substituted as **whole argv elements** and the command is exec'd directly, never through a shell — a path containing spaces or `;` is a path, not an injection. Anything with a command line works; `plugins.example.toml` also sketches rclone and rsync.
 
-**FerroGrid never handles your credentials.** The tool reads its own config
-from `workdir` on each node — for NextcloudFetcher that is the `.env` its
-README describes, found by searching upward from the working directory.
-`scripts/install_plugin_creds.sh` will distribute one for you, but think
-first: it copies a secret to every host you name, those hosts are shared, and
-anyone with root on them can read it. Prefer a credential scoped to the share
-in question and revocable on its own — for Nextcloud, an app password — over
-your account password.
+**FerroGrid never handles your credentials.** The tool reads its own config from `workdir` on each node — for NextcloudFetcher that is the `.env` its README describes, found by searching upward from the working directory. `scripts/install_plugin_creds.sh` will distribute one for you, but think first: it copies a secret to every host you name, those hosts are shared, and anyone with root on them can read it. Prefer a credential scoped to the share in question and revocable on its own — for Nextcloud, an app password — over your account password.
 
 #### Transfer archives, not directory trees
 
@@ -484,56 +357,29 @@ Measured on this cluster, fetching the same ADNI scan two ways:
 | One 1.8 GB archive | **32.5 MB/s** |
 | 208 DICOM files (56 MB total) | 0.44 MB/s |
 
-**74× apart.** WebDAV pays a round trip per file, so a scan's ~200 small
-DICOMs spend all their time on latency and none on bandwidth. `ncfetch
-folder` does not help — it fetches file by file and zips locally.
+**74× apart.** WebDAV pays a round trip per file, so a scan's ~200 small DICOMs spend all their time on latency and none on bandwidth. `ncfetch folder` does not help — it fetches file by file and zips locally.
 
-The consequence is concrete: the 46.8 GB ADNI archive on Nextcloud takes about
-**24 minutes** as one file, where the same data as a tree, or from the lab SMB
-server at 1.1 MB/s, takes most of a day. Fetch the archive with the
-`nextcloud-file` plugin and unpack on the node.
+The consequence is concrete: the 46.8 GB ADNI archive on Nextcloud takes about **24 minutes** as one file, where the same data as a tree, or from the lab SMB server at 1.1 MB/s, takes most of a day. Fetch the archive with the `nextcloud-file` plugin and unpack on the node.
 
 Two things worth knowing:
 
-- **Install the tool on the nodes**, not just the controller. Nothing is
-  shipped for you: `uv tool install` (or pip) it on each node.
-- The agent runs under `systemd --user`, whose `PATH` is minimal. The unit
-  written by `register_node.sh` puts `~/.local/bin` and `~/.cargo/bin` on it
-  so user-installed tools are visible; a node deployed before that change will
-  report `could not run ...: No such file or directory` until it is
-  re-registered.
+- **Install the tool on the nodes**, not just the controller. Nothing is shipped for you: `uv tool install` (or pip) it on each node.
+- The agent runs under `systemd --user`, whose `PATH` is minimal. The unit written by `register_node.sh` puts `~/.local/bin` and `~/.cargo/bin` on it so user-installed tools are visible; a node deployed before that change will report `could not run ...: No such file or directory` until it is re-registered.
 
 ### Live monitoring
 
-`ferro watch` is the cluster-wide equivalent of `watch -n 1 nvidia-smi`: every
-GPU on every node with utilisation and VRAM bars, who owns each card, and a row
-per running job with its live step, loss, throughput and NCCL error count.
+`ferro watch` is the cluster-wide equivalent of `watch -n 1 nvidia-smi`: every GPU on every node with utilisation and VRAM bars, who owns each card, and a row per running job with its live step, loss, throughput and NCCL error count.
 
-The `JOB` column names our job when we placed one and otherwise whoever else is
-on the card (`ext:alice +1 19G`), greyed while the card still has room, blue
-once it does not, and yellow when every process on it has gone idle. `-` means
-nobody. `FREE` in `ferro nodes` and the `GPUs n/m free` counts mean *placeable*
-— no job of ours **and** at least `--min-free-vram-gib` left — which is the
-same rule the scheduler applies, so the dashboard can no longer promise a card
-that placement will refuse.
+The `JOB` column names our job when we placed one and otherwise whoever else is on the card (`ext:alice +1 19G`), greyed while the card still has room, blue once it does not, and yellow when every process on it has gone idle. `-` means nobody. `FREE` in `ferro nodes` and the `GPUs n/m free` counts mean *placeable* — no job of ours **and** at least `--min-free-vram-gib` left — which is the same rule the scheduler applies, so the dashboard can no longer promise a card that placement will refuse.
 
 ```bash
 ferro watch            # refresh every 2s
 ferro watch -n 1       # every second
 ```
 
-`ferro ps` is the per-rank view — one row per rank with the node and GPUs it
-holds, uptime, live utilisation, VRAM, step and throughput. A `UTIL` in red
-means a rank is running but its GPUs are idle, which is what a stall or a
-starved dataloader looks like.
+`ferro ps` is the per-rank view — one row per rank with the node and GPUs it holds, uptime, live utilisation, VRAM, step and throughput. A `UTIL` in red means a rank is running but its GPUs are idle, which is what a stall or a starved dataloader looks like.
 
-It also lists the processes FerroGrid did **not** launch. A GPU with no rank on
-it is not necessarily a free GPU: on a shared lab box somebody's notebook,
-another scheduler's container or the desktop session hold VRAM just as
-effectively, and that is the usual answer to "why did my job not get placed".
-Those rows are greyed, carry `pid <n>` instead of a job id and the command line
-(prefixed with the container name when the process is in one) instead of a job
-name, so `kill` and `docker kill` are both one glance away:
+It also lists the processes FerroGrid did **not** launch. A GPU with no rank on it is not necessarily a free GPU: on a shared lab box somebody's notebook, another scheduler's container or the desktop session hold VRAM just as effectively, and that is the usual answer to "why did my job not get placed". Those rows are greyed, carry `pid <n>` instead of a job id and the command line (prefixed with the container name when the process is in one) instead of a job name, so `kill` and `docker kill` are both one glance away:
 
 ```
 JOB           USER     NAME                             NODE    AGE  RANK  GPUS  PHASE     UPTIME
@@ -542,33 +388,16 @@ pid 3000      gdm      /usr/bin/gnome-shell --mode=gdm  lab18   1s   -     0    
 pid 41221     alice    [jupyter] python -m ipykernel    lab126  2s   -     1     external  6h02m
 ```
 
-The phase says what kind of guest it is: `display` for the machine's own
-compositor (VRAM it holds, but nobody's problem), `external` for somebody
-else's compute, `idle 6h` for VRAM held with nothing computing for that long,
-and `orphan` for one of ours — see below.
+The phase says what kind of guest it is: `display` for the machine's own compositor (VRAM it holds, but nobody's problem), `external` for somebody else's compute, `idle 6h` for VRAM held with nothing computing for that long, and `orphan` for one of ours — see below.
 
-Idleness is measured, not guessed: agents ask NVML for the SM utilisation it
-attributes to each pid and keep the clock since it last did any work. Where the
-driver cannot attribute utilisation at all (pre-Maxwell, some vGPU setups)
-nothing is ever labelled idle — "we cannot tell" and "doing nothing" are
-different answers, and only one of them is grounds for going and asking for a
-card back. Display servers are never labelled idle either: a compositor
-holding 50 MB is idle by construction and nobody's problem. The clock lives in
-the agent, so a freshly redeployed agent reports at most its own uptime —
-`idle 7h` on a process up for 143h means "idle for as long as we have been
-watching".
+Idleness is measured, not guessed: agents ask NVML for the SM utilisation it attributes to each pid and keep the clock since it last did any work. Where the driver cannot attribute utilisation at all (pre-Maxwell, some vGPU setups) nothing is ever labelled idle — "we cannot tell" and "doing nothing" are different answers, and only one of them is grounds for going and asking for a card back. Display servers are never labelled idle either: a compositor holding 50 MB is idle by construction and nobody's problem. The clock lives in the agent, so a freshly redeployed agent reports at most its own uptime — `idle 7h` on a process up for 143h means "idle for as long as we have been watching".
 
 ```bash
 ferro ps --idle 6h              # forgotten notebooks, not jobs between epochs
 ferro ps --by-user              # one row per person, biggest holder first
 ```
 
-`ferro ps <pid>` drops the table and describes one process, read fresh off the
-node rather than from the last heartbeat: its whole command line (the table
-only has room for a prefix, and the argument that says which run this is tends
-to be at the end), working directory, parent, RSS, every card it holds and how
-much of each, and the one command that would actually stop it — `docker kill`
-for a container, `ferro cancel` for a job of ours, `kill` otherwise.
+`ferro ps <pid>` drops the table and describes one process, read fresh off the node rather than from the last heartbeat: its whole command line (the table only has room for a prefix, and the argument that says which run this is tends to be at the end), working directory, parent, RSS, every card it holds and how much of each, and the one command that would actually stop it — `docker kill` for a container, `ferro cancel` for a job of ours, `kill` otherwise.
 
 ```
 $ ferro ps 3796021
@@ -585,67 +414,35 @@ Process 3796021 on lab126
   stop it    ferro cancel j500be58353
 ```
 
-Pids are unique per machine only, so every node that has one answers; a pid
-holding no GPU is described too, which is how you find out *which* machine it
-is on. `-w` works here as well, if you want to watch one process.
+Pids are unique per machine only, so every node that has one answers; a pid holding no GPU is described too, which is how you find out *which* machine it is on. `-w` works here as well, if you want to watch one process.
 
-Command lines are redacted at the agent: an argument following `--api-key`,
-`--token`, `--password` and friends (or after the `=` in `HF_TOKEN=...`) is
-replaced before it leaves the node. A command line is already readable by
-anyone on that machine, but FerroGrid copies it to everyone holding a client
-and into every JSON dump — somebody else's inference-server key is not ours to
-publish.
+Command lines are redacted at the agent: an argument following `--api-key`, `--token`, `--password` and friends (or after the `=` in `HF_TOKEN=...`) is replaced before it leaves the node. A command line is already readable by anyone on that machine, but FerroGrid copies it to everyone holding a client and into every JSON dump — somebody else's inference-server key is not ours to publish.
 
-`--by-user` folds the same data per person: nodes, GPUs, VRAM, how many of
-their processes are idle, and how long the oldest has been up. On a shared
-cluster the question is rarely "which processes exist" but "whose are they, and
-can I ask for the card back".
+`--by-user` folds the same data per person: nodes, GPUs, VRAM, how many of their processes are idle, and how long the oldest has been up. On a shared cluster the question is rarely "which processes exist" but "whose are they, and can I ask for the card back".
 
-`UTIL` on those rows is the device's utilisation, not the process's — NVML
-cannot attribute SM time to a pid — so it is greyed rather than colour-coded.
-`VRAM`, however, is what that process itself holds. An `orphan` is one of
-*ours* that outlived its job record, normally a container a restarted
-controller lost track of; it is the one external row somebody has to act on.
-The scheduler already refuses GPUs with less than `--min-free-vram-gib` free,
-so these processes keep their cards out of placements whether or not anyone is
-watching.
+`UTIL` on those rows is the device's utilisation, not the process's — NVML cannot attribute SM time to a pid — so it is greyed rather than colour-coded. `VRAM`, however, is what that process itself holds. An `orphan` is one of *ours* that outlived its job record, normally a container a restarted controller lost track of; it is the one external row somebody has to act on. The scheduler already refuses GPUs with less than `--min-free-vram-gib` free, so these processes keep their cards out of placements whether or not anyone is watching.
 
-`nodes`, `gpu`, `ps`, `jobs` and `job` each take the same `-w/--watch` and
-`-n/--interval` flags if you want just one of those views:
+`nodes`, `gpu`, `ps`, `jobs` and `job` each take the same `-w/--watch` and `-n/--interval` flags if you want just one of those views:
 
 ```bash
 ferro gpu -w -n 1
 ferro job <job-id> -w
 ```
 
-**The refresh rate is not the data rate.** GPU counters reach the controller
-on the agents' heartbeat (controller `--heartbeat-secs`, default 3), so
-`-n 1` redraws every second over data that changes every three. Both views
-show how stale the numbers are — an `AGE` column in `ferro nodes` and
-`ferro ps`, a `data age` figure in `ferro watch` — so a wedged agent reads as
-stale rather than as an idle GPU. That matters most for the external rows: a
-process that exited a minute ago is still on the last heartbeat.
+**The refresh rate is not the data rate.** GPU counters reach the controller on the agents' heartbeat (controller `--heartbeat-secs`, default 3), so `-n 1` redraws every second over data that changes every three. Both views show how stale the numbers are — an `AGE` column in `ferro nodes` and `ferro ps`, a `data age` figure in `ferro watch` — so a wedged agent reads as stale rather than as an idle GPU. That matters most for the external rows: a process that exited a minute ago is still on the last heartbeat.
 
-Redraws are in place: the screen is never blanked before the fetch, so `-n 1`
-does not flicker the way `watch -n 1 nvidia-smi` does. A window too short for
-the view says how many lines it is hiding on the last row rather than
-scrolling, and Ctrl-C leaves the final frame on screen. Start the controller with `--heartbeat-secs 1` if you
-want the dashboard to genuinely track second by second.
+Redraws are in place: the screen is never blanked before the fetch, so `-n 1` does not flicker the way `watch -n 1 nvidia-smi` does. A window too short for the view says how many lines it is hiding on the last row rather than scrolling, and Ctrl-C leaves the final frame on screen. Start the controller with `--heartbeat-secs 1` if you want the dashboard to genuinely track second by second.
 
 ### Running your own project
 
-Agents resolve a relative script path against **their own** workspace root
-(`~/ferrogrid`), so the code has to be on the nodes before a job can run.
-`--sync` does that in the same command:
+Agents resolve a relative script path against **their own** workspace root (`~/ferrogrid`), so the code has to be on the nodes before a job can run. `--sync` does that in the same command:
 
 ```bash
 cd ~/my-experiment
 ferro train --nodes 1 --gpus-per-node 2 --sync -f my_train.py
 ```
 
-That rsyncs the current directory to every target node's workspace, then
-launches `my_train.py` from there. Sync separately when you would rather not
-re-copy on every run:
+That rsyncs the current directory to every target node's workspace, then launches `my_train.py` from there. Sync separately when you would rather not re-copy on every run:
 
 ```bash
 ferro sync                      # current directory -> every healthy node
@@ -654,13 +451,9 @@ ferro sync --delete             # also remove files deleted locally
 ferro sync --dry-run            # show the rsync commands only
 ```
 
-`ferro sync` needs no host list: the nodes report their own login user and
-workspace root when they register, which is also why nodes with different
-home directories need no special handling.
+`ferro sync` needs no host list: the nodes report their own login user and workspace root when they register, which is also why nodes with different home directories need no special handling.
 
-Build artefacts, virtualenvs, caches and common weight/volume file types are
-excluded automatically — **your dataset should not be synced**, put it on
-shared storage and `--mount` it instead.
+Build artefacts, virtualenvs, caches and common weight/volume file types are excluded automatically — **your dataset should not be synced**, put it on shared storage and `--mount` it instead.
 
 ### `ferro train`
 
@@ -669,8 +462,7 @@ ferro train --nodes 2 --gpus-per-node 2 --follow \
     python/examples/train_fsdp2.py --steps 100 --layers 12
 ```
 
-Flags **before** the script path belong to `ferro`; everything **after** it is
-forwarded verbatim to the script.
+Flags **before** the script path belong to `ferro`; everything **after** it is forwarded verbatim to the script.
 
 | Flag | Meaning |
 |---|---|
@@ -689,8 +481,7 @@ forwarded verbatim to the script.
 
 ### Choosing who runs next
 
-The controller's queue policy decides the order jobs leave the waiting list.
-It is chosen at startup and applies to new scheduling decisions only:
+The controller's queue policy decides the order jobs leave the waiting list. It is chosen at startup and applies to new scheduling decisions only:
 
 ```bash
 ferro-controller --queue-policy aging --aging-interval-secs 60 --aging-increment 1
@@ -720,13 +511,7 @@ ferro-controller --placement-policy topology
 | `vram` | the roomiest cards, judged by the *worst* one | other people share the GPUs and jobs OOM |
 | `topology` | the set whose slowest measured hop is fastest | jobs span nodes and the fabric is uneven |
 
-`topology` uses what `ferro net` measured, falling back to the negotiated link
-speed where nothing has been measured. Those are different claims -- a NIC that
-negotiated 1000 Mb/s can still sit behind a 100 Mb/s path -- so run `ferro net`
-before relying on it. Measurements older than `--network-max-age-secs` (default
-one day) stop counting as current, but a stale measurement is never *upgraded*
-back to the optimistic negotiated speed: forgetting must not make a slow link
-look fast.
+`topology` uses what `ferro net` measured, falling back to the negotiated link speed where nothing has been measured. Those are different claims -- a NIC that negotiated 1000 Mb/s can still sit behind a 100 Mb/s path -- so run `ferro net` before relying on it. Measurements older than `--network-max-age-secs` (default one day) stop counting as current, but a stale measurement is never *upgraded* back to the optimistic negotiated speed: forgetting must not make a slow link look fast.
 
 `ferro explain <job>` shows both decisions and the arithmetic behind each:
 
@@ -760,9 +545,7 @@ Where: placement policy `topology`
   - slowest measured hop 940 Mb/s
 ```
 
-An axis that does not apply is absent rather than scored 1.0: a single-node job
-has no network hop, and claiming a perfect score for one would be inventing a
-measurement.
+An axis that does not apply is absent rather than scored 1.0: a single-node job has no network hop, and claiming a perfect score for one would be inventing a measurement.
 
 `ferro queue` shows the resulting order and the arithmetic behind it:
 
@@ -789,25 +572,13 @@ Submitted j52c9839cf7
 
 ## How it works
 
-**Discovery.** Each agent opens NVML once, then reports live counters on every
-heartbeat (default 3s). A node with no usable NVML still registers, and
-`ferro nodes` shows why it has no GPUs instead of the agent crashing. Agents
-re-register automatically after a controller restart.
+**Discovery.** Each agent opens NVML once, then reports live counters on every heartbeat (default 3s). A node with no usable NVML still registers, and `ferro nodes` shows why it has no GPUs instead of the agent crashing. Agents re-register automatically after a controller restart.
 
-**Scheduling.** The controller considers healthy, filtered nodes with enough
-free VRAM, then prefers the same GPU model across ranks. For multi-node jobs it
-also prefers the combination with the fastest negotiated links before measured
-GPU throughput; model consistency is a preference, not a gate. Rank 0 goes to
-the first chosen node and its NCCL IP becomes `MASTER_ADDR`.
+**Scheduling.** The controller considers healthy, filtered nodes with enough free VRAM, then prefers the same GPU model across ranks. For multi-node jobs it also prefers the combination with the fastest negotiated links before measured GPU throughput; model consistency is a preference, not a gate. Rank 0 goes to the first chosen node and its NCCL IP becomes `MASTER_ADDR`.
 
-A GPU counts as free only when *both* no FerroGrid job holds it **and** it has
-at least `--min-free-vram-gib` (default 8) actually free. FerroGrid shares
-these machines with workloads it does not manage; without the VRAM check it
-would happily schedule onto a card with 0.5 GiB left and OOM immediately.
+A GPU counts as free only when *both* no FerroGrid job holds it **and** it has at least `--min-free-vram-gib` (default 8) actually free. FerroGrid shares these machines with workloads it does not manage; without the VRAM check it would happily schedule onto a card with 0.5 GiB left and OOM immediately.
 
-GPUs are reserved at submit time, so two back-to-back submissions cannot be
-handed the same devices, and each agent re-validates the placement locally
-before launching.
+GPUs are reserved at submit time, so two back-to-back submissions cannot be handed the same devices, and each agent re-validates the placement locally before launching.
 
 **Launching.** The agent runs, per node:
 
@@ -822,8 +593,7 @@ docker run --rm --network host --ipc host --shm-size 8g \
                    --master_addr=... --master_port=... <script> <args...>
 ```
 
-`--network host` keeps the rendezvous and NCCL ports reachable between nodes.
-`--user` keeps checkpoints written to the bind mount owned by you, not root.
+`--network host` keeps the rendezvous and NCCL ports reachable between nodes. `--user` keeps checkpoints written to the bind mount owned by you, not root.
 
 **Metrics.** The training script prints one line per interval:
 
@@ -831,25 +601,15 @@ docker run --rm --network host --ipc host --shm-size 8g \
 print('FERRO_METRIC ' + json.dumps({"step": 10, "loss": 6.9, "tokens_per_s": 1234}))
 ```
 
-The controller parses those lines out of stdout (the rank prefix does not
-matter) and folds them into the job summary. Recognised keys: `step`, `loss`,
-`samples_per_s`, `tokens_per_s`, `step_time_ms`, `peak_vram_gb`. Anything a
-line omits keeps its previous value; `peak_vram_gb` only ever increases. GPU
-utilisation is averaged from NVML heartbeats over the GPUs the job holds.
+The controller parses those lines out of stdout (the rank prefix does not matter) and folds them into the job summary. Recognised keys: `step`, `loss`, `samples_per_s`, `tokens_per_s`, `step_time_ms`, `peak_vram_gb`. Anything a line omits keeps its previous value; `peak_vram_gb` only ever increases. GPU utilisation is averaged from NVML heartbeats over the GPUs the job holds.
 
-**NCCL errors.** Log lines matching known failure signatures (`NCCL WARN`,
-`ncclSystemError`, `DistBackendError`, watchdog timeouts, …) are collected and
-shown by `ferro job`. Routine `[W...] ProcessGroupNCCL.cpp` warnings are
-deliberately not matched — they appear in healthy runs and would bury real
-failures.
+**NCCL errors.** Log lines matching known failure signatures (`NCCL WARN`, `ncclSystemError`, `DistBackendError`, watchdog timeouts, …) are collected and shown by `ferro job`. Routine `[W...] ProcessGroupNCCL.cpp` warnings are deliberately not matched — they appear in healthy runs and would bury real failures.
 
 ---
 
 ## Measured results
 
-Real hardware, 1 GbE between nodes. Model: 8 layers, `d_model` 1024, seq 512,
-per-GPU batch 8, ~166M parameters, FSDP2 with bf16 all-gather and fp32
-gradient reduction.
+Real hardware, 1 GbE between nodes. Model: 8 layers, `d_model` 1024, seq 512, per-GPU batch 8, ~166M parameters, FSDP2 with bf16 all-gather and fp32 gradient reduction.
 
 | Shape | GPUs | tokens/s | step time | peak VRAM/rank |
 |---|---|---|---|---|
@@ -858,31 +618,18 @@ gradient reduction.
 | 2 nodes × 1 GPU (1 GbE) | 2 | 1,522 | 5,384 ms | 3.76 GiB |
 | 2 nodes × 1 GPU (1 GbE, both idle) | 2 | 1,583 | 5,174 ms | 3.76 GiB |
 
-The 4-GPU target configuration (2 servers × 2 GPUs, `world_size=4`,
-heterogeneous RTX 4090 / RTX PRO 5000 Blackwell / A6000) **runs FSDP2 to
-completion with zero NCCL errors**, which is what phase 1 set out to prove.
+The 4-GPU target configuration (2 servers × 2 GPUs, `world_size=4`, heterogeneous RTX 4090 / RTX PRO 5000 Blackwell / A6000) **runs FSDP2 to completion with zero NCCL errors**, which is what phase 1 set out to prove.
 
 ### Read this before trusting the throughput numbers
 
-**The 1 GbE interconnect, not the GPUs, is the limit.** FSDP2 all-gathers
-parameters every forward and backward and reduce-scatters gradients — roughly
-1.3 GB per step for this model. At ~125 MB/s that is seconds of communication
-against ~50 ms of compute, which is exactly the 56× drop from one GPU to two
-GPUs on separate nodes.
+**The 1 GbE interconnect, not the GPUs, is the limit.** FSDP2 all-gathers parameters every forward and backward and reduce-scatters gradients — roughly 1.3 GB per step for this model. At ~125 MB/s that is seconds of communication against ~50 ms of compute, which is exactly the 56× drop from one GPU to two GPUs on separate nodes.
 
 Consequences worth planning around:
 
-- Multi-node FSDP2 on 1 GbE is for **correctness and capacity** (fitting a
-  model that does not fit on one card), not for speed.
-- For throughput, **10/25 GbE or InfiniBand** is the single highest-value
-  upgrade. Nothing in FerroGrid changes; NCCL picks up the faster fabric.
-- Sharding a *small* model hurts even inside one node (85k → 64k tokens/s
-  above): FSDP2 pays off when the model does not fit, not when it does.
-- The measured 4-GPU numbers were taken on a node whose GPUs were already
-  saturated by other users' jobs, so they reflect contention, not the
-  platform's ceiling. The two 2-node rows above were measured on different
-  server pairs, one of them fully idle, and agree within 4% -- the inter-node
-  cost is the fabric, not contention.
+- Multi-node FSDP2 on 1 GbE is for **correctness and capacity** (fitting a model that does not fit on one card), not for speed.
+- For throughput, **10/25 GbE or InfiniBand** is the single highest-value upgrade. Nothing in FerroGrid changes; NCCL picks up the faster fabric.
+- Sharding a *small* model hurts even inside one node (85k → 64k tokens/s above): FSDP2 pays off when the model does not fit, not when it does.
+- The measured 4-GPU numbers were taken on a node whose GPUs were already saturated by other users' jobs, so they reflect contention, not the platform's ceiling. The two 2-node rows above were measured on different server pairs, one of them fully idle, and agree within 4% -- the inter-node cost is the fabric, not contention.
 
 Reproduce with:
 
@@ -892,34 +639,21 @@ Reproduce with:
 
 ### Comparing scheduling policies without a cluster
 
-The queue and placement policies are evaluated offline, against synthetic
-workloads, by code that links the same `ferro-sched` crate the controller runs:
+The queue and placement policies are evaluated offline, against synthetic workloads, by code that links the same `ferro-sched` crate the controller runs:
 
 ```bash
 ./scripts/run_os_experiments.sh      # no GPU needed
 ```
 
-That writes `outputs/benchmarks/*/summary.csv` with waiting time, turnaround,
-makespan, utilisation, Jain fairness, starvation and measured scheduler
-overhead for every policy over every workload, each row carrying its seed and
-git commit. The findings are written up in
-[`docs/os_term_project/experiments.md`](docs/os_term_project/experiments.md) --
-including two that changed the code: performance-aware placement pairs the two
-fastest nodes across the slowest measured link, and `run_queue` already
-backfills, which yielded 4.9x lower aggregate mean wait than strict FIFO in one
-workload; a job-class split showed the large-job delay came from saturation,
-not from being overtaken.
+That writes `outputs/benchmarks/*/summary.csv` with waiting time, turnaround, makespan, utilisation, Jain fairness, starvation and measured scheduler overhead for every policy over every workload, each row carrying its seed and git commit. The findings are written up in [`docs/os_term_project/experiments.md`](docs/os_term_project/experiments.md) -- including two that changed the code: performance-aware placement pairs the two fastest nodes across the slowest measured link, and `run_queue` already backfills, which yielded 4.9x lower aggregate mean wait than strict FIFO in one workload; a job-class split showed the large-job delay came from saturation, not from being overtaken.
 
-Per-user quota effects have a separate paired-seed study so quota is the only
-scheduling variable being changed:
+Per-user quota effects have a separate paired-seed study so quota is the only scheduling variable being changed:
 
 ```bash
 ./scripts/run_quota_experiments.sh   # 20 seeds; no GPU needed
 ```
 
-It writes per-seed raw data, seed aggregates and five SVG figures under
-`outputs/benchmarks/quota/`. The workload-specific findings and limitations are
-in [`docs/os_term_project/quota_evaluation.md`](docs/os_term_project/quota_evaluation.md).
+It writes per-seed raw data, seed aggregates and five SVG figures under `outputs/benchmarks/quota/`. The workload-specific findings and limitations are in [`docs/os_term_project/quota_evaluation.md`](docs/os_term_project/quota_evaluation.md).
 
 ---
 
@@ -945,8 +679,7 @@ ferro train --nodes 2 --gpus-per-node 1 -f python/examples/train_fsdp2.py --step
 ferro train --nodes 2 --gpus-per-node 2 -f python/examples/train_fsdp2.py --steps 20
 ```
 
-`--follow` exits non-zero when a job fails, so these work in CI. Check
-`ferro job <id>` afterwards for per-rank exit codes and the NCCL error list.
+`--follow` exits non-zero when a job fails, so these work in CI. Check `ferro job <id>` afterwards for per-rank exit codes and the NCCL error list.
 
 To verify cancellation and GPU release:
 
@@ -960,43 +693,25 @@ ferro gpu        # the JOB column should be empty again
 
 ## Troubleshooting
 
-**`ncclSystemError` / hang at `init_process_group`.** Almost always the wrong
-network interface. GPU boxes are covered in `docker0` / `br-*` / calico
-bridges, and NCCL will happily bind one the peer cannot reach. The agent
-detects the interface holding its NCCL IP and pins `NCCL_SOCKET_IFNAME`
-automatically; override with `FERRO_NCCL_IFNAME=<iface>` in the unit file if
-the guess is wrong. Diagnose with `--env NCCL_DEBUG=INFO`.
+**`ncclSystemError` / hang at `init_process_group`.** Almost always the wrong network interface. GPU boxes are covered in `docker0` / `br-*` / calico bridges, and NCCL will happily bind one the peer cannot reach. The agent detects the interface holding its NCCL IP and pins `NCCL_SOCKET_IFNAME` automatically; override with `FERRO_NCCL_IFNAME=<iface>` in the unit file if the guess is wrong. Diagnose with `--env NCCL_DEBUG=INFO`.
 
-**`cannot set both Count and DeviceIDs on device request`.** Docker CSV-parses
-`--gpus`, so `device=0,1` splits into `device=0` plus a bare `1` read as a
-count. The value must be quoted — the agent does this; the same applies if you
-run `docker run` by hand.
+**`cannot set both Count and DeviceIDs on device request`.** Docker CSV-parses `--gpus`, so `device=0,1` splits into `device=0` plus a bare `1` read as a count. The value must be quoted — the agent does this; the same applies if you run `docker run` by hand.
 
-**`ferro nodes` shows a node with 0 GPUs.** Look at the `gpu_error` line
-printed under the table. A statically linked agent cannot `dlopen` NVML (see
-*Build*); a driver/library version mismatch after an unattended upgrade needs
-a reboot.
+**`ferro nodes` shows a node with 0 GPUs.** Look at the `gpu_error` line printed under the table. A statically linked agent cannot `dlopen` NVML (see *Build*); a driver/library version mismatch after an unattended upgrade needs a reboot.
 
-**Agent not registering.** `./scripts/logs_agent.sh gpu-a`. Check the
-controller address, and that port 7070 is reachable from the server.
+**Agent not registering.** `./scripts/logs_agent.sh gpu-a`. Check the controller address, and that port 7070 is reachable from the server.
 
-**Job dies instantly with exit 125.** That is `docker run` refusing to start —
-the log line carries docker's own message. Common causes: image not pulled on
-that node, or the user not in the `docker` group.
+**Job dies instantly with exit 125.** That is `docker run` refusing to start — the log line carries docker's own message. Common causes: image not pulled on that node, or the user not in the `docker` group.
 
-**Redeploying an agent seems to change nothing.** `deploy_agent.sh` restarts
-the service; if you install by hand, remember `systemctl --user restart
-ferro-agent` — `enable --now` will not restart an already-running unit.
+**Redeploying an agent seems to change nothing.** `deploy_agent.sh` restarts the service; if you install by hand, remember `systemctl --user restart ferro-agent` — `enable --now` will not restart an already-running unit.
 
-**Throughput far below expectations on multi-node.** See *Measured results* —
-on 1 GbE this is expected, not a bug.
+**Throughput far below expectations on multi-node.** See *Measured results* — on 1 GbE this is expected, not a bug.
 
 ---
 
 ## Choosing a parallelism strategy
 
-More GPUs is not automatically faster here, and on this fabric it is often
-much slower. Pick by asking **why** you need them:
+More GPUs is not automatically faster here, and on this fabric it is often much slower. Pick by asking **why** you need them:
 
 | Situation | Use | Why |
 |---|---|---|
@@ -1006,9 +721,7 @@ much slower. Pick by asking **why** you need them:
 | Model does not fit on one *node* | `--nodes 2 ...` | Only now is the network worth paying for |
 | Many independent runs (CV folds, sweeps) | one 1-GPU job per fold | Perfectly parallel, zero communication |
 
-On 1 GbE, sharding one model across two nodes costs ~55× throughput (see
-*Measured results*). The cluster's real value for most lab work is the last
-row: run five folds as five jobs, not one job on five GPUs.
+On 1 GbE, sharding one model across two nodes costs ~55× throughput (see *Measured results*). The cluster's real value for most lab work is the last row: run five folds as five jobs, not one job on five GPUs.
 
 Check before you assume you need sharding:
 
@@ -1024,16 +737,9 @@ ferro train --auto -f my_train.py
 ferro train --auto --gpus-per-node 2 -f my_train.py    # cap at 2 GPUs
 ```
 
-Auto keeps the job on **one node** and takes the largest set of **identical**
-GPUs there, preferring whichever node benchmarks fastest. Both parts follow
-from the measurements above: crossing the network costs ~55x, and a collective
-runs at the pace of its slowest rank, so a 4090 paired with an A6000 wastes
-the 4090.
+Auto keeps the job on **one node** and takes the largest set of **identical** GPUs there, preferring whichever node benchmarks fastest. Both parts follow from the measurements above: crossing the network costs ~55x, and a collective runs at the pace of its slowest rank, so a 4090 paired with an A6000 wastes the 4090.
 
-**What auto cannot know is whether your script shards.** It hands you GPUs; it
-cannot tell FSDP2 (where a second GPU makes a small model *slower*, ~3.3x
-here) from DDP (where it nearly doubles throughput). If your model fits on one
-card and you are sharding it, cap the shape yourself:
+**What auto cannot know is whether your script shards.** It hands you GPUs; it cannot tell FSDP2 (where a second GPU makes a small model *slower*, ~3.3x here) from DDP (where it nearly doubles throughput). If your model fits on one card and you are sharding it, cap the shape yourself:
 
 ```bash
 ferro train --auto --gpus-per-node 1 -f my_train.py
@@ -1041,9 +747,7 @@ ferro train --auto --gpus-per-node 1 -f my_train.py
 
 ### Ranking hardware: `ferro bench`
 
-The scheduler prefers faster GPUs, but a model name is a poor proxy for speed.
-`ferro bench` measures a bf16 matmul on every free GPU, through that node's own
-training image — which also proves the image can actually drive the card:
+The scheduler prefers faster GPUs, but a model name is a poor proxy for speed. `ferro bench` measures a bf16 matmul on every free GPU, through that node's own training image — which also proves the image can actually drive the card:
 
 ```bash
 ferro bench                # every healthy node, cached results reused
@@ -1060,21 +764,13 @@ Measured on this cluster:
 | RTX PRO 5000 Blackwell | 105.9 | 44% |
 | RTX A6000 | 58.5 | 25% |
 
-The A6000 has twice the VRAM of a 4090 and roughly a third of the throughput —
-exactly the kind of thing that makes "most free VRAM" the wrong ranking on its
-own. Scores are cached per node and survive restarts; a GPU busy with someone
-else's work is skipped rather than measured wrongly.
+The A6000 has twice the VRAM of a 4090 and roughly a third of the throughput — exactly the kind of thing that makes "most free VRAM" the wrong ranking on its own. Scores are cached per node and survive restarts; a GPU busy with someone else's work is skipped rather than measured wrongly.
 
 ### Pipeline parallelism: promising in theory, blocked in practice
 
-Pipeline parallelism should be the answer to a slow interconnect. FSDP
-all-gathers every parameter each step; PP only ships the activations crossing a
-stage boundary — for the model below, ~1.3 GB versus ~8 MB. Two orders of
-magnitude, exactly where 1 GbE hurts.
+Pipeline parallelism should be the answer to a slow interconnect. FSDP all-gathers every parameter each step; PP only ships the activations crossing a stage boundary — for the model below, ~1.3 GB versus ~8 MB. Two orders of magnitude, exactly where 1 GbE hurts.
 
-`python/examples/train_pp.py` implements it with
-`torch.distributed.pipelining`. It works, but the measurements do not support
-using it here:
+`python/examples/train_pp.py` implements it with `torch.distributed.pipelining`. It works, but the measurements do not support using it here:
 
 | Shape | Strategy | tokens/s |
 |---|---|---|
@@ -1085,26 +781,13 @@ using it here:
 
 Two separate results:
 
-**Intra-node, PP loses to FSDP** — 46.6k vs 63.8k tokens/s. That is the
-expected outcome: inside one box bandwidth is plentiful, so PP's smaller
-transfers buy nothing while its pipeline bubble and sequential stage
-dependency cost real time.
+**Intra-node, PP loses to FSDP** — 46.6k vs 63.8k tokens/s. That is the expected outcome: inside one box bandwidth is plentiful, so PP's smaller transfers buy nothing while its pipeline bubble and sequential stage dependency cost real time.
 
-**Cross-node, PP hangs** — and the network is not at fault. A probe
-(`python/examples/p2p_probe.py`) confirms every primitive works between these
-nodes: `all_reduce` 90 ms, `send`/`recv` 52 ms, and `batch_isend_irecv` — the
-one pipelining actually uses — 65 ms. The hang is inside
-`torch.distributed.pipelining` at the first `schedule.step()`, with both GPUs
-spinning at 100%.
+**Cross-node, PP hangs** — and the network is not at fault. A probe (`python/examples/p2p_probe.py`) confirms every primitive works between these nodes: `all_reduce` 90 ms, `send`/`recv` 52 ms, and `batch_isend_irecv` — the one pipelining actually uses — 65 ms. The hang is inside `torch.distributed.pipelining` at the first `schedule.step()`, with both GPUs spinning at 100%.
 
-One real bug was found and fixed along the way: passing `input_args` alone
-opts into deprecated init-time shape inference, whose metadata exchange breaks
-over NCCL's socket transport (`message truncated: receiving 8 bytes instead of
-4`). Passing `output_args` too removes that exchange entirely. It only
-reproduces between nodes, which is why the intra-node run looked fine.
+One real bug was found and fixed along the way: passing `input_args` alone opts into deprecated init-time shape inference, whose metadata exchange breaks over NCCL's socket transport (`message truncated: receiving 8 bytes instead of 4`). Passing `output_args` too removes that exchange entirely. It only reproduces between nodes, which is why the intra-node run looked fine.
 
-These were tried and all hang identically between nodes, while all succeed
-inside one:
+These were tried and all hang identically between nodes, while all succeed inside one:
 
 | Variant | Result |
 |---|---|
@@ -1115,23 +798,13 @@ inside one:
 | No `device_id=` on `init_process_group` | hangs |
 | `NCCL_PROTO=Simple` | hangs |
 
-A watchdog (`FERRO_STACK_TIMEOUT=75`, which arms `faulthandler` in the
-example) shows rank 0 stalled inside `nn.Embedding` on the **first** forward
-of the **first** microbatch — before it has sent anything. The GPU is pinned
-at 100% by a spinning NCCL kernel, so the next kernel launch never lands.
+A watchdog (`FERRO_STACK_TIMEOUT=75`, which arms `faulthandler` in the example) shows rank 0 stalled inside `nn.Embedding` on the **first** forward of the **first** microbatch — before it has sent anything. The GPU is pinned at 100% by a spinning NCCL kernel, so the next kernel launch never lands.
 
-The evidence points upstream, not at this cluster: every NCCL primitive works
-between these two nodes, and the identical code path is fine within one node.
-**FSDP2 remains the recommendation here.** Worth retrying on a newer torch;
-the theory — two orders of magnitude less traffic — still holds if the
-implementation cooperates.
+The evidence points upstream, not at this cluster: every NCCL primitive works between these two nodes, and the identical code path is fine within one node. **FSDP2 remains the recommendation here.** Worth retrying on a newer torch; the theory — two orders of magnitude less traffic — still holds if the implementation cooperates.
 
 ### Worked example: how big an LLM actually fits
 
-Yes, FSDP2 shards one model across GPUs and FerroGrid drives it. What that
-buys you on this hardware is worth knowing before you plan a run. All measured
-on one node with 2x RTX 4090 (24 GiB each, **no NVLink**), batch 1, seq 512,
-AdamW, bf16 all-gather with fp32 reduction:
+Yes, FSDP2 shards one model across GPUs and FerroGrid drives it. What that buys you on this hardware is worth knowing before you plan a run. All measured on one node with 2x RTX 4090 (24 GiB each, **no NVLink**), batch 1, seq 512, AdamW, bf16 all-gather with fp32 reduction:
 
 | Params | Setup | Peak VRAM/rank | tokens/s |
 |---|---|---|---|
@@ -1143,46 +816,26 @@ AdamW, bf16 all-gather with fp32 reduction:
 
 Three things fall out of this:
 
-**Sharding halves memory and costs 3.3x throughput.** FSDP2 did exactly what
-it promises — 20.64 → 10.66 GiB — but consumer RTX 4090s have no NVLink and
-NVIDIA disables peer-to-peer over PCIe, so every all-gather round-trips
-through host memory. Sharding a model that already fits is a bad trade; use
-the second GPU for a bigger batch, or for a second experiment.
+**Sharding halves memory and costs 3.3x throughput.** FSDP2 did exactly what it promises — 20.64 → 10.66 GiB — but consumer RTX 4090s have no NVLink and NVIDIA disables peer-to-peer over PCIe, so every all-gather round-trips through host memory. Sharding a model that already fits is a bad trade; use the second GPU for a bigger batch, or for a second experiment.
 
-**The full-finetune ceiling on 2x24 GiB is roughly 1.5B parameters.** AdamW
-needs about 16 bytes per parameter (fp32 weights, gradients, and two moments)
-and sharding divides that but does not remove it. 2.68B needs ~43 GiB of
-optimiser state alone, which is why it OOMs even sharded across 48 GiB.
+**The full-finetune ceiling on 2x24 GiB is roughly 1.5B parameters.** AdamW needs about 16 bytes per parameter (fp32 weights, gradients, and two moments) and sharding divides that but does not remove it. 2.68B needs ~43 GiB of optimiser state alone, which is why it OOMs even sharded across 48 GiB.
 
-**CPU offload changes what is possible, not what is fast.** `--offload` keeps
-the sharded state in host RAM and pulls in one block at a time: 2.68B drops to
-2.63 GiB per rank and trains, at 188 tokens/s. That is a checkpoint-recovery
-or a proof-of-concept, not a training run.
+**CPU offload changes what is possible, not what is fast.** `--offload` keeps the sharded state in host RAM and pulls in one block at a time: 2.68B drops to 2.63 GiB per rank and trains, at 188 tokens/s. That is a checkpoint-recovery or a proof-of-concept, not a training run.
 
 To train larger models here, in order of how much they buy:
 
-- **LoRA / QLoRA** — trains adapters instead of weights, removing almost all
-  of the optimiser state. This is the realistic path to 7B+ on these cards.
-- **8-bit optimiser** (`bitsandbytes`) — cuts the two moments from 8 bytes per
-  parameter to 2, roughly doubling the ceiling for a small quality cost.
-- **Activation checkpointing** — helps activations, not optimiser state, so it
-  raises the batch size you can use rather than the model size you can hold.
-- **More GPUs** — 4 GPUs is 96 GiB and ~4B parameters, but only within one
-  node. Across nodes at 1 GbE the throughput loss (see *Measured results*)
-  makes it impractical for anything but a correctness check.
+- **LoRA / QLoRA** — trains adapters instead of weights, removing almost all of the optimiser state. This is the realistic path to 7B+ on these cards.
+- **8-bit optimiser** (`bitsandbytes`) — cuts the two moments from 8 bytes per parameter to 2, roughly doubling the ceiling for a small quality cost.
+- **Activation checkpointing** — helps activations, not optimiser state, so it raises the batch size you can use rather than the model size you can hold.
+- **More GPUs** — 4 GPUs is 96 GiB and ~4B parameters, but only within one node. Across nodes at 1 GbE the throughput loss (see *Measured results*) makes it impractical for anything but a correctness check.
 
-Sharded checkpoints need `torch.distributed.checkpoint`; a plain
-`torch.save` of a sharded model saves one rank's shard, not the model.
+Sharded checkpoints need `torch.distributed.checkpoint`; a plain `torch.save` of a sharded model saves one rank's shard, not the model.
 
 ### Worked example: 3D MRI (CNN + Video-Swin)
 
-`python/examples/train_mri_3d.py` is a template for volumetric classification:
-a strided 3D conv stem, transformer blocks, activation checkpointing, bf16,
-and FSDP2 wrapping applied per block. Swap in your own `build_model` and
-`build_dataset`; everything else is ready.
+`python/examples/train_mri_3d.py` is a template for volumetric classification: a strided 3D conv stem, transformer blocks, activation checkpointing, bf16, and FSDP2 wrapping applied per block. Swap in your own `build_model` and `build_dataset`; everything else is ready.
 
-A full run on 2× RTX 4090 with FSDP2 — 128³ volumes, 15 epochs, 14.8M
-parameters, synthetic but *learnable* data:
+A full run on 2× RTX 4090 with FSDP2 — 128³ volumes, 15 epochs, 14.8M parameters, synthetic but *learnable* data:
 
 ```
 FSDP2 sharding 6 blocks over 2 ranks
@@ -1193,23 +846,18 @@ avg step time      116 ms
 peak VRAM per rank 0.76 GiB
 ```
 
-Sizing, measured on one RTX 3090 at 95M parameters with activation
-checkpointing on:
+Sizing, measured on one RTX 3090 at 95M parameters with activation checkpointing on:
 
 | Volume | Batch/GPU | Peak VRAM | Step time |
 |---|---|---|---|
 | 128³ | 2 | 2.51 GiB | 257 ms |
 | 160×192×160 | 1 | 2.68 GiB | 408 ms |
 
-Under 3 GiB on a 24 GiB card — so this **fits on a single GPU with room for a
-much larger batch**, and multi-node FSDP would be a pure loss. In 3D imaging
-the memory pressure is *activations*, not parameters, which is why the conv
-stem's stride and activation checkpointing matter far more than sharding.
+Under 3 GiB on a 24 GiB card — so this **fits on a single GPU with room for a much larger batch**, and multi-node FSDP would be a pure loss. In 3D imaging the memory pressure is *activations*, not parameters, which is why the conv stem's stride and activation checkpointing matter far more than sharding.
 
 #### Do not pool away the position
 
-The single most important line in this model is how the token grid reaches
-the classifier. An ablation on identical data:
+The single most important line in this model is how the token grid reaches the classifier. An ablation on identical data:
 
 | Head | train loss | val accuracy |
 |---|---|---|
@@ -1217,31 +865,17 @@ the classifier. An ablation on identical data:
 | conv stem → global mean → linear | 1.0719 | 24% (chance) |
 | full model, positional embeddings + attention pooling | 1.1000 | 34% (chance) |
 
-Anything that collapses the grid to one vector — a global mean, or attention
-with a learned query — discards *where* a feature was. Adding positional
-embeddings does not rescue it. The model here pools to a coarse 4×4×4 grid and
-flattens, which keeps location and still keeps the head small.
+Anything that collapses the grid to one vector — a global mean, or attention with a learned query — discards *where* a feature was. Adding positional embeddings does not rescue it. The model here pools to a coarse 4×4×4 grid and flattens, which keeps location and still keeps the head small.
 
-This is not an artefact of synthetic data. In volumetric imaging the location
-of an abnormality is most of the diagnosis; a head that cannot represent
-position cannot represent the task.
+This is not an artefact of synthetic data. In volumetric imaging the location of an abnormality is most of the diagnosis; a head that cannot represent position cannot represent the task.
 
-Two other things this run needed, both of which look like "the model cannot
-learn" when missing: **LR warmup** (a transformer trained from scratch
-otherwise collapses to the class prior and can sit there for tens of epochs)
-and **a task that is actually separable** (an early version jittered the signal
-by half the class spacing, capping even a perfect oracle at 80%).
+Two other things this run needed, both of which look like "the model cannot learn" when missing: **LR warmup** (a transformer trained from scratch otherwise collapses to the class prior and can sit there for tens of epochs) and **a task that is actually separable** (an early version jittered the signal by half the class spacing, capping even a perfect oracle at 80%).
 
 #### Getting ADNI onto the cluster
 
-ADNI ships as DICOM: one directory of ~160 `.dcm` files per scan, inside zips
-that expand to well over 100 GB. Decoding that in the dataloader would make
-every epoch re-do work whose result never changes, and none of these nodes has
-the disk for the extracted tree anyway.
+ADNI ships as DICOM: one directory of ~160 `.dcm` files per scan, inside zips that expand to well over 100 GB. Decoding that in the dataloader would make every epoch re-do work whose result never changes, and none of these nodes has the disk for the extracted tree anyway.
 
-`python/tools/preprocess_adni.py` reads the `.dcm` members **straight out of
-the zip** — no extraction — and writes one `<image_id>.npy` per scan plus a
-`manifest.csv` carrying the label and the cohort's own split:
+`python/tools/preprocess_adni.py` reads the `.dcm` members **straight out of the zip** — no extraction — and writes one `<image_id>.npy` per scan plus a `manifest.csv` carrying the label and the cohort's own split:
 
 ```bash
 uv run --with pandas --with pydicom --with numpy --with scipy python \
@@ -1258,43 +892,22 @@ It handles both archive flavours ADNI ships, and they are not interchangeable:
 | raw (`FedUQ_T1_MRI.zip`) | DICOM series | ~200 files |
 | `ADNI1_Complete *` | one preprocessed NIfTI, gradwarp/B1/N3-corrected | 1 file |
 
-Prefer the NIfTI collections: better input, and two orders of magnitude fewer
-files to move.
+Prefer the NIfTI collections: better input, and two orders of magnitude fewer files to move.
 
-**A preprocessed collection will not join on `image_id`.** ADNI assigns
-derivatives their own IDA image IDs, distinct from the raw series they came
-from, so matching a "Complete" archive to a cohort table by `image_id` finds
-exactly nothing. The tool falls back to subject + scan date, both of which are
-in the archive path, and reports which key it used — on the 46.8 GB ADNI1
-collection that is 1,705 of 2,294 scans matched, all by `ptid+date`.
+**A preprocessed collection will not join on `image_id`.** ADNI assigns derivatives their own IDA image IDs, distinct from the raw series they came from, so matching a "Complete" archive to a cohort table by `image_id` finds exactly nothing. The tool falls back to subject + scan date, both of which are in the archive path, and reports which key it used — on the 46.8 GB ADNI1 collection that is 1,705 of 2,294 scans matched, all by `ptid+date`.
 
-At 128³ float16 a volume is 4.2 MB, so a few hundred scans fit in a couple of
-GB and stream comfortably. Three things it gets right that are easy to get wrong:
+At 128³ float16 a volume is 4.2 MB, so a few hundred scans fit in a couple of GB and stream comfortably. Three things it gets right that are easy to get wrong:
 
-- **Orientation.** NIfTI volumes are reoriented to canonical RAS before
-  resampling. ADNI scans arrive in assorted orientations, and stacking them
-  as-stored trains the model on whichever way each scanner wrote its axes.
+- **Orientation.** NIfTI volumes are reoriented to canonical RAS before resampling. ADNI scans arrive in assorted orientations, and stacking them as-stored trains the model on whichever way each scanner wrote its axes.
 
-- **Slice ordering** comes from each slice's position along the slice normal,
-  not from the filename or `InstanceNumber`. ADNI mixes conventions across
-  sites and decades, and a wrongly ordered stack looks perfectly plausible
-  while being anatomically scrambled.
-- **Slice spacing** is taken from the gap between the first two slices, not
-  `SliceThickness`, which ignores any inter-slice gap and distorts the aspect
-  ratio.
+- **Slice ordering** comes from each slice's position along the slice normal, not from the filename or `InstanceNumber`. ADNI mixes conventions across sites and decades, and a wrongly ordered stack looks perfectly plausible while being anatomically scrambled.
+- **Slice spacing** is taken from the gap between the first two slices, not `SliceThickness`, which ignores any inter-slice gap and distorts the aspect ratio.
 
-**Copy the zip to local disk first.** Reading it over CIFS/NFS means ~160 small
-random reads per scan across the network: measured here at 0.8 scans/min from
-an SMB share versus minutes for the whole set once local.
+**Copy the zip to local disk first.** Reading it over CIFS/NFS means ~160 small random reads per scan across the network: measured here at 0.8 scans/min from an SMB share versus minutes for the whole set once local.
 
-The manifest is read with the stdlib `csv` module, not pandas: this runs
-inside the training container and the stock PyTorch images do not ship pandas.
-Reading a manifest is not worth making every user build a custom image for.
+The manifest is read with the stdlib `csv` module, not pandas: this runs inside the training container and the stock PyTorch images do not ship pandas. Reading a manifest is not worth making every user build a custom image for.
 
-Then point the trainer at the output — it reads the manifest, honours the
-cohort's train/val split (never reshuffle it: the same subject appears in
-several scans and would leak across the boundary), and augments with
-left-right flips only:
+Then point the trainer at the output — it reads the manifest, honours the cohort's train/val split (never reshuffle it: the same subject appears in several scans and would leak across the boundary), and augments with left-right flips only:
 
 ```bash
 ferro train --nodes 1 --gpus-per-node 2 -f \
@@ -1303,18 +916,9 @@ ferro train --nodes 1 --gpus-per-node 2 -f \
         --data-root /data/adni --label-set cn-ad --classes 2
 ```
 
-`--label-set cn-ad` drops MCI. MCI sits between the two classes by definition
-and needs far more data to separate; a handful of MCI scans adds noise rather
-than a third class.
+`--label-set cn-ad` drops MCI. MCI sits between the two classes by definition and needs far more data to separate; a handful of MCI scans adds noise rather than a third class.
 
-**Read the balanced accuracy, not the accuracy.** ADNI splits are imbalanced,
-and a model that has learned nothing still scores the prior: on this split
-validation is 17 CN and 4 AD, so predicting "CN" every time gives 81%. The
-trainer reports balanced accuracy (the mean of per-class recalls) and each
-class's recall alongside it, because always-predicting-the-majority scores
-`1 / n_classes` there however lopsided the split is. A run whose accuracy is
-high while its balanced accuracy sits at chance has learned nothing. Measured
-here, on 97 training scans:
+**Read the balanced accuracy, not the accuracy.** ADNI splits are imbalanced, and a model that has learned nothing still scores the prior: on this split validation is 17 CN and 4 AD, so predicting "CN" every time gives 81%. The trainer reports balanced accuracy (the mean of per-class recalls) and each class's recall alongside it, because always-predicting-the-majority scores `1 / n_classes` there however lopsided the split is. A run whose accuracy is high while its balanced accuracy sits at chance has learned nothing. Measured here, on 97 training scans:
 
 ```
 epoch  5/30  train_loss 0.7586  val_loss 0.6227  acc 81.0%  balanced 50.0%  [CN=100%  AD=0%]
@@ -1322,13 +926,9 @@ epoch 30/30  train_loss 0.5160  val_loss 0.4793  acc 76.2%  balanced 47.1%  [CN=
 best balanced acc  50.0%  (chance is 50%)
 ```
 
-81% accuracy, and AD recall never leaves zero. The pipeline is sound — real
-DICOM through preprocessing, FSDP2 across two GPUs, honest metrics — but 97
-scans (67 CN / 30 AD) cannot train an AD classifier, and the run says so
-plainly instead of reporting a number that flatters it.
+81% accuracy, and AD recall never leaves zero. The pipeline is sound — real DICOM through preprocessing, FSDP2 across two GPUs, honest metrics — but 97 scans (67 CN / 30 AD) cannot train an AD classifier, and the run says so plainly instead of reporting a number that flatters it.
 
-With the full ADNI1 collection — 1,705 scans, 1,225 for training, CN 552 /
-MCI 745 / AD 408 — the same model does learn:
+With the full ADNI1 collection — 1,705 scans, 1,225 for training, CN 552 / MCI 745 / AD 408 — the same model does learn:
 
 ```
 epoch  4/40  balanced 33.6%  [CN=0%   MCI=99%  AD=2% ]   only guesses MCI
@@ -1339,57 +939,31 @@ best balanced acc 45.2% (chance is 33%)
 
 Every class has non-zero recall, which the 97-scan run never managed.
 
-**Then check it on data that chose nothing.** Balanced accuracy swings ten
-points between epochs here, so picking the best epoch on a 268-scan
-validation set fits that set's noise. The trainer scores the held-out test
-split at whichever epoch validation calls best, and never lets it influence
-anything:
+**Then check it on data that chose nothing.** Balanced accuracy swings ten points between epochs here, so picking the best epoch on a 268-scan validation set fits that set's noise. The trainer scores the held-out test split at whichever epoch validation calls best, and never lets it influence anything:
 
 ```
 val  balanced acc  45.7% at epoch 24  (chance is 33%)
 TEST balanced acc  35.4%  acc 37.3%  [CN=31%  MCI=46%  AD=29%]
 ```
 
-**45.7% → 35.4%.** Against 33% chance, the model generalises by about two
-points: it has essentially not learned the task. The validation figure was
-selection noise, and quoting it would have been wrong.
+**45.7% → 35.4%.** Against 33% chance, the model generalises by about two points: it has essentially not learned the task. The validation figure was selection noise, and quoting it would have been wrong.
 
-That is the point of the test column. Every intermediate number in this
-section — 45.2%, 43.1%, 45.7% — was validation-selected and inflated by
-roughly the same margin.
+That is the point of the test column. Every intermediate number in this section — 45.2%, 43.1%, 45.7% — was validation-selected and inflated by roughly the same margin.
 
-What the run does show is overfitting: training loss reaches 0.005 while
-validation loss climbs from 1.07 to 1.90. Hence checkpointing **only on
-improvement** and `--patience`; saving every evaluation leaves the most
-overfit model as the last file on disk, which is the one you would deploy.
+What the run does show is overfitting: training loss reaches 0.005 while validation loss climbs from 1.07 to 1.90. Hence checkpointing **only on improvement** and `--patience`; saving every evaluation leaves the most overfit model as the last file on disk, which is the one you would deploy.
 
-Three-way CN/MCI/AD from T1 alone is genuinely hard — MCI overlaps both
-neighbours by definition. Dropping to CN vs AD on the same data, same model,
-same protocol shows the difference is the task and not the pipeline:
+Three-way CN/MCI/AD from T1 alone is genuinely hard — MCI overlaps both neighbours by definition. Dropping to CN vs AD on the same data, same model, same protocol shows the difference is the task and not the pipeline:
 
 | Task | val | **test** | chance | over chance |
 |---|---|---|---|---|
 | CN / MCI / AD | 45.7% | **35.4%** | 33.3% | +2 |
 | CN vs AD | 68.1% | **59.8%** | 50.0% | **+10** |
 
-The binary model learns real signal — ten points above chance on data that
-selected nothing, with balanced recall (CN 57%, AD 63%). Note the val→test
-gap appears in both, ~8-10 points each time: that is what selecting an epoch
-on a small validation set costs, consistently, and why the test column is not
-optional.
+The binary model learns real signal — ten points above chance on data that selected nothing, with balanced recall (CN 57%, AD 63%). Note the val→test gap appears in both, ~8-10 points each time: that is what selecting an epoch on a small validation set costs, consistently, and why the test column is not optional.
 
-59.8% is still well short of what T1-based CN/AD reaches in the literature. To
-close that gap, in order: more data (further ADNI collections are on the same
-NAS); a pretrained backbone rather than a transformer learned from scratch on
-692 scans; or the tabular markers the cohort already carries (hippocampal
-volume, amyloid, CSF), which are strong predictors and far cheaper than
-imaging.
+59.8% is still well short of what T1-based CN/AD reaches in the literature. To close that gap, in order: more data (further ADNI collections are on the same NAS); a pretrained backbone rather than a transformer learned from scratch on 692 scans; or the tabular markers the cohort already carries (hippocampal volume, amyloid, CSF), which are strong predictors and far cheaper than imaging.
 
-**Validation is sharded by hand, not with `DistributedSampler`.**
-`DistributedSampler` pads the set so every rank gets an equal count, which
-duplicates samples. On a small validation set that is not a rounding detail:
-21 scans over 2 ranks became 22 evaluations, one of them counted twice, and
-the reported accuracy was of a set that does not exist.
+**Validation is sharded by hand, not with `DistributedSampler`.** `DistributedSampler` pads the set so every rank gets an equal count, which duplicates samples. On a small validation set that is not a rounding detail: 21 scans over 2 ranks became 22 evaluations, one of them counted twice, and the reported accuracy was of a set that does not exist.
 
 Running the synthetic version:
 
@@ -1405,8 +979,7 @@ ferro train --nodes 1 --gpus-per-node 2 --follow \
         --volume 128 128 128 --batch-size 4 --accum 4
 ```
 
-Build the image with the medical-imaging dependencies uncommented in
-`docker/requirements.txt`:
+Build the image with the medical-imaging dependencies uncommented in `docker/requirements.txt`:
 
 ```bash
 docker build -f docker/Dockerfile.train -t ferrogrid/train:mri .
@@ -1414,25 +987,15 @@ docker build -f docker/Dockerfile.train -t ferrogrid/train:mri .
 
 #### Watch the data path, not just the GPUs
 
-For imaging the bottleneck usually moves off the GPU. From the numbers above,
-a 128³ float32 volume is 8.4 MB and a step takes 257 ms at batch 2 — about
-**65 MB/s per GPU**. Two GPUs already want ~130 MB/s, which exceeds what a
-1 GbE link to an NFS server can deliver (~125 MB/s), and it gets worse with
-every GPU you add.
+For imaging the bottleneck usually moves off the GPU. From the numbers above, a 128³ float32 volume is 8.4 MB and a step takes 257 ms at batch 2 — about **65 MB/s per GPU**. Two GPUs already want ~130 MB/s, which exceeds what a 1 GbE link to an NFS server can deliver (~125 MB/s), and it gets worse with every GPU you add.
 
-So a job can be perfectly sized for the GPUs and still crawl, with `ferro
-watch` showing utilisation flat at 20% while the cards sit waiting on the
-network. Check there first when throughput disappoints.
+So a job can be perfectly sized for the GPUs and still crawl, with `ferro watch` showing utilisation flat at 20% while the cards sit waiting on the network. Check there first when throughput disappoints.
 
 Fixes, most effective first:
 
-- **Preprocess once, cache on each node's local NVMe.** Resample and convert
-  the raw DICOM/NIfTI to `.npy`/`.pt` ahead of time; the result is far smaller
-  than the originals and reads at NVMe speed instead of network speed.
-- **Cache in RAM** with MONAI's `CacheDataset` — these machines have 60 GB+,
-  so after the first epoch the network is out of the loop entirely.
-- **Store volumes as float16.** Halves the bytes on the wire, and the data is
-  cast to bf16 for the forward pass anyway.
+- **Preprocess once, cache on each node's local NVMe.** Resample and convert the raw DICOM/NIfTI to `.npy`/`.pt` ahead of time; the result is far smaller than the originals and reads at NVMe speed instead of network speed.
+- **Cache in RAM** with MONAI's `CacheDataset` — these machines have 60 GB+, so after the first epoch the network is out of the loop entirely.
+- **Store volumes as float16.** Halves the bytes on the wire, and the data is cast to bf16 for the forward pass anyway.
 
 Cross-validation as parallel jobs rather than one distributed job:
 
@@ -1446,14 +1009,11 @@ done
 ferro jobs
 ```
 
-The scheduler spreads them over whatever GPUs are free and refuses the ones it
-cannot place, so you can queue more folds than you have cards and re-run the
-rejected ones.
+The scheduler spreads them over whatever GPUs are free and refuses the ones it cannot place, so you can queue more folds than you have cards and re-run the rejected ones.
 
 ### Mounting data
 
-Only the agent's workspace is mounted into the container by default. Datasets
-and checkpoint directories need `--mount`:
+Only the agent's workspace is mounted into the container by default. Datasets and checkpoint directories need `--mount`:
 
 | Form | Result |
 |---|---|
@@ -1461,12 +1021,9 @@ and checkpoint directories need `--mount`:
 | `--mount /host/path:/container/path` | mounted at a different path |
 | `--mount /mnt/data:/mnt/data:ro` | read-only, which is what you want for a dataset |
 
-Mount at the **same path** wherever you can: then a path in a config file
-means the same thing on the host and inside the container.
+Mount at the **same path** wherever you can: then a path in a config file means the same thing on the host and inside the container.
 
-Jobs run as **your uid**, not root. A dataset mounted `:ro` is fine either
-way, but an output directory has to be writable by you — a fresh NFS export is
-usually `root:root 755`, which silently is not. Check before a long run:
+Jobs run as **your uid**, not root. A dataset mounted `:ro` is fine either way, but an output directory has to be writable by you — a fresh NFS export is usually `root:root 755`, which silently is not. Check before a long run:
 
 ```bash
 ferro train --nodes 1 --gpus-per-node 1 -f \
@@ -1474,29 +1031,18 @@ ferro train --nodes 1 --gpus-per-node 1 -f \
     python/examples/check_mounts.py /mnt/adni_data /mnt/adni_work
 ```
 
-It reports each path's filesystem type, ownership, and whether your uid can
-write to it.
+It reports each path's filesystem type, ownership, and whether your uid can write to it.
 
 ### Network storage: NFS and Samba/CIFS
 
-FerroGrid needs no special support for either. `--mount` bind-mounts a host
-path, and the container does not care what backs it — ext4, NFS or CIFS all
-behave the same once mounted on the host. Verified end to end with a CIFS
-share bind-mounted into a job container running as a non-root uid.
+FerroGrid needs no special support for either. `--mount` bind-mounts a host path, and the container does not care what backs it — ext4, NFS or CIFS all behave the same once mounted on the host. Verified end to end with a CIFS share bind-mounted into a job container running as a non-root uid.
 
-What does need care is the **host-side mount**, because NFS and CIFS both fix
-ownership at mount time rather than honouring the on-disk owner:
+What does need care is the **host-side mount**, because NFS and CIFS both fix ownership at mount time rather than honouring the on-disk owner:
 
-- **CIFS** takes `uid=`/`gid=` as mount options. Set them to the account the
-  agent runs as, or your jobs cannot write to the share at all.
-- **NFS** maps by uid, and a fresh export is typically `root:root 755` — the
-  dataset reads fine, but an `--out-dir` on it will fail. Fix ownership on the
-  server, not the client.
+- **CIFS** takes `uid=`/`gid=` as mount options. Set them to the account the agent runs as, or your jobs cannot write to the share at all.
+- **NFS** maps by uid, and a fresh export is typically `root:root 755` — the dataset reads fine, but an `--out-dir` on it will fail. Fix ownership on the server, not the client.
 
-`scripts/mount_smb.sh` sets a Samba share up correctly on a node — installs
-`cifs-utils`, writes a root-owned `0600` credentials file (the password never
-reaches a command line), matches uid/gid to the agent's account, adds an
-`_netdev,nofail` fstab entry so it survives reboot, and write-tests the result:
+`scripts/mount_smb.sh` sets a Samba share up correctly on a node — installs `cifs-utils`, writes a root-owned `0600` credentials file (the password never reaches a command line), matches uid/gid to the agent's account, adds an `_netdev,nofail` fstab entry so it survives reboot, and write-tests the result:
 
 ```bash
 ./scripts/mount_smb.sh gpu-a //fileserver/mri /mnt/mri labuser
@@ -1507,9 +1053,7 @@ It needs sudo on the target and will prompt for it.
 
 ## Mojo / MAX
 
-Mojo and MAX are supported and working: `mojo/kernels/gelu.mojo` compiles to a
-MAX custom op that PyTorch calls on CPU and GPU, with gradients verified by
-`torch.autograd.gradcheck`.
+Mojo and MAX are supported and working: `mojo/kernels/gelu.mojo` compiles to a MAX custom op that PyTorch calls on CPU and GPU, with gradients verified by `torch.autograd.gradcheck`.
 
 ```bash
 uv sync --all-extras
@@ -1519,42 +1063,22 @@ ferro train --nodes 1 --gpus-per-node 1 -f python/examples/train_fsdp2.py \
     --activation mojo
 ```
 
-Kernels are always optional. `ferro_mojo.gelu()` falls back to
-`torch.nn.functional.gelu` when MAX is absent, the kernel fails to compile, or
-the input is unsupported, so the same script runs unchanged on a node with no
-Mojo toolchain. Pass `strict=True` when you need it to fail loudly instead.
+Kernels are always optional. `ferro_mojo.gelu()` falls back to `torch.nn.functional.gelu` when MAX is absent, the kernel fails to compile, or the input is unsupported, so the same script runs unchanged on a node with no Mojo toolchain. Pass `strict=True` when you need it to fail loudly instead.
 
 ### The honest performance picture
 
-On an RTX 3090 the Mojo custom op is currently **slower** than PyTorch's fused
-GELU — 6.6× slower at 33M elements, and 43× slower at 4K where a fixed ~180 µs
-bridge cost dominates. End to end: 100,175 tok/s with PyTorch vs 85,008 tok/s
-with Mojo. `--activation torch` is therefore the default.
+On an RTX 3090 the Mojo custom op is currently **slower** than PyTorch's fused GELU — 6.6× slower at 33M elements, and 43× slower at 4K where a fixed ~180 µs bridge cost dominates. End to end: 100,175 tok/s with PyTorch vs 85,008 tok/s with Mojo. `--activation torch` is therefore the default.
 
-This is a statement about *replacing one already-optimal PyTorch op*, not
-about Mojo. Custom kernels pay off when they fuse several ops into one bridge
-crossing, or implement something PyTorch has no fused kernel for. See
-`mojo/README.md` for the full measurement table, the Mojo 1.0 syntax notes,
-and how to add a kernel.
+This is a statement about *replacing one already-optimal PyTorch op*, not about Mojo. Custom kernels pay off when they fuse several ops into one bridge crossing, or implement something PyTorch has no fused kernel for. See `mojo/README.md` for the full measurement table, the Mojo 1.0 syntax notes, and how to add a kernel.
 
 ## Scope and limitations
 
 Phase 1 is deliberately small. Known gaps, in rough priority order:
 
-- The controller restores its jobs, queue order, GPU benchmarks and `ferro net`
-  measurements from `~/.local/state/ferrogrid/controller.db` (`--state`,
-  `--no-state`), but it does not yet reconcile them against what the agents
-  report: a job that was running when the controller died comes back running
-  until a heartbeat says otherwise. Node registrations self-heal, as before.
-- Without `--wait`, a job that cannot be placed is still rejected rather than
-  held. Both queue policy (`fifo`, `priority`, `aging`, `fair-share`, `sjf`) and
-  placement policy (`performance`, `first-fit`, `best-fit`, `vram`, `topology`)
-  are selectable at controller startup, but not while it runs.
-- No authentication or TLS on the gRPC endpoints; run it on a trusted network.
-  `submitted_by` is client supplied, so per-user quotas are not a security
-  boundary. There is no preemption.
-- Fair share and `ferro usage` use job-derived GPU-seconds. Usage history is
-  limited to the durable job records retained by the controller.
+- The controller restores its jobs, queue order, GPU benchmarks and `ferro net` measurements from `~/.local/state/ferrogrid/controller.db` (`--state`, `--no-state`), but it does not yet reconcile them against what the agents report: a job that was running when the controller died comes back running until a heartbeat says otherwise. Node registrations self-heal, as before.
+- Without `--wait`, a job that cannot be placed is still rejected rather than held. Both queue policy (`fifo`, `priority`, `aging`, `fair-share`, `sjf`) and placement policy (`performance`, `first-fit`, `best-fit`, `vram`, `topology`) are selectable at controller startup, but not while it runs.
+- No authentication or TLS on the gRPC endpoints; run it on a trusted network. `submitted_by` is client supplied, so per-user quotas are not a security boundary. There is no preemption.
+- Fair share and `ferro usage` use job-derived GPU-seconds. Usage history is limited to the durable job records retained by the controller.
 - Elastic/fault-tolerant training is not wired up; a rank failure fails the job.
 - `--gpus-per-node` is uniform across nodes, as torchrun expects.
 
@@ -1564,5 +1088,4 @@ Apache License 2.0 — see [LICENSE](LICENSE).
 
 Copyright 2026 Wang Chia Wei.
 
-FerroGrid orchestrates PyTorch, NCCL and Mojo/MAX rather than vendoring them;
-those remain under their own licences and are not redistributed here.
+FerroGrid orchestrates PyTorch, NCCL and Mojo/MAX rather than vendoring them; those remain under their own licences and are not redistributed here.

@@ -1,19 +1,10 @@
 # FerroGrid — Phase 0 Baseline Audit
 
-**Date:** 2026-09-22
-**Commit audited:** `4d1d2f4` ("Make placement legible, and per-node images first-class")
-**Auditor:** repository read of every Rust source file, `proto/ferrogrid.proto`,
-the Python examples, the scripts and the README, plus a full test/lint run.
+**Date:** 2026-09-22 **Commit audited:** `4d1d2f4` ("Make placement legible, and per-node images first-class") **Auditor:** repository read of every Rust source file, `proto/ferrogrid.proto`, the Python examples, the scripts and the README, plus a full test/lint run.
 
-> **Line numbers in this document are as of `4d1d2f4`.** This is a point-in-time
-> audit and is deliberately not rewritten as the code moves: it records what was
-> found. Phase 1 has since reformatted every crate, moved `scheduler.rs` to
-> `crates/ferro-sched/src/placement/gpu.rs`, and replaced `reserve` with
-> `reserve_exact`, so several cited sites have shifted or no longer exist.
-> [`progress.md`](progress.md) tracks what has changed since.
+> **Line numbers in this document are as of `4d1d2f4`.** This is a point-in-time audit and is deliberately not rewritten as the code moves: it records what was found. Phase 1 has since reformatted every crate, moved `scheduler.rs` to `crates/ferro-sched/src/placement/gpu.rs`, and replaced `reserve` with `reserve_exact`, so several cited sites have shifted or no longer exist. [`progress.md`](progress.md) tracks what has changed since.
 
-This document records **what exists today**, verified against the source. It does
-not propose work; the plan lives in [`roadmap.md`](roadmap.md).
+This document records **what exists today**, verified against the source. It does not propose work; the plan lives in [`roadmap.md`](roadmap.md).
 
 ---
 
@@ -30,9 +21,7 @@ not propose work; the plan lives in [`roadmap.md`](roadmap.md).
 | Python (`python/`, `tests/`) | 12 | 2,409 |
 | **Rust total** | **18** | **8,428** |
 
-Small enough that the whole control plane fits in one reading. That is a feature
-worth protecting: the project's stated character is *small, lightweight,
-understandable, testable, measurable*.
+Small enough that the whole control plane fits in one reading. That is a feature worth protecting: the project's stated character is *small, lightweight, understandable, testable, measurable*.
 
 ---
 
@@ -47,10 +36,7 @@ Run on 2026-09-22, WSL2, Rust 1.98, on commit `4d1d2f4`.
 | Formatting | `cargo fmt --check` | ❌ **FAILS** — 32 diff hunks across 8 files (exit 1) |
 | Lints | `cargo clippy --workspace --all-targets -- -D warnings` | ❌ **FAILS** — 17 lint errors across 3 crates (exit 101) |
 
-**The Phase 0 gate ("all existing tests PASS") is met. The §80 quality bar is
-not.** The lint failures are all mechanical and pre-existing — they are newer
-`clippy` lints firing on code written against an older toolchain, not latent
-bugs:
+**The Phase 0 gate ("all existing tests PASS") is met. The §80 quality bar is not.** The lint failures are all mechanical and pre-existing — they are newer `clippy` lints firing on code written against an older toolchain, not latent bugs:
 
 | Lint | Count | Where |
 |---|---|---|
@@ -60,23 +46,16 @@ bugs:
 | `manual_checked_div` | 1 | `ferro-controller/src/service.rs:547` |
 | `items_after_test_module` | 1 | `ferro-agent/src/service.rs:236` |
 
-`cargo fmt` diffs are confined to `ferro-agent` (bench, launcher, main, net,
-service, state), `ferro-gpu/src/lib.rs`, `ferro-controller` (main, metrics,
-plugins, service) and one hunk in `ferro-cli/src/render.rs`.
+`cargo fmt` diffs are confined to `ferro-agent` (bench, launcher, main, net, service, state), `ferro-gpu/src/lib.rs`, `ferro-controller` (main, metrics, plugins, service) and one hunk in `ferro-cli/src/render.rs`.
 
 ### What could not be measured
 
-No GPU cluster is reachable from this machine (one RTX 3060 Laptop, 6 GiB, under
-WSL2; no `ferro-controller` or `ferro-agent` process running). Therefore:
+No GPU cluster is reachable from this machine (one RTX 3060 Laptop, 6 GiB, under WSL2; no `ferro-controller` or `ferro-agent` process running). Therefore:
 
-- **No live scheduling baseline exists.** Throughput figures in the README
-  (§"Measured results") were taken on real lab hardware over 1 GbE and are
-  historical, not reproducible here.
-- **No scheduler micro-benchmark can be written yet** — see §4.1 below; the
-  scheduler is not importable from outside its own binary.
+- **No live scheduling baseline exists.** Throughput figures in the README (§"Measured results") were taken on real lab hardware over 1 GbE and are historical, not reproducible here.
+- **No scheduler micro-benchmark can be written yet** — see §4.1 below; the scheduler is not importable from outside its own binary.
 
-The honest Phase 0 baseline is therefore the table above: test counts, lint
-counts, and the structural findings in §4.
+The honest Phase 0 baseline is therefore the table above: test counts, lint counts, and the structural findings in §4.
 
 ---
 
@@ -118,8 +97,7 @@ counts, and the structural findings in §4.
 
 ### 2.3 Queueing (exists — the README is stale on this point)
 
-A FIFO waiting queue **is implemented**, contrary to README §"Scope and
-limitations" which still claims "No queueing".
+A FIFO waiting queue **is implemented**, contrary to README §"Scope and limitations" which still claims "No queueing".
 
 | Capability | Evidence |
 |---|---|
@@ -136,17 +114,10 @@ limitations" which still claims "No queueing".
 
 This matters disproportionately for Phase 6, so it is worth stating precisely.
 
-The agent's heartbeat loop reconnects forever and **re-registers on every
-reconnect**, and the controller's `HeartbeatResponse.known = false` explicitly
-tells an agent to re-register (`ferro-agent/src/main.rs:123-168`). More
-importantly, every heartbeat already carries two things a recovering controller
-needs:
+The agent's heartbeat loop reconnects forever and **re-registers on every reconnect**, and the controller's `HeartbeatResponse.known = false` explicitly tells an agent to re-register (`ferro-agent/src/main.rs:123-168`). More importantly, every heartbeat already carries two things a recovering controller needs:
 
-- `HeartbeatRequest.jobs` — the status of every job the agent is *currently
-  running* (`main.rs:148-152`, `state.rs:149` `job_statuses`).
-- `HeartbeatRequest.gpus` — each GPU's `allocated_job_id`, derived from the
-  agent's own allocation table (`state.rs:96` `allocations`, `:110`
-  `gpu_snapshot`).
+- `HeartbeatRequest.jobs` — the status of every job the agent is *currently running* (`main.rs:148-152`, `state.rs:149` `job_statuses`).
+- `HeartbeatRequest.gpus` — each GPU's `allocated_job_id`, derived from the agent's own allocation table (`state.rs:96` `allocations`, `:110` `gpu_snapshot`).
 
 Consequences, verified by reading the handlers:
 
@@ -157,52 +128,29 @@ Consequences, verified by reading the handlers:
 | Job records | **Lost.** `update_job_status` early-returns for an unknown `job_id` (`registry.rs:432-434`), so the agent's reports are silently discarded |
 | The running job itself | **Keeps running**, untracked: no `ferro job`, no `ferro logs`, and `ferro cancel` returns `not_found` (`service.rs:687`). Only the agent can still stop it |
 
-So the "actual state" half of §21's reconciliation is **already flowing over the
-wire**; what is missing is the "desired state" half (durable job records) and
-somewhere to put what arrives. That makes Phase 6 considerably cheaper than a
-blank-sheet reading of the spec suggests — and it means the honest description
-of today's behaviour is *"jobs become unmanageable"*, not *"GPUs leak"*.
+So the "actual state" half of §21's reconciliation is **already flowing over the wire**; what is missing is the "desired state" half (durable job records) and somewhere to put what arrives. That makes Phase 6 considerably cheaper than a blank-sheet reading of the spec suggests — and it means the honest description of today's behaviour is *"jobs become unmanageable"*, not *"GPUs leak"*.
 
 ### 2.4 Placement policy (a single, already fairly sophisticated function)
 
 `scheduler.rs` implements one composite placement policy:
 
-1. **Feasibility.** Healthy node, inside `--node` filter, GPU unallocated **and**
-   ≥ `min_free_vram_b` free (`free_gpus`, `scheduler.rs:46`).
-2. **Homogeneity, within a node.** Group free cards by model, only offer groups
-   of ≥ `want` (`homogeneous_options`, `:76`). Mixed sets are a fallback only
-   (`best_selection`, `:124`).
-3. **Homogeneity, across nodes.** Build one candidate placement per target GPU
-   model plus a baseline, score them, keep the best (`plan`, `:559`;
-   `placement_choice`, `:316`). A target model is a *preference*, never a
-   requirement.
-4. **Measured performance.** Rank by benchmarked TFLOP/s; unbenchmarked cards
-   fall back to a free-VRAM proxy scaled so any real measurement outranks them
-   (`score`, `:140`).
-5. **Network.** For multi-node jobs only, negotiated `link_mbps` is compared
-   *before* GPU score, and choices are compared on min-link then total-link
-   (`node_choice_order`, `:278`; `choice_order`, `:391`).
-6. **Determinism.** Every comparison chain ends in a total order — model name,
-   GPU index, node id (`compare_selection`, `:113`; `choice_order` tail).
-7. **Auto shape selection.** `plan_auto` (`:487`) keeps a job on **one** node and
-   takes the largest identical-model group, because on this cluster crossing the
-   network costs ~55× and sharding a fitting model costs ~3×.
+1. **Feasibility.** Healthy node, inside `--node` filter, GPU unallocated **and** ≥ `min_free_vram_b` free (`free_gpus`, `scheduler.rs:46`).
+2. **Homogeneity, within a node.** Group free cards by model, only offer groups of ≥ `want` (`homogeneous_options`, `:76`). Mixed sets are a fallback only (`best_selection`, `:124`).
+3. **Homogeneity, across nodes.** Build one candidate placement per target GPU model plus a baseline, score them, keep the best (`plan`, `:559`; `placement_choice`, `:316`). A target model is a *preference*, never a requirement.
+4. **Measured performance.** Rank by benchmarked TFLOP/s; unbenchmarked cards fall back to a free-VRAM proxy scaled so any real measurement outranks them (`score`, `:140`).
+5. **Network.** For multi-node jobs only, negotiated `link_mbps` is compared *before* GPU score, and choices are compared on min-link then total-link (`node_choice_order`, `:278`; `choice_order`, `:391`).
+6. **Determinism.** Every comparison chain ends in a total order — model name, GPU index, node id (`compare_selection`, `:113`; `choice_order` tail).
+7. **Auto shape selection.** `plan_auto` (`:487`) keeps a job on **one** node and takes the largest identical-model group, because on this cluster crossing the network costs ~55× and sharding a fitting model costs ~3×.
 
 ### 2.5 Explainability (partially there, and genuinely good)
 
-`node_verdicts` (`scheduler.rs:154`) produces a **per-node** ledger — eligible
-yes/no, the reasons each filter fired, free GPU count, free VRAM — surfaced in
-`SubmitJobResponse.node_verdicts` and `JobSummary.node_verdicts`, and refreshed
-on every queue tick. `compatibility_warnings` (`service.rs:943`) adds driver-age
-and mixed-compute-capability warnings as *warnings, not gates*.
+`node_verdicts` (`scheduler.rs:154`) produces a **per-node** ledger — eligible yes/no, the reasons each filter fired, free GPU count, free VRAM — surfaced in `SubmitJobResponse.node_verdicts` and `JobSummary.node_verdicts`, and refreshed on every queue tick. `compatibility_warnings` (`service.rs:943`) adds driver-age and mixed-compute-capability warnings as *warnings, not gates*.
 
-This is the seed of §46 "Scheduling explainability" and is a real asset: the
-abstraction to build is one the codebase already believes in.
+This is the seed of §46 "Scheduling explainability" and is a real asset: the abstraction to build is one the codebase already believes in.
 
 ### 2.6 CLI surface (the backward-compatibility contract)
 
-Global: `--controller <URL>` (env `FERRO_CONTROLLER`), `--json`.
-Shared `WatchArgs` on read-only views: `-w/--watch`, `-n/--interval <SECONDS>`.
+Global: `--controller <URL>` (env `FERRO_CONTROLLER`), `--json`. Shared `WatchArgs` on read-only views: `-w/--watch`, `-n/--interval <SECONDS>`.
 
 | Command | Flags |
 |---|---|
@@ -220,15 +168,9 @@ Shared `WatchArgs` on read-only views: `-w/--watch`, `-n/--interval <SECONDS>`.
 | `ferro sync [PATH]` | `--node`, `--delete`, `--dry-run` |
 | `ferro plugins` / `fetch` / `push` | plugin/remote/local positional, `--node`, `--timeout` |
 
-Rendering is frame-based: renderers build a frame and return it, only `main`
-prints, and `Screen` overwrites the previous frame in one write rather than
-clearing first (`render.rs`). Data age is surfaced alongside numbers throughout.
+Rendering is frame-based: renderers build a frame and return it, only `main` prints, and `Screen` overwrites the previous frame in one write rather than clearing first (`render.rs`). Data age is surfaced alongside numbers throughout.
 
-`--json` is honoured by `nodes`, `gpu`, `ps`, `net`, `plugins`, `fetch`, `push`,
-`bench`, `jobs`, `job` and `train`. It is **not** honoured by `sync`, `watch`,
-`logs` or `cancel` (`main.rs:293-489`); `--watch` and `--json` are explicitly
-rejected together (`main.rs:610-611`). For §63, only `sync` and `cancel` are real
-gaps — `watch` and `logs` are streaming views where JSON has no obvious meaning.
+`--json` is honoured by `nodes`, `gpu`, `ps`, `net`, `plugins`, `fetch`, `push`, `bench`, `jobs`, `job` and `train`. It is **not** honoured by `sync`, `watch`, `logs` or `cancel` (`main.rs:293-489`); `--watch` and `--json` are explicitly rejected together (`main.rs:610-611`). For §63, only `sync` and `cancel` are real gaps — `watch` and `logs` are streaming views where JSON has no obvious meaning.
 
 ---
 
@@ -252,11 +194,7 @@ gaps — `watch` and `logs` are streaming views where JSON has no obvious meanin
 
 ## 4. Missing entirely
 
-Verified by repository-wide search: **zero occurrences** of `priority`,
-`fair.?share`, `quota`, `sqlite`/`rusqlite`, `event.?log`, `backfill`,
-`preempt`, or `drain` anywhere in `*.rs`, `*.proto` or `*.toml` (the only
-matches are the English word "priority" in two comments and "drains" describing
-a TCP sink).
+Verified by repository-wide search: **zero occurrences** of `priority`, `fair.?share`, `quota`, `sqlite`/`rusqlite`, `event.?log`, `backfill`, `preempt`, or `drain` anywhere in `*.rs`, `*.proto` or `*.toml` (the only matches are the English word "priority" in two comments and "drains" describing a TCP sink).
 
 - Queue policies: priority, aging, fair-share, SJF, DRF
 - Placement policies: first-fit, best-fit as *named, selectable* strategies
@@ -284,25 +222,20 @@ These are ordered by how much they block the roadmap.
 
 ### 5.1 `ferro-controller` is a binary-only crate — **structural blocker**
 
-`crates/ferro-controller/` declares `[[bin]]` with `path = "src/main.rs"` and has
-**no `lib.rs`**. Every module (`scheduler`, `registry`, `service`, `metrics`) is
-private to that binary.
+`crates/ferro-controller/` declares `[[bin]]` with `path = "src/main.rs"` and has **no `lib.rs`**. Every module (`scheduler`, `registry`, `service`, `metrics`) is private to that binary.
 
 Consequences, all of which the roadmap depends on:
 
-- No integration tests can import the scheduler (`crates/*/tests/` does not exist
-  anywhere in the workspace — all 54 tests are inline `#[cfg(test)] mod tests`).
+- No integration tests can import the scheduler (`crates/*/tests/` does not exist anywhere in the workspace — all 54 tests are inline `#[cfg(test)] mod tests`).
 - **No scheduler simulator is possible** (§53) — it could not link the policy code.
 - **No benchmark harness is possible** (§51, §52) — same reason.
 - No `criterion`-style micro-benchmark of scheduler latency (§48).
 
-This must be fixed before anything in Phase 2 onward can be evaluated, and it is
-cheap: add `src/lib.rs` re-exporting the modules and point the binary at it.
+This must be fixed before anything in Phase 2 onward can be evaluated, and it is cheap: add `src/lib.rs` re-exporting the modules and point the binary at it.
 
 ### 5.2 Plan and reserve are not atomic — lost update on the allocation table
 
-`submit_job` reads the cluster, plans, and reserves in three separate critical
-sections:
+`submit_job` reads the cluster, plans, and reserves in three separate critical sections:
 
 ```
 service.rs:97    let nodes = self.registry.node_states().await;   // lock → clone → unlock
@@ -319,12 +252,9 @@ if p.gpu_indices.contains(&gpu.index) {
 }
 ```
 
-Two concurrent `SubmitJob` RPCs (tonic serves each in its own task; nothing
-serialises them) can both observe GPU 0 as free and both plan onto it.
+Two concurrent `SubmitJob` RPCs (tonic serves each in its own task; nothing serialises them) can both observe GPU 0 as free and both plan onto it.
 
-**What this does *not* cause.** Two jobs do not end up running on the same GPU.
-The agent re-validates every launch against its **own** allocation table and
-rejects a conflict outright:
+**What this does *not* cause.** Two jobs do not end up running on the same GPU. The agent re-validates every launch against its **own** allocation table and rejects a conflict outright:
 
 ```rust
 // ferro-agent/src/service.rs:69-73
@@ -334,72 +264,39 @@ let busy = self.state.busy_gpus().await;
 if let Some(conflict) = req.gpu_indices.iter().find(|i| busy.contains(i)) { … }
 ```
 
-plus a GPU-UUID re-check before that (`service.rs:57-67`). The agent, not the
-controller, is the real allocator.
+plus a GPU-UUID re-check before that (`service.rs:57-67`). The agent, not the controller, is the real allocator.
 
 **What it does cause**, which is still a genuine defect:
 
-1. **Lost update.** Job B's `reserve` overwrites job A's ownership of A's cards
-   in the controller's table.
-2. **Wrong release.** B's launch is then rejected by the agent, `start_job`
-   marks B failed and calls `release_if_done(B)`, which clears every GPU whose
-   `allocated_job_id == "B"` — those are **A's cards**. The controller now
-   reports A's running GPUs as free.
-3. **Cascading spurious failures.** A third submission can be planned onto those
-   phantom-free cards and will also be rejected by the agent.
-4. **Self-healing, slowly.** The next heartbeat overwrites `node.info.gpus`
-   wholesale from the agent's authoritative table (`registry.rs:199`), so the
-   window closes after up to one heartbeat interval (~3 s default).
+1. **Lost update.** Job B's `reserve` overwrites job A's ownership of A's cards in the controller's table.
+2. **Wrong release.** B's launch is then rejected by the agent, `start_job` marks B failed and calls `release_if_done(B)`, which clears every GPU whose `allocated_job_id == "B"` — those are **A's cards**. The controller now reports A's running GPUs as free.
+3. **Cascading spurious failures.** A third submission can be planned onto those phantom-free cards and will also be rejected by the agent.
+4. **Self-healing, slowly.** The next heartbeat overwrites `node.info.gpus` wholesale from the agent's authoritative table (`registry.rs:199`), so the window closes after up to one heartbeat interval (~3 s default).
 
-So the controller's allocation table is **soft state**: an optimistic hint that
-exists to stop two submissions in the same instant from planning onto the same
-device, reconciled from the agent every few seconds. It currently fails at the
-one job it has. The comment at `service.rs:1058-1059` ("Reserve before
-dispatching, so a second submission racing this one sees the GPUs as taken")
-states an intent the code does not achieve.
+So the controller's allocation table is **soft state**: an optimistic hint that exists to stop two submissions in the same instant from planning onto the same device, reconciled from the agent every few seconds. It currently fails at the one job it has. The comment at `service.rs:1058-1059` ("Reserve before dispatching, so a second submission racing this one sees the GPUs as taken") states an intent the code does not achieve.
 
-This is §36 (atomic allocation) and §37 (concurrency safety), and **no existing
-test would catch it**. Framing matters for the fix: the goal is not to make the
-controller the authority — the agent should stay authoritative — but to make
-*plan-and-reserve* a single critical section and to make `reserve` refuse a
-GPU that is already spoken for instead of silently taking it.
+This is §36 (atomic allocation) and §37 (concurrency safety), and **no existing test would catch it**. Framing matters for the fix: the goal is not to make the controller the authority — the agent should stay authoritative — but to make *plan-and-reserve* a single critical section and to make `reserve` refuse a GPU that is already spoken for instead of silently taking it.
 
 ### 5.3 `ferro net` measurements are discarded
 
-`MeasureNetwork` returns pairwise Mbps straight to the CLI. Nothing persists them
-and the scheduler cannot see them, so §12 (topology-aware placement) currently
-rests on the *negotiated* link speed only — which, as CLAUDE.md records, "covers
-the node-to-switch hop only, and a 1000 Mb/s NIC with zero errors can still sit
-behind a 100 Mb/s path". The measured number is the one worth scheduling on.
+`MeasureNetwork` returns pairwise Mbps straight to the CLI. Nothing persists them and the scheduler cannot see them, so §12 (topology-aware placement) currently rests on the *negotiated* link speed only — which, as CLAUDE.md records, "covers the node-to-switch hop only, and a 1000 Mb/s NIC with zero errors can still sit behind a 100 Mb/s path". The measured number is the one worth scheduling on.
 
 ### 5.4 Lint and format gates are red
 
-32 `rustfmt` hunks and 17 `clippy -D warnings` errors (itemised in §1). None are
-bugs, but a red gate cannot detect a regression, so §80 cannot be enforced until
-this is cleaned once.
+32 `rustfmt` hunks and 17 `clippy -D warnings` errors (itemised in §1). None are bugs, but a red gate cannot detect a regression, so §80 cannot be enforced until this is cleaned once.
 
 ### 5.5 README is stale
 
-"Scope and limitations" still says *"No queueing — a job that cannot be placed is
-rejected rather than held"*. `--wait` has existed since commit `7363af6`.
+"Scope and limitations" still says *"No queueing — a job that cannot be placed is rejected rather than held"*. `--wait` has existed since commit `7363af6`.
 
 ### 5.6 Smaller items
 
 - `HEARTBEAT_TIMEOUT_S` is a `const` (`registry.rs:14`), not configurable (§23, §66).
 - Queue tick (5 s) and reap tick (15 s) are hard-coded literals in `service.rs:1128,1191`.
-- Admission checks are scattered: `script.is_empty()` raises a gRPC `Status`
-  (`service.rs:93`) while image-override errors return a *typed non-accepted
-  response* (`service.rs:103`). Two different failure channels for the same class
-  of problem.
-- `Job::phase()` recomputes from a `HashMap` on every call, including inside
-  `live_job_ids()` which runs per `gpu_entries()` call.
-- A `Job` holds an unbounded-ish `VecDeque` of 20,000 log lines **per job**, in
-  memory, forever — with no persistence this is also the only copy.
-- Containers run as the agent's uid/gid rather than the submitter's
-  (`ferro-agent/src/launcher.rs:401-405`). Jobs are isolated from the host and
-  from each other's devices and mounts, but **not from each other by user** —
-  every FerroGrid job on a node runs as the same account. §61 needs this stated
-  honestly rather than implied otherwise.
+- Admission checks are scattered: `script.is_empty()` raises a gRPC `Status` (`service.rs:93`) while image-override errors return a *typed non-accepted response* (`service.rs:103`). Two different failure channels for the same class of problem.
+- `Job::phase()` recomputes from a `HashMap` on every call, including inside `live_job_ids()` which runs per `gpu_entries()` call.
+- A `Job` holds an unbounded-ish `VecDeque` of 20,000 log lines **per job**, in memory, forever — with no persistence this is also the only copy.
+- Containers run as the agent's uid/gid rather than the submitter's (`ferro-agent/src/launcher.rs:401-405`). Jobs are isolated from the host and from each other's devices and mounts, but **not from each other by user** — every FerroGrid job on a node runs as the same account. §61 needs this stated honestly rather than implied otherwise.
 
 ---
 
@@ -407,33 +304,15 @@ rejected rather than held"*. `--wait` has existed since commit `7363af6`.
 
 Verified first-hand after an external audit pass flagged them.
 
-- **Job logs are silently dropped while the controller is unreachable.** The
-  agent batches log lines and, if it cannot connect, calls `batch.clear()` and
-  returns (`ferro-agent/src/launcher.rs:178-181`). Combined with the fact that
-  the controller's 20,000-line ring is the only copy (§5.6), a controller
-  restart loses output permanently. Phase 5 persistence should account for this.
-- **No CPU or RAM limit is placed on a container.** The `docker run` argv sets
-  `--shm-size 8g` and `--ulimit memlock=-1` and nothing else — no `--memory`,
-  `--cpus` or `--cpu-shares` (`launcher.rs:378-399`). A job can therefore starve
-  a node of RAM while its GPU accounting looks healthy, which is exactly the
-  failure mode §16 describes.
-- **Containers run with `--network host --ipc host`** (`launcher.rs:383-387`).
-  Both are load-bearing — host networking keeps NCCL and the rendezvous port
-  reachable without publishing a port range per job — but they mean network and
-  IPC namespaces are *not* isolated. §61 must state this rather than imply
-  container isolation is complete.
-- **CPU and RAM capacity are computed** from `std::thread::available_parallelism()`
-  and `/proc/meminfo` `MemTotal` (`ferro-agent/src/state.rs:129-132`, `:246`) and
-  sent in `NodeInfo` at registration — then never read by anything. The
-  advertisement side of §16 is already done.
-- **Agent reconnect uses a fixed 3-second delay, no backoff**
-  (`ferro-agent/src/main.rs:143,173`). Harmless at this cluster size; worth
-  noting before §23's graded failure detection is designed on top of it.
+- **Job logs are silently dropped while the controller is unreachable.** The agent batches log lines and, if it cannot connect, calls `batch.clear()` and returns (`ferro-agent/src/launcher.rs:178-181`). Combined with the fact that the controller's 20,000-line ring is the only copy (§5.6), a controller restart loses output permanently. Phase 5 persistence should account for this.
+- **No CPU or RAM limit is placed on a container.** The `docker run` argv sets `--shm-size 8g` and `--ulimit memlock=-1` and nothing else — no `--memory`, `--cpus` or `--cpu-shares` (`launcher.rs:378-399`). A job can therefore starve a node of RAM while its GPU accounting looks healthy, which is exactly the failure mode §16 describes.
+- **Containers run with `--network host --ipc host`** (`launcher.rs:383-387`). Both are load-bearing — host networking keeps NCCL and the rendezvous port reachable without publishing a port range per job — but they mean network and IPC namespaces are *not* isolated. §61 must state this rather than imply container isolation is complete.
+- **CPU and RAM capacity are computed** from `std::thread::available_parallelism()` and `/proc/meminfo` `MemTotal` (`ferro-agent/src/state.rs:129-132`, `:246`) and sent in `NodeInfo` at registration — then never read by anything. The advertisement side of §16 is already done.
+- **Agent reconnect uses a fixed 3-second delay, no backoff** (`ferro-agent/src/main.rs:143,173`). Harmless at this cluster size; worth noting before §23's graded failure detection is designed on top of it.
 
 ## 6. Feature matrix against the term-project specification
 
-`DONE` = implemented and tested · `PARTIAL` = present but not in the required
-form · `MISSING` = no code exists.
+`DONE` = implemented and tested · `PARTIAL` = present but not in the required form · `MISSING` = no code exists.
 
 | § | Feature | Status | Note |
 |---|---|---|---|
@@ -496,22 +375,10 @@ form · `MISSING` = no code exists.
 
 Three things are true at once, and the roadmap has to respect all of them.
 
-1. **The hard part is already built.** Node registration, NVML telemetry,
-   process attribution, Docker execution, torchrun/NCCL integration, log and
-   metric plumbing, and a genuinely thoughtful placement heuristic all work and
-   are tested. None of this should be rewritten.
+1. **The hard part is already built.** Node registration, NVML telemetry, process attribution, Docker execution, torchrun/NCCL integration, log and metric plumbing, and a genuinely thoughtful placement heuristic all work and are tested. None of this should be rewritten.
 
-2. **The scheduling *research* surface is nearly empty.** One placement function,
-   one implicit FIFO, no priority, no fairness, no persistence, no metrics, no
-   simulator. That is where the term project's contribution lies, and it is
-   mostly greenfield — which is good news for not breaking things.
+2. **The scheduling *research* surface is nearly empty.** One placement function, one implicit FIFO, no priority, no fairness, no persistence, no metrics, no simulator. That is where the term project's contribution lies, and it is mostly greenfield — which is good news for not breaking things.
 
-3. **Two structural problems gate everything else**: the controller cannot be
-   imported (§5.1), so no experiment can be run against it; and plan-and-reserve is
-   not atomic (§5.2), so the controller's ledger of who holds what loses writes
-   under concurrency — and that ledger is exactly what every utilisation, waiting
-   time and fairness number would be read off.
+3. **Two structural problems gate everything else**: the controller cannot be imported (§5.1), so no experiment can be run against it; and plan-and-reserve is not atomic (§5.2), so the controller's ledger of who holds what loses writes under concurrency — and that ledger is exactly what every utilisation, waiting time and fairness number would be read off.
 
-Phase 1 should therefore do exactly three things: make the crate importable,
-make allocation atomic, and put the existing behaviour behind policy traits
-without changing a single placement decision.
+Phase 1 should therefore do exactly three things: make the crate importable, make allocation atomic, and put the existing behaviour behind policy traits without changing a single placement decision.
