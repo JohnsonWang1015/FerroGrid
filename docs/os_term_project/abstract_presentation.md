@@ -34,7 +34,7 @@
 - Placement: performance, first-fit, best-fit, VRAM-aware, and topology-aware.
 - Dispatch: opportunistic backfilling and reservation-based comparison.
 - Per-user concurrent GPU quotas extend the system with admission control and usage accounting.
-- Quota admission/accounting is implemented in PR #1; the initial quota study is complete in PR #2 and depends on #1. Neither PR has merged as of September 24.
+- Quota admission/accounting and the initial quota study were merged into `main` through PR #1 and PR #2, respectively; #1 merged first on September 25, 2026.
 
 **Speaker cue:** Emphasize the OS mechanisms and use FerroGrid only to run and measure them.
 

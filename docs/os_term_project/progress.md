@@ -6,49 +6,29 @@ Updated at the end of every phase, in the format fixed by the project specificat
 
 ## Multi-user GPU quota evaluation (stacked PR #2)
 
-**Date:** 2026-09-24
+**Date:** 2026-09-25
 
-**Status:** ✅ Primary paired-seed evaluation complete; no PR merged.
+**Status:** ✅ Primary paired-seed evaluation complete; PR #1 and PR #2 have since merged in sequence.
 
-**Stacked review:** OPEN [upstream PR #2](https://github.com/JohnsonWang1015/FerroGrid/pull/2),
-`KageRyo:eval/quota-fairness` → `main`. Upstream PR #1 was OPEN and unmerged
-when PR #2 was created. The PR body requests that #1 merge first, then this
-branch be rebased and PR #2 updated before it is merged. The temporary
-fork-local draft was closed to avoid duplicate review threads.
+**Merge:** [Upstream PR #2](https://github.com/JohnsonWang1015/FerroGrid/pull/2) followed PR #1 into `main`; #1 used a merge commit and #2 was squash-merged on September 25, 2026. The temporary fork-local draft was closed to avoid duplicate review threads.
 
-The quota evaluation reuses `ferro-admission::QuotaTable` and
-`QuotaDecision`, shared with the controller. CLI parsing, registry locking,
-atomic GPU reservation, persistence, and networking remain in the controller.
-The simulator applies that shared decision model during its normal FIFO,
-opportunistic dispatch and placement path.
+The quota evaluation reuses `ferro-admission::QuotaTable` and `QuotaDecision`, shared with the controller. CLI parsing, registry locking, atomic GPU reservation, persistence, and networking remain in the controller. The simulator applies that shared decision model during its normal FIFO, opportunistic dispatch and placement path.
 
 ### Experiment
 
-- 8 homogeneous GPUs (2 nodes × 4), FIFO, opportunistic dispatch,
-  performance placement; only the quota changes within each comparison.
+- 8 homogeneous GPUs (2 nodes × 4), FIFO, opportunistic dispatch, performance placement; only the quota changes within each comparison.
 - Quotas: unlimited, 1, 2, 4 GPUs/user; 20 paired seeds per scenario, reused for every quota.
 - Four deterministic scenarios: balanced arrivals, a 70%-arrival heavy user, an early burst that can overlap with three light-user streams, and one active user.
-- All jobs request one GPU and run for 120–240 simulated seconds. Each
-  scenario/seed job list is reused for all four quota values.
-- 320 runs total. All submitted jobs completed; there were no failures,
-  never-started jobs, or hard rejects in the main matrix.
+- All jobs request one GPU and run for 120–240 simulated seconds. Each scenario/seed job list is reused for all four quota values.
+- 320 runs total. All submitted jobs completed; there were no failures, never-started jobs, or hard rejects in the main matrix.
 - Per-seed raw records include cluster/policy/workload configuration, `git_commit`, cluster metrics, per-user metrics, and per-job quota events. Summaries report mean, sample SD, and two-sided 95% Student-t CI for per-cell results and paired quota-minus-unlimited differences (20 seeds, df=19).
 
 ### Findings
 
 - **Balanced A:** no difference was detected between quota 4 and unlimited access. The paired 95% CIs bound changes to +0.2 s mean wait [−0.1, +0.5], +0.01 percentage points of utilization [−0.15, +0.17], and +0.02 jobs/h throughput [−0.24, +0.27]. Quota 1 lowered utilization to 43.72% and raised mean wait to 4,804 s.
-- **Heavy-user B:** with no quota, the heavy user's mean wait was 2,030 s and
-  the other users' average was 2,018 s (ratio 1.014; wait Jain 0.991). Quota
-  2 lowered other users' mean wait to 442 s but raised the heavy user's to
-  6,992 s; utilization was 35.16%, throughput 56.19 jobs/h, and wait Jain
-  0.351. Quota 4 gave 916 s vs 3,160 s (other users vs heavy), 69.75%
-  utilization, 111.48 jobs/h, and wait Jain 0.693. Quotas reduce normal-user
-  delay here, but the results do **not** show improved equality of mean waits.
+- **Heavy-user B:** with no quota, the heavy user's mean wait was 2,030 s and the other users' average was 2,018 s (ratio 1.014; wait Jain 0.991). Quota 2 lowered other users' mean wait to 442 s but raised the heavy user's to 6,992 s; utilization was 35.16%, throughput 56.19 jobs/h, and wait Jain 0.351. Quota 4 gave 916 s vs 3,160 s (other users vs heavy), 69.75% utilization, 111.48 jobs/h, and wait Jain 0.693. Quotas reduce normal-user delay here, but the results do **not** show improved equality of mean waits.
 - **Overlapping-burst C:** unlimited access gave the light users 4,456 s mean wait vs 1,708 s for the hog user. Quota 4 moved these to 1,886 s vs 3,508 s; paired differences were −2,570 s [−2,603, −2,536] for light users and +1,800 s [1,783, 1,816] for the hog, with −21.15 utilization points [−21.64, −20.65] and −33.77 jobs/h [−34.54, −33.00]. Wait Jain changed from 0.909 to 0.914. Quotas 1/2 overshot: hog/light wait ratios were 5.60/5.87 and wait Jain fell to 0.538/0.526.
-- **Single-user D:** utilization fell from 98.07% without a quota to 12.50%,
-  24.95%, and 49.65% for quotas 1/2/4. At quota 2, mean wait rose from
-  2,026 s to 10,132 s and mean placeable idle capacity while quota-blocked
-  reached 128,879 GPU-seconds per run.
+- **Single-user D:** utilization fell from 98.07% without a quota to 12.50%, 24.95%, and 49.65% for quotas 1/2/4. At quota 2, mean wait rose from 2,026 s to 10,132 s and mean placeable idle capacity while quota-blocked reached 128,879 GPU-seconds per run.
 
 The first expectation that hard quotas would straightforwardly "improve fairness" was too broad. Under FIFO, scenario B's waits were already nearly equal; quotas transfer delay from the lighter users to the 70%-arrival user and reduce wait equality. Scenario C has a different baseline, so quota 4 slightly improves the waiting-time Jain index while protecting the light-user streams. The report now distinguishes user isolation from equal waiting-time treatment and states the utilization/throughput costs alongside both.
 
@@ -58,13 +38,8 @@ Scenario C uses subsecond exponential arrival intervals floored to the simulator
 
 - Raw runs are regenerated locally by `scripts/run_quota_experiments.sh` and ignored by Git; each contains one scenario/seed/quota record.
 - Aggregates: `summary.csv` and `summary.json` (1,176 metric rows, n=20 each), including paired quota-minus-unlimited differences and paired t-CIs.
-- Five SVG figures: heavy wait, normal/later wait, utilization, wait ratio,
-  and throughput under `outputs/benchmarks/quota/figures/`.
-- The full 320-run script completed twice from the same clean code revision;
-  raw data, summaries, and all figures compared byte-for-byte. A first repeat
-  while prior outputs were present changed only the `git_commit` dirty marker;
-  moving the generated directory aside restored the clean source state and
-  confirmed exact repeatability. The recorded source revision is `61a188a`.
+- Five SVG figures: heavy wait, normal/later wait, utilization, wait ratio, and throughput under `outputs/benchmarks/quota/figures/`.
+- The full 320-run script completed twice from the same clean code revision; raw data, summaries, and all figures compared byte-for-byte. A first repeat while prior outputs were present changed only the `git_commit` dirty marker; moving the generated directory aside restored the clean source state and confirmed exact repeatability. The recorded source revision is `61a188a`.
 - `./target/release/ferro-sim quota-aggregate --input outputs/benchmarks/quota/raw.json --out /tmp/quota-summary-recomputed` independently regenerated both summary files byte-for-byte (1,176 aggregate rows).
 
 | Check | Result |
@@ -78,39 +53,19 @@ Scenario C uses subsecond exponential arrival intervals floored to the simulator
 | `git diff --check` | clean |
 | `./scripts/run_quota_experiments.sh` | 320/320 runs; five SVGs generated |
 
-The host lacks a system `protoc`; Rust builds used the repository environment's
-Torch `protoc` through `/tmp/ferrogrid-protoc-wrapper`. The experiment script
-has a local fallback for this setup.
+The host lacks a system `protoc`; Rust builds used the repository environment's Torch `protoc` through `/tmp/ferrogrid-protoc-wrapper`. The experiment script has a local fallback for this setup.
 
 ---
 
 ## Per-user GPU quota admission and usage accounting
 
-**Status:** ✅ Controller-configured concurrent GPU limits, atomic admission,
-queue retry behavior, `Controller.GetUsage`, and `ferro usage` are implemented.
+**Status:** ✅ Controller-configured concurrent GPU limits, atomic admission, queue retry behavior, `Controller.GetUsage`, and `ferro usage` are implemented.
 
-`ferro-controller --user-quota USER=N` is repeatable. Duplicate identities and
-malformed limits fail startup; an omitted user is unlimited and zero is a valid
-limit. Exact requests that can never fit are rejected, temporary quota blocks
-are rejected without `--wait` or retained in the queue with it, and automatic
-placement is capped by remaining quota. Quota blocking has its own message,
-separate from cluster capacity.
+`ferro-controller --user-quota USER=N` is repeatable. Duplicate identities and malformed limits fail startup; an omitted user is unlimited and zero is a valid limit. Exact requests that can never fit are rejected, temporary quota blocks are rejected without `--wait` or retained in the queue with it, and automatic placement is capped by remaining quota. Quota blocking has its own message, separate from cluster capacity.
 
-The race was prevented at the allocation boundary: `reserve_exact_with_quota`
-holds the registry mutex while it checks physical GPU ownership, counts GPUs
-already allocated to the submitter, checks the quota, and applies the full
-reservation or none of it. The preflight check only supplies early feedback;
-both immediate and queued jobs repeat admission at the atomic reservation.
-Placement remains outside the critical section, and the agent's launch-time
-GPU validation remains in place.
+The race was prevented at the allocation boundary: `reserve_exact_with_quota` holds the registry mutex while it checks physical GPU ownership, counts GPUs already allocated to the submitter, checks the quota, and applies the full reservation or none of it. The preflight check only supplies early feedback; both immediate and queued jobs repeat admission at the atomic reservation. Placement remains outside the critical section, and the agent's launch-time GPU validation remains in place.
 
-Usage reuses `RegistryInner::usage_snapshot`, the same job-derived data used by
-fair-share, rather than maintaining a second cumulative ledger. The API reports
-held GPUs, current nonqueued jobs, accumulated GPU-seconds, and an optional
-quota; the CLI displays an absent quota as `unlimited` and preserves quota zero
-as zero in JSON. Job-derived GPU-seconds remain available after restart from
-persisted job records. The controller's quota flags are startup configuration
-and must be supplied again after a restart.
+Usage reuses `RegistryInner::usage_snapshot`, the same job-derived data used by fair-share, rather than maintaining a second cumulative ledger. The API reports held GPUs, current nonqueued jobs, accumulated GPU-seconds, and an optional quota; the CLI displays an absent quota as `unlimited` and preserves quota zero as zero in JSON. Job-derived GPU-seconds remain available after restart from persisted job records. The controller's quota flags are startup configuration and must be supplied again after a restart.
 
 ### Verification
 
@@ -121,25 +76,13 @@ and must be supplied again after a restart.
 | `PROTOC=/tmp/ferro-protoc/bin/protoc cargo test --workspace` | ✅ 289 passed, 0 failed |
 | `uv run --all-extras pytest -q` | ✅ 14 passed, 5 skipped; one CUDA driver-version warning |
 
-The first full Rust test run hit two unchanged `ferro-agent` process-fixture
-assertions before `setsid` had moved the child into its own session. Both tests
-passed when isolated and on the complete workspace rerun. The new mandatory
-16-way same-user reservation test admits exactly two GPUs under a quota of two.
-A mocked NodeAgent gRPC integration test also leaves a quota-blocked job queued,
-releases the incumbent job, then dispatches and launches the waiting job. RPC
-and renderer tests verify current usage and the difference between unlimited
-and a zero-GPU limit. No real GPU result is claimed.
+The first full Rust test run hit two unchanged `ferro-agent` process-fixture assertions before `setsid` had moved the child into its own session. Both tests passed when isolated and on the complete workspace rerun. The new mandatory 16-way same-user reservation test admits exactly two GPUs under a quota of two. A mocked NodeAgent gRPC integration test also leaves a quota-blocked job queued, releases the incumbent job, then dispatches and launches the waiting job. RPC and renderer tests verify current usage and the difference between unlimited and a zero-GPU limit. No real GPU result is claimed.
 
 ### Known limitations
 
-- `submitted_by` is client supplied; quota enforcement is resource management,
-  not an authentication or security boundary. The controller gRPC endpoint is
-  still unauthenticated.
-- Quota definitions are supplied at controller startup rather than persisted
-  in the state database; operators must pass the same limits after restart.
-- GPU-seconds and current job counts are derived from retained durable job
-  records and the existing registry lifecycle semantics. There is no separate
-  accounting ledger, identity provider, project quota, or GPU preemption.
+- `submitted_by` is client supplied; quota enforcement is resource management, not an authentication or security boundary. The controller gRPC endpoint is still unauthenticated.
+- Quota definitions are supplied at controller startup rather than persisted in the state database; operators must pass the same limits after restart.
+- GPU-seconds and current job counts are derived from retained durable job records and the existing registry lifecycle semantics. There is no separate accounting ledger, identity provider, project quota, or GPU preemption.
 
 ---
 

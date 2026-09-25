@@ -2,25 +2,15 @@
 
 ## Research Questions
 
-- **RQ1:** How do hard per-user concurrent GPU limits change waiting-time
-  treatment when users have equal demand, one user submits most jobs, or one
-  user arrives in a burst?
+- **RQ1:** How do hard per-user concurrent GPU limits change waiting-time treatment when users have equal demand, one user submits most jobs, or one user arrives in a burst?
 - **RQ2:** What utilization and throughput cost accompanies those changes?
-- **RQ3:** How sensitive is the trade-off to limits of 1, 2, or 4 GPUs on an
-  8-GPU cluster?
+- **RQ3:** How sensitive is the trade-off to limits of 1, 2, or 4 GPUs on an 8-GPU cluster?
 
-The results do not support a blanket claim that a quota improves fairness.
-They show a workload-dependent exchange: a hard limit can protect other users
-from a dominant or early-arriving queue, while moving delay to the limited user
-and leaving GPUs idle.
+The results do not support a blanket claim that a quota improves fairness. They show a workload-dependent exchange: a hard limit can protect other users from a dominant or early-arriving queue, while moving delay to the limited user and leaving GPUs idle.
 
 ## Experimental Setup
 
-The experiment uses the simulator's shared `ferro-admission::QuotaTable` and
-`QuotaDecision` model, the same pure admission semantics used by
-`ferro-controller`. The controller's atomic GPU reservation and registry lock
-remain controller-owned. This experiment does not implement a second quota
-rule or scheduler.
+The experiment uses the simulator's shared `ferro-admission::QuotaTable` and `QuotaDecision` model, the same pure admission semantics used by `ferro-controller`. The controller's atomic GPU reservation and registry lock remain controller-owned. This experiment does not implement a second quota rule or scheduler.
 
 | Setting | Value |
 |---|---|
@@ -34,11 +24,7 @@ rule or scheduler.
 | Execution | Simulator default model; no node failures |
 | Runs | 4 scenarios × 4 quota settings × 20 seeds = 320 |
 
-For each scenario and seed, the workload is generated once and the same job
-identities, users, arrival times, and durations are reused for all four quota
-settings. The quota is the only scheduling input that changes within that
-paired group. The main matrix uses one-GPU jobs, so every job fits the smallest
-tested quota; no main-matrix run rejects an oversized job.
+For each scenario and seed, the workload is generated once and the same job identities, users, arrival times, and durations are reused for all four quota settings. The quota is the only scheduling input that changes within that paired group. The main matrix uses one-GPU jobs, so every job fits the smallest tested quota; no main-matrix run rejects an oversized job.
 
 | Scenario | Workload |
 |---|---|
@@ -47,44 +33,19 @@ tested quota; no main-matrix run rejects an oversized job.
 | C — Overlapping burst | 250 jobs; 160 jobs from `hog` arrive with seeded exponential interarrival mean 0.15 s. Their cumulative timestamps are floored to the simulator's integer-second clock, so the hog stream can continue after the three light-user streams begin at t=20 s; those users then submit 30 jobs each at 3 s intervals plus seeded 0–2 s jitter. |
 | D — Single user | 240 jobs from one user on the same 8-GPU cluster, so no other user can borrow capacity left idle by the quota. |
 
-The fixed FIFO baseline matters to interpretation. Scenario B assigns user
-identity to a shared arrival stream; FIFO serves the resulting arrivals in
-order, so the 70%-demand user is not intentionally placed at the front of the
-queue. Scenario C starts one user's burst early, but the burst can overlap with the other users' arrivals.
+The fixed FIFO baseline matters to interpretation. Scenario B assigns user identity to a shared arrival stream; FIFO serves the resulting arrivals in order, so the 70%-demand user is not intentionally placed at the front of the queue. Scenario C starts one user's burst early, but the burst can overlap with the other users' arrivals.
 
 ## Metrics and Statistical Method
 
-- **Mean, p50, and p95 waiting time:** submission-to-start time for jobs that
-  started. Percentiles use nearest rank. All 320 main-matrix runs start every
-  submitted job, so these values do not conceal jobs rejected or left waiting.
-- **Turnaround:** submission to completion. **Makespan:** first arrival to
-  last completion.
+- **Mean, p50, and p95 waiting time:** submission-to-start time for jobs that started. Percentiles use nearest rank. All 320 main-matrix runs start every submitted job, so these values do not conceal jobs rejected or left waiting.
+- **Turnaround:** submission to completion. **Makespan:** first arrival to last completion.
 - **GPU utilization:** GPU-seconds used divided by `8 × makespan`.
-- **Throughput:** completed jobs per hour of makespan. Every run completes all
-  submitted jobs, so throughput and utilization move together for this fixed
-  workload; they are related views of the same longer or shorter drain time.
-- **Per-user service and waiting:** raw output includes submitted/completed
-  jobs, mean/p50/p95 wait, GPU-seconds received, and share of total
-  GPU-seconds.
-- **Wait fairness:** Jain's index over each user's mean wait. A lower value
-  means users' mean waits differ more; it does not by itself say which user was
-  treated better. The heavy-to-normal ratio supplies that direction.
-- **Heavy-to-normal wait ratio:** the heavy user's mean wait divided by the
-  unweighted average of the other users' mean waits. A value above 1 means the
-  heavy user waits longer; below 1 means the later/normal users wait longer.
-- **Jain GPU-seconds:** reported in the raw data, but not used as the primary
-  policy fairness result. Since every job completes and quotas do not change
-  the submitted jobs or their durations, this index primarily describes the
-  workload's demand mix.
-- **Quota observations:** blocked jobs count distinct jobs ever delayed by a
-  quota; block events count continuous blocked intervals per job; attempts
-  count scheduling passes while blocked; block time ends when a job starts or
-  the run ends. Hard rejects are requests larger than a user's whole limit.
-  `quota_unused_gpu_seconds` counts placeable free GPU-seconds during
-  intervals with at least one quota-blocked queued job. It is a direct
-  underutilization measure for scenario D; in multi-user scenarios it is an
-  overlap measure and does not prove that every idle GPU was caused only by
-  quota enforcement.
+- **Throughput:** completed jobs per hour of makespan. Every run completes all submitted jobs, so throughput and utilization move together for this fixed workload; they are related views of the same longer or shorter drain time.
+- **Per-user service and waiting:** raw output includes submitted/completed jobs, mean/p50/p95 wait, GPU-seconds received, and share of total GPU-seconds.
+- **Wait fairness:** Jain's index over each user's mean wait. A lower value means users' mean waits differ more; it does not by itself say which user was treated better. The heavy-to-normal ratio supplies that direction.
+- **Heavy-to-normal wait ratio:** the heavy user's mean wait divided by the unweighted average of the other users' mean waits. A value above 1 means the heavy user waits longer; below 1 means the later/normal users wait longer.
+- **Jain GPU-seconds:** reported in the raw data, but not used as the primary policy fairness result. Since every job completes and quotas do not change the submitted jobs or their durations, this index primarily describes the workload's demand mix.
+- **Quota observations:** blocked jobs count distinct jobs ever delayed by a quota; block events count continuous blocked intervals per job; attempts count scheduling passes while blocked; block time ends when a job starts or the run ends. Hard rejects are requests larger than a user's whole limit. `quota_unused_gpu_seconds` counts placeable free GPU-seconds during intervals with at least one quota-blocked queued job. It is a direct underutilization measure for scenario D; in multi-user scenarios it is an overlap measure and does not prove that every idle GPU was caused only by quota enforcement.
 
 Each table cell below is **mean ± sample standard deviation [95% confidence interval]** across the 20 seed-level runs. These per-cell intervals use a two-sided Student-t critical value with 19 degrees of freedom (2.093), computed as `mean ± t × SD / sqrt(20)`. The checked-in `summary.csv` and `summary.json` retain full precision and include all metrics; values here are rounded for reading.
 
@@ -127,19 +88,9 @@ For this balanced control, no difference was detected between quota 4 and unlimi
 | 2 | 6,992 ± 412 [6,800, 7,185] | 442 ± 113 [389, 494] | 17.00 ± 5.02 [14.65, 19.35] | 0.351 ± 0.033 [0.335, 0.366] | 35.16 ± 1.75 [34.33, 35.98] | 56.19 ± 3.04 [54.77, 57.61] |
 | 4 | 3,160 ± 211 [3,061, 3,259] | 916 ± 172 [836, 997] | 3.59 ± 0.83 [3.20, 3.98] | 0.693 ± 0.085 [0.654, 0.733] | 69.75 ± 3.41 [68.16, 71.35] | 111.48 ± 5.87 [108.73, 114.23] |
 
-Without a quota, mean waits are already similar under FIFO: the heavy user's
-mean is 2,030 s and the average of the three other users is 2,018 s. The
-quota does reduce the other users' waits, but it does so by shifting delay to
-the heavy user's queue. At quota 4, the other-user mean falls about 55% while
-the heavy-user mean rises about 56%; utilization falls 28.3 percentage points
-and throughput falls 28.9% from the unlimited baseline. Quotas 1 and 2 shift
-more delay, but cost roughly 82% and 64% of throughput, respectively.
+Without a quota, mean waits are already similar under FIFO: the heavy user's mean is 2,030 s and the average of the three other users is 2,018 s. The quota does reduce the other users' waits, but it does so by shifting delay to the heavy user's queue. At quota 4, the other-user mean falls about 55% while the heavy-user mean rises about 56%; utilization falls 28.3 percentage points and throughput falls 28.9% from the unlimited baseline. Quotas 1 and 2 shift more delay, but cost roughly 82% and 64% of throughput, respectively.
 
-This is **not an improvement in equal mean-wait treatment** in scenario B:
-the wait Jain index falls from 0.991 without a quota to 0.693 at quota 4 and
-0.351 at quota 2. A quota can provide admission isolation to lighter users,
-but this workload gives no evidence that it improves their aggregate wait
-without substantial cost to the heavy user and cluster throughput.
+This is **not an improvement in equal mean-wait treatment** in scenario B: the wait Jain index falls from 0.991 without a quota to 0.693 at quota 4 and 0.351 at quota 2. A quota can provide admission isolation to lighter users, but this workload gives no evidence that it improves their aggregate wait without substantial cost to the heavy user and cluster throughput.
 
 ### Scenario C — Overlapping burst and light-user arrivals
 
@@ -161,10 +112,7 @@ The unlimited baseline leaves light users waiting much longer than the hog user.
 | 2 | 10,132 ± 178 [10,048, 10,215] | 24.95 ± 0.03 [24.94, 24.96] | 39.87 ± 0.48 [39.65, 40.10] | 128,879 ± 1,637 [128,113, 129,644] |
 | 4 | 4,723 ± 97 [4,678, 4,768] | 49.65 ± 0.14 [49.59, 49.72] | 79.35 ± 0.97 [78.90, 79.80] | 42,743 ± 571 [42,475, 43,010] |
 
-This directly exposes the hard ceiling: with one active user, limits of 1, 2,
-and 4 cap useful concurrency at 1/8, 2/8, and 4/8 of the GPUs. The waiting
-queue cannot borrow idle GPUs because no other user has jobs. The per-run idle
-GPU-second measure agrees with that mechanism.
+This directly exposes the hard ceiling: with one active user, limits of 1, 2, and 4 cap useful concurrency at 1/8, 2/8, and 4/8 of the GPUs. The waiting queue cannot borrow idle GPUs because no other user has jobs. The per-run idle GPU-second measure agrees with that mechanism.
 
 ### Figures
 
@@ -178,50 +126,27 @@ Points show across-seed means and bars show the two-sided 95% t confidence inter
 
 ## Interpretation
 
-**RQ1 — Does quota improve fairness under dominant arrivals?** It depends on
-what fairness means. In B, FIFO already gives the 70%-arrival user and the other users nearly equal mean wait. Quotas 1/2/4 reduce light-user waits but make the wait distribution less equal and cause the heavy user to wait longer. In C, quota 4 moves the light users' wait substantially toward the hog user's, while quotas 1 and 2 overshoot and make the hog user wait much longer. The data support workload-specific isolation, not a general fairness improvement claim.
+**RQ1 — Does quota improve fairness under dominant arrivals?** It depends on what fairness means. In B, FIFO already gives the 70%-arrival user and the other users nearly equal mean wait. Quotas 1/2/4 reduce light-user waits but make the wait distribution less equal and cause the heavy user to wait longer. In C, quota 4 moves the light users' wait substantially toward the hog user's, while quotas 1 and 2 overshoot and make the hog user wait much longer. The data support workload-specific isolation, not a general fairness improvement claim.
 
 **RQ2 — What does it cost?** B's quota-4 setting gives lighter users a lower mean wait, with 69.8% utilization and 111.5 jobs/h versus 98.1% and 156.7/h without quota. C's quota-4 setting retains 77.1% utilization and 123.2 jobs/h while cutting light-user mean wait from 4,456 s to 1,886 s. Quotas 1 and 2 have much larger costs in all four workloads.
 
-**RQ3 — How sensitive is the trade-off?** Strongly. Quota 4 has little effect
-on balanced A, is a possible isolation compromise for B/C when that objective
-justifies the throughput cost, and still wastes half the cluster in D. Quota
-1 or 2 is not a sensible general default from these runs.
+**RQ3 — How sensitive is the trade-off?** Strongly. Quota 4 has little effect on balanced A, is a possible isolation compromise for B/C when that objective justifies the throughput cost, and still wastes half the cluster in D. Quota 1 or 2 is not a sensible general default from these runs.
 
 For this simulated B/C mix, **quota 4 is the most defensible compromise among the tested limits only when reducing light-user waiting is an explicit priority**. It is not a universal recommendation: B's mean-wait equality worsens, its throughput drops about 29%, and D demonstrates a much larger cost when demand is not shared.
 
-Quota and fair-share are different mechanisms. A hard quota is a concurrent
-resource ceiling: it prevents one user from holding more than N GPUs at once
-and can leave capacity idle. Fair-share is a soft queue preference based on
-historical/current usage; it can choose other users' work first without
-forbidding the heavy user from using otherwise-idle GPUs. This PR's primary
-matrix keeps FIFO fixed and does **not** measure their interaction.
+Quota and fair-share are different mechanisms. A hard quota is a concurrent resource ceiling: it prevents one user from holding more than N GPUs at once and can leave capacity idle. Fair-share is a soft queue preference based on historical/current usage; it can choose other users' work first without forbidding the heavy user from using otherwise-idle GPUs. This PR's primary matrix keeps FIFO fixed and does **not** measure their interaction.
 
 ## Threats to Validity and Limitations
 
 - These are simulator results, not measurements on a real multi-GPU cluster.
-- Workloads are synthetic and the conclusions depend on their arrival rates,
-  user mix, job duration, and the chosen 8-GPU topology.
-- Scenario C's subsecond exponential interarrivals are floored to an
-  integer-second simulator clock; this creates tied arrival timestamps and is
-  part of the recorded workload definition.
-- Quota identity uses the job's `submitted_by` user string. The controller
-  endpoint has no authentication in this study; quota is not an identity or
-  security boundary.
-- There is no preemption. Running jobs keep their GPUs until completion, so
-  quotas govern future admission and queued work.
-- All jobs complete and retain their submitted GPU-seconds. Jain GPU-seconds
-  therefore describes demand, not who received service sooner; the wait
-  metrics are more informative for these runs.
-- The wait-time ratio intentionally compares the named dominant/burst user to
-  an unweighted average of the other users. It is directional and does not
-  encode policy entitlements.
-- Throughput and utilization are coupled because every run drains the same
-  fixed jobs and service durations; neither is an independent validation of
-  the other.
-- The optional fair-share × quota interaction experiment and mixed-size
-  workload were not included. The primary matrix isolates quota under a fixed
-  FIFO baseline.
+- Workloads are synthetic and the conclusions depend on their arrival rates, user mix, job duration, and the chosen 8-GPU topology.
+- Scenario C's subsecond exponential interarrivals are floored to an integer-second simulator clock; this creates tied arrival timestamps and is part of the recorded workload definition.
+- Quota identity uses the job's `submitted_by` user string. The controller endpoint has no authentication in this study; quota is not an identity or security boundary.
+- There is no preemption. Running jobs keep their GPUs until completion, so quotas govern future admission and queued work.
+- All jobs complete and retain their submitted GPU-seconds. Jain GPU-seconds therefore describes demand, not who received service sooner; the wait metrics are more informative for these runs.
+- The wait-time ratio intentionally compares the named dominant/burst user to an unweighted average of the other users. It is directional and does not encode policy entitlements.
+- Throughput and utilization are coupled because every run drains the same fixed jobs and service durations; neither is an independent validation of the other.
+- The optional fair-share × quota interaction experiment and mixed-size workload were not included. The primary matrix isolates quota under a fixed FIFO baseline.
 
 ## Reproduction
 
@@ -246,9 +171,4 @@ To regenerate only the aggregates from raw JSON:
 
 The independent reaggregation reproduced both summary files byte-for-byte. The full experiment was run twice from the same clean code revision; raw CSV/JSON, summary CSV/JSON, and all five SVGs were byte-identical. Every main-matrix row completed its submitted jobs with zero failures, never-started jobs, or hard quota rejections.
 
-The raw `git_commit` value (`61a188a`) is captured before the experiment creates
-its output directory. A later rerun from a newer checkout records that newer
-revision in this metadata field, so raw files will differ there even when all
-simulated fields, summaries, and plots are unchanged. For byte-for-byte
-comparison, rerun from the recorded code revision; otherwise compare the
-simulation fields and regenerated summaries.
+The raw `git_commit` value (`61a188a`) is captured before the experiment creates its output directory. A later rerun from a newer checkout records that newer revision in this metadata field, so raw files will differ there even when all simulated fields, summaries, and plots are unchanged. For byte-for-byte comparison, rerun from the recorded code revision; otherwise compare the simulation fields and regenerated summaries.

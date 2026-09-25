@@ -296,31 +296,11 @@ ferro usage --json
 ferro usage --watch
 ```
 
-`USER=N` sets the maximum number of GPUs the user may hold at once. A user
-without a configured quota is unlimited; `USER=0` prevents that user from
-holding GPUs. Quotas are independent between users and count GPUs reserved for
-their active jobs. If one request can never fit under its user's quota, it is
-rejected even with `--wait`. If it could fit after current work finishes, a
-submission without `--wait` gets a quota-specific error, while `--wait` keeps it
-queued for a later retry. Auto placement is capped by the user's remaining
-quota. Quota messages are distinct from physical cluster-capacity messages.
-Quota flags are controller startup configuration; pass the same flags again
-after a restart.
+`USER=N` sets the maximum number of GPUs the user may hold at once. A user without a configured quota is unlimited; `USER=0` prevents that user from holding GPUs. Quotas are independent between users and count GPUs reserved for their active jobs. If one request can never fit under its user's quota, it is rejected even with `--wait`. If it could fit after current work finishes, a submission without `--wait` gets a quota-specific error, while `--wait` keeps it queued for a later retry. Auto placement is capped by the user's remaining quota. Quota messages are distinct from physical cluster-capacity messages. Quota flags are controller startup configuration; pass the same flags again after a restart.
 
-The registry checks physical GPU ownership and the user's total allocation,
-then makes the reservation in one critical section. Queue dispatch uses the same
-check, so concurrent submissions cannot both consume the same remaining quota.
-`ferro usage` reports current GPU holdings and running jobs alongside
-GPU-seconds derived from the same persisted job records used by fair-share
-scheduling. Queued jobs hold no GPUs and accrue no GPU-seconds; a terminal job
-stops accruing time. GPU-seconds are elapsed runtime multiplied by the GPUs in
-the job's placement.
+The registry checks physical GPU ownership and the user's total allocation, then makes the reservation in one critical section. Queue dispatch uses the same check, so concurrent submissions cannot both consume the same remaining quota. `ferro usage` reports current GPU holdings and running jobs alongside GPU-seconds derived from the same persisted job records used by fair-share scheduling. Queued jobs hold no GPUs and accrue no GPU-seconds; a terminal job stops accruing time. GPU-seconds are elapsed runtime multiplied by the GPUs in the job's placement.
 
-**Quota enforcement is a resource-management mechanism, not an authentication
-boundary.** `submitted_by` is currently supplied by the client, and gRPC has no
-authentication; a client can claim another username. Use quotas to manage
-cooperative users on a trusted controller network, not to enforce identity or
-security.
+**Quota enforcement is a resource-management mechanism, not an authentication boundary.** `submitted_by` is currently supplied by the client, and gRPC has no authentication; a client can claim another username. Use quotas to manage cooperative users on a trusted controller network, not to enforce identity or security.
 
 ### Measuring the fabric
 
