@@ -510,6 +510,96 @@ async fn adopted_multinode_job_keeps_requested_gpu_count_while_a_peer_has_not_re
 }
 
 #[tokio::test]
+async fn adopted_auto_job_uses_observed_gpus_instead_of_the_users_quota_as_world_size() {
+    let db = TempDb::new();
+    let (mut queued, _) = planned_job("adopted-auto", "alice", &[]);
+    queued.plan = JobPlan::default();
+    queued.queued = true;
+    let mut req = request("alice", 2, true);
+    req.auto_place = true;
+    queued.queue_req = Some(req);
+    {
+        let store = Store::open(&db.path()).unwrap();
+        store.write(Change::Job(Box::new(queued.to_record(0))));
+    }
+
+    let state = Store::load(&db.path()).unwrap();
+    let store = Store::open(&db.path()).unwrap();
+    let registry = Registry::restore(VRAM_FLOOR, Arc::new(ferro_sched::queue::Fifo), store, state)
+        .with_quotas(Arc::new(quota("alice", 8)));
+
+    let mut returned = node(2);
+    for gpu in &mut returned.gpus {
+        gpu.allocated_job_id = "adopted-auto".into();
+    }
+    registry.upsert_node(returned.clone()).await;
+    assert!(registry.heartbeat("gpu-a", returned.gpus, Vec::new()).await);
+
+    let g = registry.inner.lock().await;
+    assert_eq!(g.jobs["adopted-auto"].plan.world_size, 2);
+    drop(g);
+    assert_eq!(registry.user_gpus_held("alice").await, 2);
+}
+
+#[tokio::test]
+async fn adopted_multinode_quota_gap_closes_when_peer_returns_free_and_recovery_ends() {
+    let db = TempDb::new();
+    let (mut queued, _) = planned_job("adopted-free-peer", "alice", &[]);
+    queued.plan = JobPlan::default();
+    queued.queued = true;
+    queued.queue_req = Some(SubmitJobRequest {
+        script: "train.py".into(),
+        nodes: 2,
+        gpus_per_node: 2,
+        submitted_by: "alice".into(),
+        queue: true,
+        ..Default::default()
+    });
+    {
+        let store = Store::open(&db.path()).unwrap();
+        store.write(Change::Job(Box::new(queued.to_record(0))));
+    }
+
+    let state = Store::load(&db.path()).unwrap();
+    let store = Store::open(&db.path()).unwrap();
+    let registry = Registry::restore(VRAM_FLOOR, Arc::new(ferro_sched::queue::Fifo), store, state)
+        .with_quotas(Arc::new(quota("alice", 4)));
+
+    let mut running_peer = node(2);
+    for gpu in &mut running_peer.gpus {
+        gpu.allocated_job_id = "adopted-free-peer".into();
+    }
+    registry.upsert_node(running_peer.clone()).await;
+    assert!(
+        registry
+            .heartbeat("gpu-a", running_peer.gpus, Vec::new())
+            .await
+    );
+    assert_eq!(registry.user_gpus_held("alice").await, 4);
+
+    let mut free_peer = node(2);
+    free_peer.node_id = "gpu-b".into();
+    registry.upsert_node(free_peer.clone()).await;
+    assert!(
+        registry
+            .heartbeat("gpu-b", free_peer.gpus, Vec::new())
+            .await
+    );
+
+    registry.close_recovery_window(30).await;
+    assert_eq!(
+        registry.user_gpus_held("alice").await,
+        2,
+        "the recovered peer reported free and the unknown placement gap closed"
+    );
+    let g = registry.inner.lock().await;
+    assert_eq!(g.jobs["adopted-free-peer"].plan.world_size, 2);
+    drop(g);
+    let usage = registry.inner.lock().await.usage_snapshot(now_s());
+    assert_eq!(usage.per_user["alice"].gpus_held, 2);
+}
+
+#[tokio::test]
 async fn reservation_rejects_a_request_larger_than_the_hard_limit() {
     let registry = Registry::new(VRAM_FLOOR).with_quotas(Arc::new(quota("alice", 2)));
     registry.upsert_node(node(4)).await;

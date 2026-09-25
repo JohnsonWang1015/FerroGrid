@@ -783,7 +783,10 @@ impl Registry {
             .as_ref()
             .map(|req| {
                 if req.auto_place {
-                    self.quotas.quota_for(&job.submitted_by).unwrap_or(0)
+                    // Auto placement has no fixed requested world size. Its
+                    // concrete shape is the ownership found by `adopt_plan`;
+                    // a user's quota is only a ceiling, not that shape.
+                    0
                 } else {
                     req.nodes.max(1).saturating_mul(req.gpus_per_node.max(1))
                 }
@@ -853,8 +856,23 @@ impl Registry {
             let stranded = std::mem::take(&mut g.reconciling);
             // Whatever an adopted job's plan says now is what it says: the
             // agents have had their window, and a node that has not reported
-            // by now is not going to complete anybody's plan.
-            g.adopted.clear();
+            // by now is not going to complete anybody's plan. For an adopted
+            // partial plan, stop charging the unconfirmed world-size gap: no
+            // later node in this recovery can add ranks to the plan.
+            let adopted = std::mem::take(&mut g.adopted);
+            let mut resized = Vec::new();
+            for job_id in adopted {
+                if let Some(job) = g.jobs.get_mut(&job_id) {
+                    let observed_gpus = plan_gpu_count(&job.plan);
+                    if job.plan.world_size != observed_gpus {
+                        job.plan.world_size = observed_gpus;
+                        resized.push(job_id);
+                    }
+                }
+            }
+            for job_id in resized {
+                self.write_job(&g, &job_id);
+            }
 
             // Read the whole verdict out first: the reason depends on the node
             // table and the statuses depend on the plan, and both live in the
