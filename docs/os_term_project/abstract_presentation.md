@@ -1,7 +1,7 @@
 # Abstract Presentation Outline
 
 - **Target length:** about 7 minutes 50 seconds (within the 5–10 minute limit)
-- **Team members:** [Add presenter and team member names]
+- **Team members:** 王嘉暐、張健勳、陳育哲
 
 ## Slide 1 — A shared GPU cluster is a scheduling problem (0:50)
 
@@ -41,11 +41,11 @@
 ## Slide 5 — Early evidence: policies trade one outcome for another (1:30)
 
 - In a synthetic priority workload, aging reduced the low-priority-to-other mean-wait ratio from 11.72 to 4.62.
-- In a simulated burst workload, quota 4 lowered later-user mean wait from 4,456 to 1,886 seconds.
+- In a simulated workload where the early hog stream can overlap with light-user arrivals, quota 4 lowered light-user mean wait from 4,456 to 1,886 seconds.
 - In that same quota comparison, utilization fell from 98.26% to 77.12%; in a heavy-user workload, quotas also reduced equal-wait treatment.
 - The quota experiment used 20 paired seeds and an eight-GPU simulator; these are not real-cluster results.
 
-**Visual:** Simple paired bars for later-user wait and utilization, with a note that each point is a simulator mean over 20 seeds.
+**Visual:** Simple paired bars for light-user wait and utilization, with a note that each point is a simulator mean over 20 seeds.
 
 ## Slide 6 — Evaluation plan for the rest of the term (1:25)
 

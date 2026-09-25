@@ -28,7 +28,7 @@ Where a real multi-GPU cluster is available, we will run a small matched set of 
 
 ## Preliminary observations
 
-Existing scheduling experiments show why a single average is insufficient. In one synthetic priority workload, strict priority made the low-priority user's mean wait 11.72 times that of other users; aging reduced the ratio to 4.62 while retaining service for urgent jobs. In the completed quota study, 20 paired seeds on an eight-GPU simulated cluster showed a workload-specific trade-off. For a burst followed by later users, a four-GPU per-user quota reduced later users' mean wait from 4,456 to 1,886 seconds, while utilization fell from 98.26% to 77.12% and throughput from 156.93 to 123.16 jobs per hour. In a different heavy-user workload, the same quota reduced other users' waiting time but also reduced mean-wait equality and utilization. These are synthetic simulator results, not real-cluster measurements; the quota matrix holds FIFO, opportunistic dispatch, and performance placement fixed. The [quota evaluation PR](https://github.com/JohnsonWang1015/FerroGrid/pull/2) records the full scenarios, confidence intervals, and limitations.
+Existing scheduling experiments show why a single average is insufficient. In one synthetic priority workload, strict priority made the low-priority user's mean wait 11.72 times that of other users; aging reduced the ratio to 4.62 while retaining service for urgent jobs. In the completed quota study, 20 paired seeds on an eight-GPU simulated cluster showed a workload-specific trade-off. When an early hog stream could overlap with light-user arrivals, a four-GPU per-user quota reduced light users' mean wait from 4,456 to 1,886 seconds, while utilization fell from 98.26% to 77.12% and throughput from 156.93 to 123.16 jobs per hour. In a different heavy-user workload, the same quota reduced other users' waiting time but also reduced mean-wait equality and utilization. These are synthetic simulator results, not real-cluster measurements; the quota matrix holds FIFO, opportunistic dispatch, and performance placement fixed. The [quota evaluation PR](https://github.com/JohnsonWang1015/FerroGrid/pull/2) records the full scenarios, confidence intervals, and limitations.
 
 ## Expected contribution and schedule
 
@@ -37,4 +37,4 @@ The expected contribution is a practical shared-GPU resource-management platform
 - **September 29:** submit this two-page-style abstract and give a 5–10 minute in-class presentation.
 - **October 20:** present a progress report with the selected experiment matrix and any real-cluster validation status.
 - **November 10 onward:** give the 25-minute project presentation and demonstration.
-- **December 29:** submit a final report of at most 15 pages, including each teammate's role. Team names and roles will be filled in once confirmed.
+- **December 29:** submit a final report of at most 15 pages, including each teammate's role.
