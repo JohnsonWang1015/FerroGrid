@@ -339,7 +339,7 @@ impl Controller for ControllerService {
             return Err(Status::not_found(format!("no such job {id}")));
         };
         let mut summary = [job.to_summary()];
-        g.annotate_queue(&mut summary, now_s());
+        g.annotate_queue(&mut summary, now_s(), &self.registry.quotas);
         g.annotate_recovery(&mut summary);
         let [summary] = summary;
         Ok(Response::new(summary))
@@ -395,7 +395,7 @@ impl Controller for ControllerService {
             .filter_map(|id| g.jobs.get(id))
             .map(|j| j.to_summary())
             .collect();
-        g.annotate_queue(&mut jobs, now_s());
+        g.annotate_queue(&mut jobs, now_s(), &self.registry.quotas);
         g.annotate_recovery(&mut jobs);
         if limit > 0 {
             jobs.truncate(limit as usize);

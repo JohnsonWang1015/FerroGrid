@@ -1,14 +1,41 @@
 use ferro_controller::quota::{QuotaDecision, QuotaTable, UserQuotaSpec};
 use ferro_controller::registry::{now_s, Job, QuotaReservationError, Registry};
 use ferro_controller::service::{queue_pass, ControllerService};
+use ferro_controller::store::{Change, Store};
 use ferro_proto::controller_server::Controller;
 use ferro_proto::node_agent_server::{NodeAgent, NodeAgentServer};
 use ferro_proto::{Gpu, JobPhase, JobPlacement, JobPlan, JobStatus, NodeInfo, SubmitJobRequest};
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 const VRAM_FLOOR: u64 = 8 << 30;
+
+struct TempDb(PathBuf);
+
+impl TempDb {
+    fn new() -> Self {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        Self(std::env::temp_dir().join(format!(
+            "ferrogrid-user-quota-{}-{nonce}",
+            std::process::id()
+        )))
+    }
+
+    fn path(&self) -> PathBuf {
+        self.0.join("state/controller.db")
+    }
+}
+
+impl Drop for TempDb {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
 
 fn quota(user: &str, gpus: u32) -> QuotaTable {
     QuotaTable::from_specs([UserQuotaSpec {
@@ -236,6 +263,82 @@ async fn reservation_admits_a_job_below_the_limit() {
 }
 
 #[tokio::test]
+async fn restored_running_job_counts_towards_quota_before_its_node_returns() {
+    let db = TempDb::new();
+    let (mut running, _) = planned_job("restored", "alice", &[0, 1]);
+    let started = now_s() - 60;
+    let status = JobStatus {
+        job_id: "restored".into(),
+        node_id: "gpu-a".into(),
+        phase: JobPhase::Running as i32,
+        started_unix_s: started,
+        ..Default::default()
+    };
+    running.per_node.insert("gpu-a".into(), status.clone());
+    {
+        let store = Store::open(&db.path()).unwrap();
+        store.write(Change::Job(Box::new(running.to_record(0))));
+        store.write(Change::Status {
+            job_id: "restored".into(),
+            node_id: "gpu-a".into(),
+            status: Box::new(status),
+        });
+    }
+
+    let state = Store::load(&db.path()).unwrap();
+    let store = Store::open(&db.path()).unwrap();
+    let registry = Arc::new(
+        Registry::restore(VRAM_FLOOR, Arc::new(ferro_sched::queue::Fifo), store, state)
+            .with_quotas(Arc::new(quota("alice", 2))),
+    );
+    let (address, stop, _) = start_mock_agent().await;
+    let mut reappeared_node = node(2);
+    reappeared_node.node_id = "gpu-b".into();
+    reappeared_node.address = address;
+    registry.upsert_node(reappeared_node).await;
+
+    let response = Controller::submit_job(
+        &service(registry.clone()),
+        tonic::Request::new(request("alice", 2, false)),
+    )
+    .await
+    .unwrap()
+    .into_inner();
+
+    assert_eq!(registry.user_gpus_held("alice").await, 2);
+    assert!(
+        !response.accepted,
+        "the restored two-GPU plan already consumes Alice's quota: {}",
+        response.message
+    );
+    assert!(
+        response.message.contains("GPU quota"),
+        "{}",
+        response.message
+    );
+    let (mut candidate, mut candidate_plan) = planned_job("attempt", "alice", &[0, 1]);
+    candidate_plan.placements[0].node_id = "gpu-b".into();
+    candidate.plan = candidate_plan.clone();
+    registry.insert_job(candidate).await;
+    assert!(matches!(
+        registry
+            .reserve_exact_with_quota(&candidate_plan, "attempt")
+            .await,
+        Err(QuotaReservationError::Quota {
+            decision: QuotaDecision::Wait {
+                held: 2,
+                requested: 2,
+                limit: 2
+            },
+            ..
+        })
+    ));
+    let usage = registry.inner.lock().await.usage_snapshot(now_s());
+    assert_eq!(usage.per_user["alice"].gpus_held, 2);
+    let _ = stop.send(());
+}
+
+#[tokio::test]
 async fn reservation_rejects_a_request_larger_than_the_hard_limit() {
     let registry = Registry::new(VRAM_FLOOR).with_quotas(Arc::new(quota("alice", 2)));
     registry.upsert_node(node(4)).await;
@@ -449,17 +552,75 @@ async fn an_exact_request_larger_than_quota_is_rejected_even_with_wait() {
 #[tokio::test]
 async fn auto_placement_is_capped_by_the_users_quota() {
     let registry = Arc::new(Registry::new(VRAM_FLOOR).with_quotas(Arc::new(quota("alice", 2))));
-    registry.upsert_node(node(4)).await;
+    let (address, stop, launches) = start_mock_agent().await;
+    let mut available = node(4);
+    available.address = address;
+    registry.upsert_node(available).await;
     let mut req = request("alice", 0, false);
     req.auto_place = true;
 
-    let response = Controller::submit_job(&service(registry), tonic::Request::new(req))
+    let response = Controller::submit_job(&service(registry.clone()), tonic::Request::new(req))
         .await
         .unwrap()
         .into_inner();
 
+    assert!(response.accepted, "{}", response.message);
     let plan = response.plan.expect("a feasible auto request has a plan");
-    assert!(plan.world_size <= 2, "auto chose {} GPUs", plan.world_size);
+    assert_eq!(plan.world_size, 2, "auto chose {} GPUs", plan.world_size);
+    assert!(launches.load(Ordering::SeqCst) > 0, "job was not launched");
+    assert_eq!(registry.user_gpus_held("alice").await, 2);
+    let _ = stop.send(());
+}
+
+#[tokio::test]
+async fn auto_queue_dispatch_uses_remaining_quota_for_strict_and_reserved_modes() {
+    for dispatch in [
+        ferro_sched::Dispatch::Strict,
+        ferro_sched::Dispatch::Reserved,
+    ] {
+        let registry = Arc::new(Registry::new(VRAM_FLOOR).with_quotas(Arc::new(quota("alice", 2))));
+        let service = service(registry.clone());
+        let mut bob = request("bob", 1, true);
+        bob.name = "bob-first".into();
+        let first = Controller::submit_job(&service, tonic::Request::new(bob))
+            .await
+            .unwrap()
+            .into_inner();
+        assert!(first.accepted, "{}", first.message);
+
+        let mut alice = request("alice", 4, true);
+        alice.name = "alice-auto".into();
+        alice.auto_place = true;
+        let auto = Controller::submit_job(&service, tonic::Request::new(alice))
+            .await
+            .unwrap()
+            .into_inner();
+        assert!(auto.accepted, "{}", auto.message);
+
+        let queued = registry.waiting_jobs().await;
+        let auto_queued = queued
+            .iter()
+            .find(|(job, _, _)| job.job_id == auto.job_id)
+            .expect("auto job remains queued until GPUs return");
+        assert_eq!(
+            auto_queued.0.gpus, 2,
+            "{dispatch:?} saw the uncapped request"
+        );
+
+        let (address, stop, launches) = start_mock_agent().await;
+        let mut available = node(3);
+        available.address = address;
+        registry.upsert_node(available).await;
+        let started = queue_pass(&registry, &service.placement, &service.sched, dispatch).await;
+
+        assert!(
+            started.contains(&auto.job_id),
+            "{dispatch:?} left auto job waiting"
+        );
+        assert_eq!(registry.user_gpus_held("alice").await, 2);
+        assert!(launches.load(Ordering::SeqCst) >= 2);
+        let _ = stop.send(());
+    }
 }
 
 #[tokio::test]

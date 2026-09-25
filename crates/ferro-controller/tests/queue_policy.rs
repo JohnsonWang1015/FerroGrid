@@ -8,7 +8,7 @@
 //! drift away from them.
 
 use ferro_controller::registry::{Job, Registry};
-use ferro_proto::{JobPhase, JobPlacement, JobPlan, JobStatus, SubmitJobRequest};
+use ferro_proto::{Gpu, JobPhase, JobPlacement, JobPlan, JobStatus, NodeInfo, SubmitJobRequest};
 use ferro_sched::queue::{Fifo, Priority};
 use ferro_sched::DEFAULT_PRIORITY;
 use std::sync::Arc;
@@ -181,11 +181,26 @@ async fn waiting_is_not_usage() {
 #[tokio::test]
 async fn a_running_job_accrues_usage_as_it_goes() {
     let registry = Registry::new(VRAM_FLOOR);
+    registry
+        .upsert_node(NodeInfo {
+            node_id: "gpu-a".into(),
+            gpus: (0..2)
+                .map(|index| Gpu {
+                    index,
+                    memory_total_b: 24 << 30,
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        })
+        .await;
     let mut running = finished("live", "alice", 2, 1_000, 0);
     // Still going: no end time, and the rank reports Running.
     running.per_node.get_mut("gpu-a").unwrap().phase = JobPhase::Running as i32;
     running.per_node.get_mut("gpu-a").unwrap().ended_unix_s = 0;
+    let plan = running.plan.clone();
     registry.insert_job(running).await;
+    registry.reserve_exact(&plan, "live").await.unwrap();
 
     let g = registry.inner.lock().await;
     assert_eq!(g.usage_snapshot(1_100).gpu_seconds("alice"), 200.0);
