@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1120" height="650" viewBox="0 0 1120 650">
 <rect width="100%" height="100%" fill="white"/>
 <style>text{font-family:Arial,sans-serif;fill:#222}.grid{stroke:#ddd;stroke-width:1}.axis{stroke:#333;stroke-width:1.5}</style>
-<text x="560.0" y="38" text-anchor="middle" font-size="24" font-weight="bold">Normal-user mean waiting time under dominant-user workloads</text>
+<text x="560.0" y="38" text-anchor="middle" font-size="24" font-weight="bold">Other-user mean waiting time under dominant-user workloads</text>
 <line class="grid" x1="100" y1="538.00" x2="790" y2="538.00"/>
 <text x="88" y="543.00" text-anchor="end" font-size="14">0</text>
 <line class="grid" x1="100" y1="447.60" x2="790" y2="447.60"/>
@@ -59,6 +59,6 @@
 <line x1="826" y1="98" x2="856" y2="98" stroke="#2463a6" stroke-width="3"/>
 <text x="866" y="103" font-size="14">B normal users</text>
 <line x1="826" y1="132" x2="856" y2="132" stroke="#8856a7" stroke-width="3"/>
-<text x="866" y="137" font-size="14">C later users</text>
+<text x="866" y="137" font-size="14">C light users</text>
 <text x="100" y="620" font-size="12" fill="#555">Points are across-seed means; bars show two-sided 95% Student-t confidence intervals.</text>
 </svg>

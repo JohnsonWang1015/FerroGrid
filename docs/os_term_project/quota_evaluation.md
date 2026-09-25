@@ -44,13 +44,13 @@ tested quota; no main-matrix run rejects an oversized job.
 |---|---|
 | A — Balanced | 240 jobs; four users receive equal arrival weights in a Poisson stream with mean interarrival time 5 s. |
 | B — Heavy user | 240 jobs; one user receives 70% of arrivals and three other users share 30%, with the same one-GPU job and duration distributions. |
-| C — Burst | 250 jobs; 160 jobs from `hog` arrive early with seeded exponential interarrival mean 0.15 s. Their cumulative timestamps are floored to the simulator's integer-second clock. Three later users submit 30 jobs each, starting at t=20 s and then every 3 s plus seeded 0–2 s jitter. |
+| C — Overlapping burst | 250 jobs; 160 jobs from `hog` arrive with seeded exponential interarrival mean 0.15 s. Their cumulative timestamps are floored to the simulator's integer-second clock, so the hog stream can continue after the three light-user streams begin at t=20 s; those users then submit 30 jobs each at 3 s intervals plus seeded 0–2 s jitter. |
 | D — Single user | 240 jobs from one user on the same 8-GPU cluster, so no other user can borrow capacity left idle by the quota. |
 
 The fixed FIFO baseline matters to interpretation. Scenario B assigns user
 identity to a shared arrival stream; FIFO serves the resulting arrivals in
 order, so the 70%-demand user is not intentionally placed at the front of the
-queue. Scenario C instead puts one user's burst before the other users arrive.
+queue. Scenario C starts one user's burst early, but the burst can overlap with the other users' arrivals.
 
 ## Metrics and Statistical Method
 
@@ -86,12 +86,24 @@ queue. Scenario C instead puts one user's burst before the other users arrive.
   overlap measure and does not prove that every idle GPU was caused only by
   quota enforcement.
 
-Each table cell below is **mean ± sample standard deviation [95% confidence
-interval]** across the 20 seed-level runs. Intervals use a two-sided Student-t
-critical value with 19 degrees of freedom (2.093), computed as
-`mean ± t × SD / sqrt(20)`. The checked-in `summary.csv` and `summary.json`
-retain full precision and include all metrics; values here are rounded for
-reading.
+Each table cell below is **mean ± sample standard deviation [95% confidence interval]** across the 20 seed-level runs. These per-cell intervals use a two-sided Student-t critical value with 19 degrees of freedom (2.093), computed as `mean ± t × SD / sqrt(20)`. The checked-in `summary.csv` and `summary.json` retain full precision and include all metrics; values here are rounded for reading.
+
+The table below reports **paired differences (quota minus unlimited)** for headline outcomes. For each scenario and seed, we subtract the unlimited result from the quota result before calculating the mean and two-sided 95% Student-t CI (n=20, df=19). All cells use the exact seed set 1001–1020. Wait differences use overall mean wait for A/D and heavy-user plus normal-user mean waits for B/C; utilization is shown as percentage-point change.
+
+| Scenario | Quota | Paired wait difference, s (95% CI) | Utilization difference, pp (95% CI) | Throughput difference, jobs/h (95% CI) |
+|---|---:|---|---:|---:|
+| A — Balanced | 1 | +2,777.4 [2,742.7, 2,812.1] | −54.35 [−55.54, −53.15] | −86.86 [−88.95, −84.77] |
+| A — Balanced | 2 | +42.7 [27.3, 58.0] | −11.46 [−13.88, −9.03] | −18.34 [−22.25, −14.43] |
+| A — Balanced | 4 | +0.2 [−0.1, 0.5] | +0.01 [−0.15, +0.17] | +0.02 [−0.24, +0.27] |
+| B — Heavy user | 1 | Heavy +12,645 [12,272, 13,017]; normal −565 [−704, −427] | −80.43 [−80.90, −79.96] | −128.53 [−129.43, −127.63] |
+| B — Heavy user | 2 | Heavy +4,963 [4,777, 5,148]; normal −1,576 [−1,677, −1,476] | −62.92 [−63.78, −62.05] | −100.54 [−101.89, −99.18] |
+| B — Heavy user | 4 | Heavy +1,131 [1,037, 1,224]; normal −1,102 [−1,219, −984] | −28.32 [−29.93, −26.71] | −45.24 [−47.79, −42.70] |
+| C — Overlapping burst | 1 | Hog +12,637 [12,529, 12,744]; light users −1,894 [−1,931, −1,857] | −78.76 [−78.98, −78.54] | −125.78 [−126.54, −125.02] |
+| C — Overlapping burst | 2 | Hog +5,412 [5,365, 5,458]; light users −3,241 [−3,272, −3,210] | −59.37 [−59.66, −59.07] | −94.81 [−95.46, −94.15] |
+| C — Overlapping burst | 4 | Hog +1,800 [1,783, 1,816]; light users −2,570 [−2,603, −2,536] | −21.15 [−21.64, −20.65] | −33.77 [−34.54, −33.00] |
+| D — Single user | 1 | +18,930.6 [18,794.0, 19,067.3] | −85.57 [−85.78, −85.37] | −136.75 [−137.55, −135.95] |
+| D — Single user | 2 | +8,105.3 [8,046.3, 8,164.4] | −73.12 [−73.32, −72.93] | −116.85 [−117.54, −116.17] |
+| D — Single user | 4 | +2,696.5 [2,676.7, 2,716.3] | −48.42 [−48.60, −48.24] | −77.38 [−77.86, −76.89] |
 
 ## Results
 
@@ -131,22 +143,16 @@ the wait Jain index falls from 0.991 without a quota to 0.693 at quota 4 and
 but this workload gives no evidence that it improves their aggregate wait
 without substantial cost to the heavy user and cluster throughput.
 
-### Scenario C — Early burst, then later arrivals
+### Scenario C — Overlapping burst and light-user arrivals
 
-| Quota | Burst-user mean wait (s) | Later users' mean wait (s) | Burst/later ratio | Jain wait index | GPU util. (%) | Throughput (jobs/h) |
+| Quota | Hog mean wait (s) | Light users' mean wait (s) | Hog/light ratio | Jain wait index | GPU util. (%) | Throughput (jobs/h) |
 |---:|---:|---:|---:|---:|---:|---:|
 | Unlimited | 1,708 ± 31 [1,694, 1,722] | 4,456 ± 66 [4,425, 4,487] | 0.383 ± 0.006 [0.381, 0.386] | 0.909 ± 0.002 [0.909, 0.910] | 98.26 ± 0.38 [98.09, 98.44] | 156.93 ± 2.00 [155.99, 157.87] |
 | 1 | 14,345 ± 260 [14,223, 14,466] | 2,562 ± 54 [2,537, 2,587] | 5.603 ± 0.184 [5.517, 5.689] | 0.538 ± 0.009 [0.534, 0.543] | 19.50 ± 0.17 [19.42, 19.58] | 31.15 ± 0.53 [30.90, 31.40] |
 | 2 | 7,120 ± 129 [7,059, 7,180] | 1,215 ± 26 [1,202, 1,227] | 5.865 ± 0.196 [5.774, 5.957] | 0.526 ± 0.009 [0.521, 0.530] | 38.90 ± 0.37 [38.73, 39.07] | 62.13 ± 1.07 [61.62, 62.63] |
 | 4 | 3,508 ± 64 [3,478, 3,538] | 1,886 ± 40 [1,868, 1,905] | 1.861 ± 0.061 [1.832, 1.889] | 0.914 ± 0.009 [0.910, 0.918] | 77.12 ± 0.86 [76.72, 77.52] | 123.16 ± 2.31 [122.08, 124.24] |
 
-Here the unlimited baseline leaves later users waiting much longer than the
-burst user. Quota 4 cuts the later users' mean wait by about 58%, raises the
-burst user's mean by about 105%, and moves the mean-wait Jain index only
-slightly (0.909 to 0.914). Quotas 1 and 2 push the ratio past 5.6 and reduce
-wait fairness substantially. Among these tested limits, 4 is the least
-disruptive setting that still changes the later users' outcome materially;
-it costs about 21.1 utilization points and 21.5% throughput in this scenario.
+The unlimited baseline leaves light users waiting much longer than the hog user. Quota 4 reduces their mean wait by about 58% and raises the hog user's mean by about 105%; the paired differences are −2,570 s [−2,603, −2,536] for light users and +1,800 s [1,783, 1,816] for the hog user. It moves the mean-wait Jain index only slightly (0.909 to 0.914). Quotas 1 and 2 push the ratio past 5.6 and reduce wait fairness substantially. Among these tested limits, 4 is the least disruptive setting that still changes the light users' outcome materially; it costs 21.15 utilization points [20.65, 21.64] and 33.77 jobs/h [33.00, 34.54] in paired comparisons.
 
 ### Scenario D — One user is the only source of demand
 
@@ -165,41 +171,26 @@ GPU-second measure agrees with that mechanism.
 ### Figures
 
 - [Heavy-user mean wait](../../outputs/benchmarks/quota/figures/quota_heavy_user_wait.svg)
-- [Normal/later-user mean wait](../../outputs/benchmarks/quota/figures/quota_normal_user_wait.svg)
+- [Normal/light-user mean wait](../../outputs/benchmarks/quota/figures/quota_normal_user_wait.svg)
 - [GPU utilization](../../outputs/benchmarks/quota/figures/quota_gpu_utilisation.svg)
 - [Heavy-to-normal waiting-time ratio](../../outputs/benchmarks/quota/figures/quota_wait_ratio.svg)
 - [Completed-job throughput](../../outputs/benchmarks/quota/figures/quota_throughput.svg)
 
-Points show across-seed means and bars show the two-sided 95% t confidence
-intervals. The CSV underlying each plot remains alongside the raw files.
+Points show across-seed means and bars show the two-sided 95% t confidence intervals. The checked-in `summary.csv` contains the plotted means and intervals.
 
 ## Interpretation
 
 **RQ1 — Does quota improve fairness under dominant arrivals?** It depends on
-what fairness means. In B, FIFO already gives the 70%-arrival user and the
-other users nearly equal mean wait. Quotas 1/2/4 reduce light-user waits but
-make the wait distribution less equal and cause the heavy user to wait longer.
-In C, quota 4 moves the later users' wait substantially toward the burst
-user's, while quotas 1 and 2 overshoot and make the burst user wait much
-longer. The data support workload-specific isolation, not a general fairness
-improvement claim.
+what fairness means. In B, FIFO already gives the 70%-arrival user and the other users nearly equal mean wait. Quotas 1/2/4 reduce light-user waits but make the wait distribution less equal and cause the heavy user to wait longer. In C, quota 4 moves the light users' wait substantially toward the hog user's, while quotas 1 and 2 overshoot and make the hog user wait much longer. The data support workload-specific isolation, not a general fairness improvement claim.
 
-**RQ2 — What does it cost?** B's quota-4 setting gives lighter users a lower
-mean wait, with 69.8% utilization and 111.5 jobs/h versus 98.1% and 156.7/h
-without quota. C's quota-4 setting retains 77.1% utilization and 123.2 jobs/h
-while cutting later-user mean wait from 4,456 s to 1,886 s. Quotas 1 and 2
-have much larger costs in all four workloads.
+**RQ2 — What does it cost?** B's quota-4 setting gives lighter users a lower mean wait, with 69.8% utilization and 111.5 jobs/h versus 98.1% and 156.7/h without quota. C's quota-4 setting retains 77.1% utilization and 123.2 jobs/h while cutting light-user mean wait from 4,456 s to 1,886 s. Quotas 1 and 2 have much larger costs in all four workloads.
 
 **RQ3 — How sensitive is the trade-off?** Strongly. Quota 4 has little effect
 on balanced A, is a possible isolation compromise for B/C when that objective
 justifies the throughput cost, and still wastes half the cluster in D. Quota
 1 or 2 is not a sensible general default from these runs.
 
-For this simulated B/C mix, **quota 4 is the most defensible compromise among
-the tested limits only when reducing light/later-user waiting is an explicit
-priority**. It is not a universal recommendation: B's mean-wait equality
-worsens, its throughput drops about 29%, and D demonstrates a much larger
-cost when demand is not shared.
+For this simulated B/C mix, **quota 4 is the most defensible compromise among the tested limits only when reducing light-user waiting is an explicit priority**. It is not a universal recommendation: B's mean-wait equality worsens, its throughput drops about 29%, and D demonstrates a much larger cost when demand is not shared.
 
 Quota and fair-share are different mechanisms. A hard quota is a concurrent
 resource ceiling: it prevents one user from holding more than N GPUs at once
@@ -242,16 +233,10 @@ From a clean checkout with Rust and the repository's Python environment:
 ./scripts/run_quota_experiments.sh
 ```
 
-The script builds the release simulator, runs the 320 cases, writes the raw
-and aggregate files, then generates the five SVGs. The committed results are:
+The script builds the release simulator, runs the 320 cases, writes local raw and aggregate files, then generates the five SVGs. The large raw CSV/JSON are ignored by Git and can be regenerated by this script. The committed results are:
 
-- [`raw.csv`](../../outputs/benchmarks/quota/raw.csv) — one row per
-  seed/scenario/quota, 320 data rows;
-- [`raw.json`](../../outputs/benchmarks/quota/raw.json) — same run records,
-  including per-user and per-job quota observations;
-- [`summary.csv`](../../outputs/benchmarks/quota/summary.csv) and
-  [`summary.json`](../../outputs/benchmarks/quota/summary.json) — 672
-  scenario/quota/metric aggregates with n, mean, sample SD, and 95% CI.
+- [`summary.csv`](../../outputs/benchmarks/quota/summary.csv) and [`summary.json`](../../outputs/benchmarks/quota/summary.json) — 1,176 scenario/quota/metric aggregates with n, mean, sample SD, and 95% CI, including paired quota-minus-unlimited differences;
+- five figures under [`figures/`](../../outputs/benchmarks/quota/figures/).
 
 To regenerate only the aggregates from raw JSON:
 
@@ -261,11 +246,7 @@ To regenerate only the aggregates from raw JSON:
   --out outputs/benchmarks/quota
 ```
 
-The independent reaggregation reproduced both summary files byte-for-byte.
-The full experiment was run twice from the same clean code revision;
-raw CSV/JSON, summary CSV/JSON, and all five SVGs were byte-identical. Every
-main-matrix row completed its submitted jobs with zero failures, never-started
-jobs, or hard quota rejections.
+The independent reaggregation reproduced both summary files byte-for-byte. The full experiment was run twice from the same clean code revision; raw CSV/JSON, summary CSV/JSON, and all five SVGs were byte-identical. Every main-matrix row completed its submitted jobs with zero failures, never-started jobs, or hard quota rejections.
 
 The raw `git_commit` value (`61a188a`) is captured before the experiment creates
 its output directory. A later rerun from a newer checkout records that newer

@@ -10,7 +10,7 @@ use ferro_admission::QuotaTable;
 use ferro_sched::{PlacementWeights, SchedulerConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::Write;
 use std::path::Path;
 
@@ -250,15 +250,16 @@ pub fn workloads_for_seed(seed: u64) -> Vec<QuotaWorkload> {
         },
         QuotaWorkload {
             scenario: "C-burst".into(),
-            description: "160 early heavy-user jobs followed by three users arriving from t=20 s"
-                .into(),
+            description:
+                "160 early hog jobs can overlap with three light-user streams beginning at t=20 s"
+                    .into(),
             heavy_user: Some("hog".into()),
             workload_parameters: json!({
                 "jobs": 250,
                 "heavy_jobs": 160,
                 "light_jobs_per_user": 30,
                 "heavy_arrivals": "seeded exponential interarrival mean 0.15 s, cumulative arrival times floored to the simulator's integer-second clock",
-                "light_arrivals": "each user starts at 20 s, then 3 s intervals plus seeded integer jitter [0,2] s",
+                "light_arrivals": "three streams start at 20 s while the hog burst may still be active, then 3 s intervals plus seeded integer jitter [0,2] s",
                 "job_gpu_count": 1,
                 "duration_s_uniform_inclusive": [MIN_DURATION_S, MAX_DURATION_S]
             }),
@@ -565,18 +566,88 @@ fn metric_values(run: &QuotaRawRun) -> BTreeMap<String, Option<f64>> {
 }
 
 pub fn aggregate_runs(runs: &[QuotaRawRun]) -> Result<Vec<QuotaAggregateRow>> {
+    type RunKey = (String, Option<u32>, u64);
+    type RunMetrics = BTreeMap<String, Option<f64>>;
+
     anyhow::ensure!(!runs.is_empty(), "cannot aggregate an empty run set");
     let mut samples: BTreeMap<(String, Option<u32>, String), Vec<f64>> = BTreeMap::new();
+    let mut seed_sets: BTreeMap<(String, Option<u32>), BTreeSet<u64>> = BTreeMap::new();
+    let mut run_metrics: BTreeMap<RunKey, RunMetrics> = BTreeMap::new();
     for run in runs {
-        for (metric, value) in metric_values(run) {
+        let run_key = (run.scenario.clone(), run.quota_gpus, run.seed);
+        let metrics = metric_values(run);
+        anyhow::ensure!(
+            !run_metrics.contains_key(&run_key),
+            "duplicate run for scenario {}, quota {:?}, seed {}",
+            run.scenario,
+            run.quota_gpus,
+            run.seed
+        );
+        anyhow::ensure!(
+            seed_sets
+                .entry((run.scenario.clone(), run.quota_gpus))
+                .or_default()
+                .insert(run.seed),
+            "duplicate seed {} for scenario {}, quota {:?}",
+            run.seed,
+            run.scenario,
+            run.quota_gpus
+        );
+        for (metric, value) in &metrics {
             if let Some(value) = value {
                 samples
-                    .entry((run.scenario.clone(), run.quota_gpus, metric))
+                    .entry((run.scenario.clone(), run.quota_gpus, metric.clone()))
                     .or_default()
-                    .push(value);
+                    .push(*value);
+            }
+        }
+        run_metrics.insert(run_key, metrics);
+    }
+
+    for ((scenario, quota), seeds) in &seed_sets {
+        let Some(quota) = quota else {
+            continue;
+        };
+        let baseline_seeds = seed_sets.get(&(scenario.clone(), None)).ok_or_else(|| {
+            anyhow::anyhow!("scenario {scenario} is missing its unlimited baseline")
+        })?;
+        anyhow::ensure!(
+            seeds == baseline_seeds,
+            "scenario {scenario} quota {quota} has a different seed set from its unlimited baseline"
+        );
+    }
+
+    let mut paired_samples: BTreeMap<(String, Option<u32>, String), Vec<f64>> = BTreeMap::new();
+    for ((scenario, quota, seed), treatment_metrics) in &run_metrics {
+        let Some(quota) = quota else {
+            continue;
+        };
+        let baseline_metrics = run_metrics
+            .get(&(scenario.clone(), None, *seed))
+            .expect("seed-set validation requires a matching unlimited baseline");
+        anyhow::ensure!(
+            treatment_metrics.keys().eq(baseline_metrics.keys()),
+            "scenario {scenario} quota {quota} seed {seed} has different metrics from its unlimited baseline"
+        );
+        for (metric, treatment_value) in treatment_metrics {
+            match (treatment_value, baseline_metrics.get(metric).unwrap()) {
+                (Some(treatment), Some(baseline)) => paired_samples
+                    .entry((
+                        scenario.clone(),
+                        Some(*quota),
+                        format!("paired_delta_vs_unlimited.{metric}"),
+                    ))
+                    .or_default()
+                    .push(treatment - baseline),
+                (None, None) => {}
+                _ => anyhow::bail!(
+                    "scenario {scenario} quota {quota} seed {seed} has a mismatched value for {metric}"
+                ),
             }
         }
     }
+    samples.extend(paired_samples);
+
     samples
         .into_iter()
         .map(|((scenario, quota_gpus, metric), values)| {
@@ -767,6 +838,34 @@ mod tests {
     }
 
     #[test]
+    fn c_burst_metadata_matches_the_overlapping_arrival_streams() {
+        let case = workloads_for_seed(1001)
+            .into_iter()
+            .find(|case| case.scenario == "C-burst")
+            .unwrap();
+        let last_burst_arrival = case
+            .jobs
+            .iter()
+            .filter(|job| job.user == "hog")
+            .map(|job| job.arrival_s)
+            .max()
+            .unwrap();
+        let first_light_arrival = case
+            .jobs
+            .iter()
+            .filter(|job| job.user != "hog")
+            .map(|job| job.arrival_s)
+            .min()
+            .unwrap();
+
+        assert!(case.description.contains("overlap"));
+        assert!(
+            last_burst_arrival > first_light_arrival,
+            "the streams should overlap: hog ends at {last_burst_arrival}s, light users begin at {first_light_arrival}s"
+        );
+    }
+
+    #[test]
     fn aggregation_reports_mean_sample_sd_and_student_t_confidence_interval() {
         let result = aggregate_samples(&[1.0, 2.0, 3.0, 4.0]).unwrap();
         assert_eq!(result.n, 4);
@@ -774,6 +873,51 @@ mod tests {
         assert!((result.standard_deviation.unwrap() - (5.0_f64 / 3.0).sqrt()).abs() < 1e-12);
         let margin = result.ci_high.unwrap() - result.mean;
         assert!((margin - 2.054).abs() < 0.002);
+    }
+
+    #[test]
+    fn paired_aggregates_use_same_seed_treatment_differences() {
+        let case = workloads_for_seed(1001).remove(0);
+        let template = run_case(&case, None, "test").unwrap();
+        let mut base_1001 = template.clone();
+        base_1001.seed = 1001;
+        base_1001.mean_wait_s = 10.0;
+        let mut quota_1001 = base_1001.clone();
+        quota_1001.quota_gpus = Some(4);
+        quota_1001.mean_wait_s = 12.0;
+        let mut base_1002 = template.clone();
+        base_1002.seed = 1002;
+        base_1002.mean_wait_s = 30.0;
+        let mut quota_1002 = base_1002.clone();
+        quota_1002.quota_gpus = Some(4);
+        quota_1002.mean_wait_s = 36.0;
+
+        let rows = aggregate_runs(&[quota_1002, base_1001, quota_1001, base_1002]).unwrap();
+        let paired = rows
+            .iter()
+            .find(|row| {
+                row.scenario == "A-balanced"
+                    && row.quota_gpus == Some(4)
+                    && row.metric == "paired_delta_vs_unlimited.mean_wait_s"
+            })
+            .expect("the paired quota-minus-unlimited aggregate");
+
+        assert_eq!(paired.aggregate.n, 2);
+        assert!((paired.aggregate.mean - 4.0).abs() < 1e-12);
+        assert!((paired.aggregate.standard_deviation.unwrap() - 8.0_f64.sqrt()).abs() < 1e-12);
+        assert!(paired.aggregate.ci_low.unwrap() < 0.0);
+        assert!(paired.aggregate.ci_high.unwrap() > 0.0);
+    }
+
+    #[test]
+    fn aggregate_rejects_quota_cells_with_different_seed_sets() {
+        let case = workloads_for_seed(1001).remove(0);
+        let mut baseline = run_case(&case, None, "test").unwrap();
+        let mut limited = run_case(&case, Some(4), "test").unwrap();
+        baseline.seed = 1001;
+        limited.seed = 1002;
+
+        assert!(aggregate_runs(&[baseline, limited]).is_err());
     }
 
     #[test]
@@ -790,6 +934,7 @@ mod tests {
     fn each_raw_run_contains_the_reproduction_configuration() {
         let case = workloads_for_seed(23).remove(1);
         let raw = run_case(&case, Some(2), "abc123").unwrap();
+        let baseline = run_case(&case, None, "abc123").unwrap();
         assert_eq!(raw.seed, 23);
         assert_eq!(raw.scenario, "B-heavy");
         assert_eq!(raw.cluster_gpus, 8);
@@ -799,7 +944,7 @@ mod tests {
         assert_eq!(raw.placement_policy, "performance");
         assert_eq!(raw.git_commit, "abc123");
         assert!(raw.workload_parameters.get("heavy_arrival_share").is_some());
-        let encoded = serde_json::to_vec(std::slice::from_ref(&raw)).unwrap();
+        let encoded = serde_json::to_vec(&[raw.clone(), baseline]).unwrap();
         let decoded: Vec<QuotaRawRun> = serde_json::from_slice(&encoded).unwrap();
         assert_eq!(decoded[0].scenario, raw.scenario);
         assert_eq!(decoded[0].seed, raw.seed);

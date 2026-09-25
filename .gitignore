@@ -1,4 +1,6 @@
 /target
+/outputs/benchmarks/quota/raw.csv
+/outputs/benchmarks/quota/raw.json
 /.cargo-container-registry
 __pycache__/
 *.pyc

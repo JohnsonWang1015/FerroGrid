@@ -128,17 +128,17 @@ def main() -> None:
         data,
         [
             ("B-heavy", "heavy_user_mean_wait_s", "B heavy user", COLORS[0]),
-            ("C-burst", "heavy_user_mean_wait_s", "C burst user", COLORS[2]),
+            ("C-burst", "heavy_user_mean_wait_s", "C hog user", COLORS[2]),
         ],
     )
     chart(
         args.out / "quota_normal_user_wait.svg",
-        "Normal-user mean waiting time under dominant-user workloads",
+        "Other-user mean waiting time under dominant-user workloads",
         "Mean per-user wait (seconds)",
         data,
         [
             ("B-heavy", "normal_users_mean_wait_s", "B normal users", COLORS[1]),
-            ("C-burst", "normal_users_mean_wait_s", "C later users", COLORS[3]),
+            ("C-burst", "normal_users_mean_wait_s", "C light users", COLORS[3]),
         ],
     )
     chart(

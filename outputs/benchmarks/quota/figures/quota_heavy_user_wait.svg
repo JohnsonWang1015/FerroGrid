@@ -59,6 +59,6 @@
 <line x1="826" y1="98" x2="856" y2="98" stroke="#b33b3b" stroke-width="3"/>
 <text x="866" y="103" font-size="14">B heavy user</text>
 <line x1="826" y1="132" x2="856" y2="132" stroke="#548235" stroke-width="3"/>
-<text x="866" y="137" font-size="14">C burst user</text>
+<text x="866" y="137" font-size="14">C hog user</text>
 <text x="100" y="620" font-size="12" fill="#555">Points are across-seed means; bars show two-sided 95% Student-t confidence intervals.</text>
 </svg>

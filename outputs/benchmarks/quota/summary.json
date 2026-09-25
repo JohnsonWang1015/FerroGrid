@@ -602,6 +602,456 @@
   {
     "scenario": "A-balanced",
     "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation",
+    "n": 20,
+    "mean": -0.5434692742852021,
+    "standard_deviation": 0.02552711787287898,
+    "ci_low": -0.5554161959006342,
+    "ci_high": -0.53152235266977
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation_percent",
+    "n": 20,
+    "mean": -54.346927428520225,
+    "standard_deviation": 2.552711787287899,
+    "ci_low": -55.54161959006344,
+    "ci_high": -53.15223526697701
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.hard_rejected_jobs",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.jain_gpu_seconds",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.jain_mean_wait",
+    "n": 20,
+    "mean": -0.013028279870106064,
+    "standard_deviation": 0.015782993055173434,
+    "ci_low": -0.020414863103906947,
+    "ci_high": -0.00564169663630518
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.jobs_never_started",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.makespan_s",
+    "n": 20,
+    "mean": 6898.25,
+    "standard_deviation": 795.975196320774,
+    "ci_low": 6525.726422303996,
+    "ci_high": 7270.773577696004
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.mean_turnaround_s",
+    "n": 20,
+    "mean": 2777.4262499999995,
+    "standard_deviation": 74.17833249101562,
+    "ci_low": 2742.7101207351616,
+    "ci_high": 2812.1423792648375
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.mean_wait_s",
+    "n": 20,
+    "mean": 2777.4262499999995,
+    "standard_deviation": 74.17833249101552,
+    "ci_low": 2742.7101207351616,
+    "ci_high": 2812.1423792648375
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.normal_users_mean_wait_s",
+    "n": 20,
+    "mean": 2705.239049471683,
+    "standard_deviation": 49.23884895297284,
+    "ci_low": 2682.1948236485923,
+    "ci_high": 2728.2832752947734
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.normal_users_p95_wait_s",
+    "n": 20,
+    "mean": 5150.125,
+    "standard_deviation": 85.94924680481958,
+    "ci_low": 5109.899976572128,
+    "ci_high": 5190.350023427872
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.p50_wait_s",
+    "n": 20,
+    "mean": 2685.8,
+    "standard_deviation": 76.08347216605,
+    "ci_low": 2650.192248168234,
+    "ci_high": 2721.4077518317663
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.p95_turnaround_s",
+    "n": 20,
+    "mean": 5704.5,
+    "standard_deviation": 560.6317395299886,
+    "ci_low": 5442.119284690021,
+    "ci_high": 5966.880715309979
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.p95_wait_s",
+    "n": 20,
+    "mean": 5706.8,
+    "standard_deviation": 560.6435775540746,
+    "ci_low": 5444.413744387879,
+    "ci_high": 5969.186255612121
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.quota_block_attempts",
+    "n": 20,
+    "mean": 47523.7,
+    "standard_deviation": 527.4769239153102,
+    "ci_low": 47276.83603770911,
+    "ci_high": 47770.563962290886
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.quota_block_events",
+    "n": 20,
+    "mean": 236.0,
+    "standard_deviation": 0.0,
+    "ci_low": 236.0,
+    "ci_high": 236.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_jobs",
+    "n": 20,
+    "mean": 236.0,
+    "standard_deviation": 0.0,
+    "ci_low": 236.0,
+    "ci_high": 236.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_time_s",
+    "n": 20,
+    "mean": 1152922.85,
+    "standard_deviation": 25769.060745653067,
+    "ci_low": 1140862.6969359242,
+    "ci_high": 1164983.003064076
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.quota_unused_gpu_seconds",
+    "n": 20,
+    "mean": 54607.0,
+    "standard_deviation": 6461.445430600771,
+    "ci_low": 51582.98520654798,
+    "ci_high": 57631.01479345202
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.throughput_per_hour",
+    "n": 20,
+    "mean": -86.86171500766264,
+    "standard_deviation": 4.46247093950433,
+    "ci_low": -88.95019169315809,
+    "ci_high": -84.77323832216719
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.alice.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.alice.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.alice.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.alice.mean_wait_s",
+    "n": 20,
+    "mean": 2880.794842783332,
+    "standard_deviation": 661.0637348895267,
+    "ci_low": 2571.411046976098,
+    "ci_high": 3190.178638590566
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.alice.p50_wait_s",
+    "n": 20,
+    "mean": 2875.35,
+    "standard_deviation": 714.4238956191057,
+    "ci_low": 2540.9931672522957,
+    "ci_high": 3209.706832747704
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.alice.p95_wait_s",
+    "n": 20,
+    "mean": 5453.35,
+    "standard_deviation": 1118.1154857498773,
+    "ci_low": 4930.0618586682795,
+    "ci_high": 5976.638141331721
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.bob.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.bob.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.bob.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.bob.mean_wait_s",
+    "n": 20,
+    "mean": 2820.979711911095,
+    "standard_deviation": 675.0986108764953,
+    "ci_low": 2505.02746743944,
+    "ci_high": 3136.93195638275
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.bob.p50_wait_s",
+    "n": 20,
+    "mean": 2823.35,
+    "standard_deviation": 779.2984209834949,
+    "ci_low": 2458.631303714612,
+    "ci_high": 3188.068696285388
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.bob.p95_wait_s",
+    "n": 20,
+    "mean": 5293.65,
+    "standard_deviation": 1158.6054355401404,
+    "ci_low": 4751.4121966356915,
+    "ci_high": 5835.887803364308
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.carol.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.carol.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.carol.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.carol.mean_wait_s",
+    "n": 20,
+    "mean": 2412.3548589382044,
+    "standard_deviation": 656.9875970359238,
+    "ci_low": 2104.8787324445684,
+    "ci_high": 2719.8309854318404
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.carol.p50_wait_s",
+    "n": 20,
+    "mean": 2349.75,
+    "standard_deviation": 643.964192777011,
+    "ci_low": 2048.368944270801,
+    "ci_high": 2651.131055729199
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.carol.p95_wait_s",
+    "n": 20,
+    "mean": 4727.7,
+    "standard_deviation": 1218.5271134922643,
+    "ci_low": 4157.418310399723,
+    "ci_high": 5297.981689600277
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.dave.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.dave.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.dave.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.dave.mean_wait_s",
+    "n": 20,
+    "mean": 2706.8267842540995,
+    "standard_deviation": 653.8677519595518,
+    "ci_low": 2400.810773421202,
+    "ci_high": 3012.842795086997
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.dave.p50_wait_s",
+    "n": 20,
+    "mean": 2720.7,
+    "standard_deviation": 701.3048064707295,
+    "ci_low": 2392.483019408815,
+    "ci_high": 3048.9169805911847
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.dave.p95_wait_s",
+    "n": 20,
+    "mean": 5125.8,
+    "standard_deviation": 1213.6955137100904,
+    "ci_low": 4557.779542715969,
+    "ci_high": 5693.820457284031
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 1,
     "metric": "quota_block_attempts",
     "n": 20,
     "mean": 47523.7,
@@ -1052,6 +1502,456 @@
   {
     "scenario": "A-balanced",
     "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation",
+    "n": 20,
+    "mean": -0.11459074103690377,
+    "standard_deviation": 0.051820320521646236,
+    "ci_low": -0.13884311885886017,
+    "ci_high": -0.09033836321494737
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation_percent",
+    "n": 20,
+    "mean": -11.45907410369038,
+    "standard_deviation": 5.182032052164625,
+    "ci_low": -13.884311885886019,
+    "ci_high": -9.033836321494741
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.hard_rejected_jobs",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.jain_gpu_seconds",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.jain_mean_wait",
+    "n": 20,
+    "mean": -0.019165143462549678,
+    "standard_deviation": 0.020705855713247248,
+    "ci_low": -0.028855670862410573,
+    "ci_high": -0.009474616062688785
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.jobs_never_started",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.makespan_s",
+    "n": 20,
+    "mean": 752.5,
+    "standard_deviation": 406.1072583236575,
+    "ci_low": 562.4381368938067,
+    "ci_high": 942.5618631061933
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.mean_turnaround_s",
+    "n": 20,
+    "mean": 42.67270833333341,
+    "standard_deviation": 32.83083227725394,
+    "ci_low": 27.30758244097915,
+    "ci_high": 58.037834225687675
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.mean_wait_s",
+    "n": 20,
+    "mean": 42.67270833333333,
+    "standard_deviation": 32.83083227725396,
+    "ci_low": 27.30758244097906,
+    "ci_high": 58.037834225687604
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.normal_users_mean_wait_s",
+    "n": 20,
+    "mean": 5.772715113095979,
+    "standard_deviation": 11.774207879428467,
+    "ci_low": 0.2622795316164135,
+    "ci_high": 11.283150694575543
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.normal_users_p95_wait_s",
+    "n": 20,
+    "mean": 27.5125,
+    "standard_deviation": 31.784893279504235,
+    "ci_low": 12.63688300100637,
+    "ci_high": 42.38811699899363
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.p50_wait_s",
+    "n": 20,
+    "mean": -6.6,
+    "standard_deviation": 36.91155859476455,
+    "ci_low": -23.87494264848428,
+    "ci_high": 10.674942648484278
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.p95_turnaround_s",
+    "n": 20,
+    "mean": 331.7,
+    "standard_deviation": 307.9707949243171,
+    "ci_low": 187.56688771033654,
+    "ci_high": 475.8331122896634
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.p95_wait_s",
+    "n": 20,
+    "mean": 331.05,
+    "standard_deviation": 314.29193184212136,
+    "ci_low": 183.9585385675352,
+    "ci_high": 478.14146143246484
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.quota_block_attempts",
+    "n": 20,
+    "mean": 40276.05,
+    "standard_deviation": 851.0701297716151,
+    "ci_low": 39877.741496068986,
+    "ci_high": 40674.35850393102
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.quota_block_events",
+    "n": 20,
+    "mean": 232.0,
+    "standard_deviation": 0.0,
+    "ci_low": 232.0,
+    "ci_high": 232.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_jobs",
+    "n": 20,
+    "mean": 232.0,
+    "standard_deviation": 0.0,
+    "ci_low": 232.0,
+    "ci_high": 232.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_time_s",
+    "n": 20,
+    "mean": 496582.0,
+    "standard_deviation": 14327.893259762857,
+    "ci_low": 489876.4166066422,
+    "ci_high": 503287.5833933578
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.quota_unused_gpu_seconds",
+    "n": 20,
+    "mean": 5479.15,
+    "standard_deviation": 3310.262961012709,
+    "ci_low": 3929.917050215884,
+    "ci_high": 7028.382949784115
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.throughput_per_hour",
+    "n": 20,
+    "mean": -18.33797232532261,
+    "standard_deviation": 8.360375676091424,
+    "ci_low": -22.250703616619187,
+    "ci_high": -14.425241034026033
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.alice.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.alice.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.alice.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.alice.mean_wait_s",
+    "n": 20,
+    "mean": 100.49306742008477,
+    "standard_deviation": 366.9891366971179,
+    "ci_low": -71.26116161858494,
+    "ci_high": 272.2472964587545
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.alice.p50_wait_s",
+    "n": 20,
+    "mean": 113.4,
+    "standard_deviation": 421.12310989093265,
+    "ci_low": -83.68941719814168,
+    "ci_high": 310.4894171981417
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.alice.p95_wait_s",
+    "n": 20,
+    "mean": 204.2,
+    "standard_deviation": 534.2579310053387,
+    "ci_low": -45.837534825856835,
+    "ci_high": 454.2375348258568
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.bob.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.bob.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.bob.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.bob.mean_wait_s",
+    "n": 20,
+    "mean": 77.96605809489816,
+    "standard_deviation": 369.95732049492244,
+    "ci_low": -95.17730775698936,
+    "ci_high": 251.10942394678568
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.bob.p50_wait_s",
+    "n": 20,
+    "mean": 109.05,
+    "standard_deviation": 465.0093915293823,
+    "ci_low": -108.57859319671302,
+    "ci_high": 326.678593196713
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.bob.p95_wait_s",
+    "n": 20,
+    "mean": 79.65,
+    "standard_deviation": 578.8803416942054,
+    "ci_low": -191.2712258655687,
+    "ci_high": 350.57122586556875
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.carol.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.carol.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.carol.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.carol.mean_wait_s",
+    "n": 20,
+    "mean": -173.0664906065436,
+    "standard_deviation": 348.6164366738665,
+    "ci_low": -336.2221301712784,
+    "ci_high": -9.910851041808797
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.carol.p50_wait_s",
+    "n": 20,
+    "mean": -211.0,
+    "standard_deviation": 368.8592657027025,
+    "ci_low": -383.62946629622957,
+    "ci_high": -38.370533703770434
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.carol.p95_wait_s",
+    "n": 20,
+    "mean": -193.2,
+    "standard_deviation": 612.9501224664034,
+    "ci_low": -480.0661908384006,
+    "ci_high": 93.66619083840061
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.dave.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.dave.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.dave.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.dave.mean_wait_s",
+    "n": 20,
+    "mean": 17.698225543944694,
+    "standard_deviation": 369.17399749625633,
+    "ci_low": -155.07853807296934,
+    "ci_high": 190.4749891608587
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.dave.p50_wait_s",
+    "n": 20,
+    "mean": 62.15,
+    "standard_deviation": 452.7728924143573,
+    "ci_low": -149.75180114355194,
+    "ci_high": 274.0518011435519
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.dave.p95_wait_s",
+    "n": 20,
+    "mean": 19.4,
+    "standard_deviation": 640.8750103938899,
+    "ci_low": -280.5352904857155,
+    "ci_high": 319.33529048571546
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 2,
     "metric": "quota_block_attempts",
     "n": 20,
     "mean": 40276.05,
@@ -1498,6 +2398,456 @@
     "standard_deviation": 108.68025289085892,
     "ci_low": 3852.286660515369,
     "ci_high": 3954.013339484631
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation",
+    "n": 20,
+    "mean": 0.00010964192602770928,
+    "standard_deviation": 0.003393349614439635,
+    "ci_low": -0.0014784763276408162,
+    "ci_high": 0.0016977601796962349
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation_percent",
+    "n": 20,
+    "mean": 0.010964192602769174,
+    "standard_deviation": 0.3393349614439614,
+    "ci_low": -0.1478476327640824,
+    "ci_high": 0.16977601796962075
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.hard_rejected_jobs",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.jain_gpu_seconds",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.jain_mean_wait",
+    "n": 20,
+    "mean": 0.00010609825556156526,
+    "standard_deviation": 0.0002289987316557252,
+    "ci_low": -1.0752181830355617e-6,
+    "ci_high": 0.0002132717293061661
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.jobs_never_started",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.makespan_s",
+    "n": 20,
+    "mean": -0.65,
+    "standard_deviation": 19.25254596970981,
+    "ci_low": -9.660365319854508,
+    "ci_high": 8.360365319854507
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.mean_turnaround_s",
+    "n": 20,
+    "mean": 0.1591666666666697,
+    "standard_deviation": 0.6531729238272918,
+    "ci_low": -0.14652415832763663,
+    "ci_high": 0.464857491660976
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.mean_wait_s",
+    "n": 20,
+    "mean": 0.15916666666660148,
+    "standard_deviation": 0.6531729238272276,
+    "ci_low": -0.14652415832767482,
+    "ci_high": 0.46485749166087775
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.normal_users_mean_wait_s",
+    "n": 20,
+    "mean": -0.038660245249923265,
+    "standard_deviation": 0.8119078496299037,
+    "ci_low": -0.41864044852966636,
+    "ci_high": 0.3413199580298198
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.normal_users_p95_wait_s",
+    "n": 20,
+    "mean": 1.225,
+    "standard_deviation": 5.233306793987909,
+    "ci_low": -1.2242348242614467,
+    "ci_high": 3.674234824261447
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.p50_wait_s",
+    "n": 20,
+    "mean": 5.75,
+    "standard_deviation": 13.821702995080257,
+    "ci_low": -0.7186817797572296,
+    "ci_high": 12.21868177975723
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.p95_turnaround_s",
+    "n": 20,
+    "mean": 0.65,
+    "standard_deviation": 8.21599851381117,
+    "ci_low": -3.1951614759570512,
+    "ci_high": 4.495161475957051
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.p95_wait_s",
+    "n": 20,
+    "mean": 2.75,
+    "standard_deviation": 11.219696027405039,
+    "ci_low": -2.5009190287711087,
+    "ci_high": 8.000919028771108
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.quota_block_attempts",
+    "n": 20,
+    "mean": 5048.45,
+    "standard_deviation": 1272.1836790172615,
+    "ci_low": 4453.056553339146,
+    "ci_high": 5643.843446660853
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.quota_block_events",
+    "n": 20,
+    "mean": 722.85,
+    "standard_deviation": 101.21071037561609,
+    "ci_low": 675.4824738452223,
+    "ci_high": 770.2175261547777
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_jobs",
+    "n": 20,
+    "mean": 198.8,
+    "standard_deviation": 8.395487509746873,
+    "ci_low": 194.87083605357392,
+    "ci_high": 202.7291639464261
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_time_s",
+    "n": 20,
+    "mean": 58875.35,
+    "standard_deviation": 12004.038203323169,
+    "ci_low": 53257.351752100636,
+    "ci_high": 64493.34824789936
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.quota_unused_gpu_seconds",
+    "n": 20,
+    "mean": 22.9,
+    "standard_deviation": 94.93094443081411,
+    "ci_low": -21.528539000825752,
+    "ci_high": 67.32853900082574
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.throughput_per_hour",
+    "n": 20,
+    "mean": 0.0156398072601192,
+    "standard_deviation": 0.543248734204263,
+    "ci_low": -0.23860550462902463,
+    "ci_high": 0.26988511914926305
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.alice.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.alice.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.alice.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.alice.mean_wait_s",
+    "n": 20,
+    "mean": 0.3686118255755787,
+    "standard_deviation": 4.289189445632175,
+    "ci_low": -1.6387675564559738,
+    "ci_high": 2.375991207607131
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.alice.p50_wait_s",
+    "n": 20,
+    "mean": 1.35,
+    "standard_deviation": 15.100627383271897,
+    "ci_low": -5.71722993916473,
+    "ci_high": 8.41722993916473
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.alice.p95_wait_s",
+    "n": 20,
+    "mean": 6.65,
+    "standard_deviation": 25.24672985598437,
+    "ci_low": -5.16569749226916,
+    "ci_high": 18.46569749226916
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.bob.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.bob.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.bob.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.bob.mean_wait_s",
+    "n": 20,
+    "mean": -0.33132405499403605,
+    "standard_deviation": 5.9563238908820635,
+    "ci_low": -3.1189374077766727,
+    "ci_high": 2.456289297788601
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.bob.p50_wait_s",
+    "n": 20,
+    "mean": -2.95,
+    "standard_deviation": 28.999954627913688,
+    "ci_low": -16.522240568484474,
+    "ci_high": 10.622240568484475
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.bob.p95_wait_s",
+    "n": 20,
+    "mean": 5.6,
+    "standard_deviation": 18.5398574910778,
+    "ci_low": -3.076820677923573,
+    "ci_high": 14.276820677923572
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.carol.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.carol.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.carol.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.carol.mean_wait_s",
+    "n": 20,
+    "mean": -2.2161174232397345,
+    "standard_deviation": 3.8689659711283264,
+    "ci_low": -4.02682842555593,
+    "ci_high": -0.4054064209235384
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.carol.p50_wait_s",
+    "n": 20,
+    "mean": 5.2,
+    "standard_deviation": 22.218058089382115,
+    "ci_low": -5.198251763587348,
+    "ci_high": 15.59825176358735
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.carol.p95_wait_s",
+    "n": 20,
+    "mean": -5.75,
+    "standard_deviation": 32.273298397803785,
+    "ci_low": -20.85419500352817,
+    "ci_high": 9.354195003528167
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.dave.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.dave.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.dave.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.dave.mean_wait_s",
+    "n": 20,
+    "mean": 2.0241886716585555,
+    "standard_deviation": 7.117864230357072,
+    "ci_low": -1.3070360460253125,
+    "ci_high": 5.355413389342424
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.dave.p50_wait_s",
+    "n": 20,
+    "mean": -3.0,
+    "standard_deviation": 22.391257692515435,
+    "ci_low": -13.479310741446188,
+    "ci_high": 7.479310741446188
+  },
+  {
+    "scenario": "A-balanced",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.dave.p95_wait_s",
+    "n": 20,
+    "mean": -1.6,
+    "standard_deviation": 17.72717212583404,
+    "ci_low": -9.896476590317373,
+    "ci_high": 6.696476590317374
   },
   {
     "scenario": "A-balanced",
@@ -2462,6 +3812,486 @@
   {
     "scenario": "B-heavy",
     "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation",
+    "n": 20,
+    "mean": -0.8042988745823896,
+    "standard_deviation": 0.010116002096997508,
+    "ci_low": -0.8090332548879225,
+    "ci_high": -0.7995644942768566
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation_percent",
+    "n": 20,
+    "mean": -80.42988745823894,
+    "standard_deviation": 1.0116002096997503,
+    "ci_low": -80.90332548879223,
+    "ci_high": -79.95644942768564
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.hard_rejected_jobs",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.heavy_to_normal_wait_ratio",
+    "n": 20,
+    "mean": 9.372742248172045,
+    "standard_deviation": 2.0156970726408963,
+    "ci_low": 8.429377821086376,
+    "ci_high": 10.316106675257714
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.heavy_user_mean_wait_s",
+    "n": 20,
+    "mean": 12644.594436068111,
+    "standard_deviation": 795.2017217770534,
+    "ci_low": 12272.432851441257,
+    "ci_high": 13016.756020694966
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.heavy_user_p95_wait_s",
+    "n": 20,
+    "mean": 24007.7,
+    "standard_deviation": 1488.5809243776612,
+    "ci_low": 23311.03068894308,
+    "ci_high": 24704.369311056922
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.jain_gpu_seconds",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.jain_mean_wait",
+    "n": 20,
+    "mean": -0.5818302222150025,
+    "standard_deviation": 0.03502972060691273,
+    "ci_low": -0.5982244476965208,
+    "ci_high": -0.5654359967334841
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.jobs_never_started",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.makespan_s",
+    "n": 20,
+    "mean": 25207.5,
+    "standard_deviation": 1533.5811718087557,
+    "ci_low": 24489.77016689701,
+    "ci_high": 25925.22983310299
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.mean_turnaround_s",
+    "n": 20,
+    "mean": 8861.282083333334,
+    "standard_deviation": 893.0935398466127,
+    "ci_low": 8443.30624411287,
+    "ci_high": 9279.257922553797
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.mean_wait_s",
+    "n": 20,
+    "mean": 8861.282083333334,
+    "standard_deviation": 893.0935398466127,
+    "ci_low": 8443.30624411287,
+    "ci_high": 9279.257922553797
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.normal_users_mean_wait_s",
+    "n": 20,
+    "mean": -565.0495712482816,
+    "standard_deviation": 296.01606294343173,
+    "ci_low": -703.5877610472679,
+    "ci_high": -426.5113814492953
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.normal_users_p95_wait_s",
+    "n": 20,
+    "mean": -1005.7833333333334,
+    "standard_deviation": 457.5097899441462,
+    "ci_low": -1219.9020452840723,
+    "ci_high": -791.6646213825944
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.p50_wait_s",
+    "n": 20,
+    "mean": 6565.25,
+    "standard_deviation": 1369.1756596003688,
+    "ci_low": 5924.463430812651,
+    "ci_high": 7206.036569187349
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.p95_turnaround_s",
+    "n": 20,
+    "mean": 23339.35,
+    "standard_deviation": 1588.2088645289766,
+    "ci_low": 22596.053913542033,
+    "ci_high": 24082.646086457964
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.p95_wait_s",
+    "n": 20,
+    "mean": 23344.05,
+    "standard_deviation": 1580.0183368356338,
+    "ci_low": 22604.587154444067,
+    "ci_high": 24083.51284555593
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.quota_block_attempts",
+    "n": 20,
+    "mean": 48165.8,
+    "standard_deviation": 691.0057963044273,
+    "ci_low": 47842.40304914293,
+    "ci_high": 48489.19695085708
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.quota_block_events",
+    "n": 20,
+    "mean": 235.8,
+    "standard_deviation": 0.41039134083406176,
+    "ci_low": 235.60793314760357,
+    "ci_high": 235.99206685239645
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_jobs",
+    "n": 20,
+    "mean": 235.8,
+    "standard_deviation": 0.41039134083406176,
+    "ci_low": 235.60793314760357,
+    "ci_high": 235.99206685239645
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_time_s",
+    "n": 20,
+    "mean": 2613048.25,
+    "standard_deviation": 219595.10645441007,
+    "ci_low": 2510275.7577426345,
+    "ci_high": 2715820.7422573655
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.quota_unused_gpu_seconds",
+    "n": 20,
+    "mean": 201163.85,
+    "standard_deviation": 12296.813687742553,
+    "ci_low": 195408.83018230586,
+    "ci_high": 206918.86981769415
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.throughput_per_hour",
+    "n": 20,
+    "mean": -128.52759395876654,
+    "standard_deviation": 1.9274386478913579,
+    "ci_low": -129.42965264629967,
+    "ci_high": -127.62553527123342
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.alice.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.alice.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.alice.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.alice.mean_wait_s",
+    "n": 20,
+    "mean": -656.0770100351267,
+    "standard_deviation": 641.5077371214944,
+    "ci_low": -956.3084223414223,
+    "ci_high": -355.84559772883114
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.alice.p50_wait_s",
+    "n": 20,
+    "mean": -734.35,
+    "standard_deviation": 740.1153732962678,
+    "ci_low": -1080.73067623533,
+    "ci_high": -387.96932376466987
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.alice.p95_wait_s",
+    "n": 20,
+    "mean": -1151.1,
+    "standard_deviation": 1088.7301584390582,
+    "ci_low": -1660.6355428686118,
+    "ci_high": -641.564457131388
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.bob.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.bob.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.bob.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.bob.mean_wait_s",
+    "n": 20,
+    "mean": -512.0140098964733,
+    "standard_deviation": 464.234131021338,
+    "ci_low": -729.2797741766095,
+    "ci_high": -294.74824561633716
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.bob.p50_wait_s",
+    "n": 20,
+    "mean": -427.85,
+    "standard_deviation": 616.0123268588911,
+    "ci_low": -716.149330138719,
+    "ci_high": -139.550669861281
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.bob.p95_wait_s",
+    "n": 20,
+    "mean": -848.85,
+    "standard_deviation": 635.7951734887415,
+    "ci_low": -1146.4078809549096,
+    "ci_high": -551.2921190450904
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.carol.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.carol.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.carol.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.carol.mean_wait_s",
+    "n": 20,
+    "mean": -527.0576938132446,
+    "standard_deviation": 441.2810232902496,
+    "ci_low": -733.581196461674,
+    "ci_high": -320.53419116481507
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.carol.p50_wait_s",
+    "n": 20,
+    "mean": -399.95,
+    "standard_deviation": 528.7351814521738,
+    "ci_low": -647.4028381773009,
+    "ci_high": -152.4971618226991
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.carol.p95_wait_s",
+    "n": 20,
+    "mean": -1017.4,
+    "standard_deviation": 880.4628208773887,
+    "ci_low": -1429.4645487166429,
+    "ci_high": -605.3354512833571
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.hog.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.hog.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.hog.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.hog.mean_wait_s",
+    "n": 20,
+    "mean": 12644.594436068111,
+    "standard_deviation": 795.2017217770534,
+    "ci_low": 12272.432851441257,
+    "ci_high": 13016.756020694966
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.hog.p50_wait_s",
+    "n": 20,
+    "mean": 12578.9,
+    "standard_deviation": 851.1797323962227,
+    "ci_low": 12180.540201051208,
+    "ci_high": 12977.259798948791
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.hog.p95_wait_s",
+    "n": 20,
+    "mean": 24007.7,
+    "standard_deviation": 1488.5809243776612,
+    "ci_low": 23311.03068894308,
+    "ci_high": 24704.369311056922
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 1,
     "metric": "quota_block_attempts",
     "n": 20,
     "mean": 48165.8,
@@ -2942,6 +4772,486 @@
   {
     "scenario": "B-heavy",
     "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation",
+    "n": 20,
+    "mean": -0.6291596355929674,
+    "standard_deviation": 0.018409837358194913,
+    "ci_low": -0.6377756056749202,
+    "ci_high": -0.6205436655110146
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation_percent",
+    "n": 20,
+    "mean": -62.91596355929674,
+    "standard_deviation": 1.8409837358194907,
+    "ci_low": -63.777560567492024,
+    "ci_high": -62.05436655110146
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.hard_rejected_jobs",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.heavy_to_normal_wait_ratio",
+    "n": 20,
+    "mean": 15.988292842154129,
+    "standard_deviation": 5.046829898675017,
+    "ci_low": 13.62633088835485,
+    "ci_high": 18.350254795953408
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.heavy_user_mean_wait_s",
+    "n": 20,
+    "mean": 4962.875979158684,
+    "standard_deviation": 396.20724694942015,
+    "ci_low": 4777.447410749874,
+    "ci_high": 5148.3045475674935
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.heavy_user_p95_wait_s",
+    "n": 20,
+    "mean": 9437.0,
+    "standard_deviation": 721.8369840753155,
+    "ci_low": 9099.17377493172,
+    "ci_high": 9774.82622506828
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.jain_gpu_seconds",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.jain_mean_wait",
+    "n": 20,
+    "mean": -0.6406626265324747,
+    "standard_deviation": 0.0332194579794404,
+    "ci_low": -0.6562096327618449,
+    "ci_high": -0.6251156203031046
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.jobs_never_started",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.makespan_s",
+    "n": 20,
+    "mean": 9903.4,
+    "standard_deviation": 761.7879522613406,
+    "ci_low": 9546.876361155675,
+    "ci_high": 10259.923638844324
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.mean_turnaround_s",
+    "n": 20,
+    "mean": 3089.403333333333,
+    "standard_deviation": 438.57400312418685,
+    "ci_low": 2884.146740560762,
+    "ci_high": 3294.6599261059046
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.mean_wait_s",
+    "n": 20,
+    "mean": 3089.4033333333336,
+    "standard_deviation": 438.57400312418685,
+    "ci_low": 2884.1467405607623,
+    "ci_high": 3294.659926105905
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.normal_users_mean_wait_s",
+    "n": 20,
+    "mean": -1576.1953397213508,
+    "standard_deviation": 215.11395914361236,
+    "ci_low": -1676.870614582851,
+    "ci_high": -1475.5200648598507
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.normal_users_p95_wait_s",
+    "n": 20,
+    "mean": -2920.95,
+    "standard_deviation": 263.83776414583576,
+    "ci_low": -3044.428455465982,
+    "ci_high": -2797.4715445340175
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.p50_wait_s",
+    "n": 20,
+    "mean": 2066.2,
+    "standard_deviation": 652.7761444299585,
+    "ci_low": 1760.694871345647,
+    "ci_high": 2371.7051286543524
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.p95_turnaround_s",
+    "n": 20,
+    "mean": 9125.35,
+    "standard_deviation": 775.2164570383925,
+    "ci_low": 8762.541699691628,
+    "ci_high": 9488.158300308372
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.p95_wait_s",
+    "n": 20,
+    "mean": 9129.1,
+    "standard_deviation": 773.9541602092874,
+    "ci_low": 8766.882466003275,
+    "ci_high": 9491.317533996726
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.quota_block_attempts",
+    "n": 20,
+    "mean": 41904.6,
+    "standard_deviation": 1019.4641213582958,
+    "ci_low": 41427.48158779754,
+    "ci_high": 42381.718412202456
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.quota_block_events",
+    "n": 20,
+    "mean": 229.85,
+    "standard_deviation": 1.694418080515829,
+    "ci_low": 229.05699704163624,
+    "ci_high": 230.64300295836375
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_jobs",
+    "n": 20,
+    "mean": 229.85,
+    "standard_deviation": 1.694418080515829,
+    "ci_low": 229.05699704163624,
+    "ci_high": 230.64300295836375
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_time_s",
+    "n": 20,
+    "mean": 1227797.35,
+    "standard_deviation": 110437.19194054672,
+    "ci_low": 1176111.747179013,
+    "ci_high": 1279482.9528209872
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.quota_unused_gpu_seconds",
+    "n": 20,
+    "mean": 78765.5,
+    "standard_deviation": 6089.375480034229,
+    "ci_low": 75915.61730234555,
+    "ci_high": 81615.38269765445
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.throughput_per_hour",
+    "n": 20,
+    "mean": -100.53552550324837,
+    "standard_deviation": 2.896361025223231,
+    "ci_low": -101.89104861050434,
+    "ci_high": -99.18000239599239
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.alice.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.alice.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.alice.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.alice.mean_wait_s",
+    "n": 20,
+    "mean": -1615.7959610939206,
+    "standard_deviation": 424.0883616600687,
+    "ci_low": -1814.2731428893937,
+    "ci_high": -1417.3187792984475
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.alice.p50_wait_s",
+    "n": 20,
+    "mean": -1671.35,
+    "standard_deviation": 565.1847648522141,
+    "ci_low": -1935.861572264085,
+    "ci_high": -1406.8384277359148
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.alice.p95_wait_s",
+    "n": 20,
+    "mean": -2992.1,
+    "standard_deviation": 632.7502126265525,
+    "ci_low": -3288.2328117824404,
+    "ci_high": -2695.9671882175594
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.bob.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.bob.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.bob.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.bob.mean_wait_s",
+    "n": 20,
+    "mean": -1589.524876707145,
+    "standard_deviation": 348.9517220202733,
+    "ci_low": -1752.8374328408506,
+    "ci_high": -1426.2123205734395
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.bob.p50_wait_s",
+    "n": 20,
+    "mean": -1480.25,
+    "standard_deviation": 507.7785338842951,
+    "ci_low": -1717.894937925401,
+    "ci_high": -1242.605062074599
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.bob.p95_wait_s",
+    "n": 20,
+    "mean": -2877.8,
+    "standard_deviation": 365.6070078793982,
+    "ci_low": -3048.9073802745456,
+    "ci_high": -2706.6926197254547
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.carol.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.carol.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.carol.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.carol.mean_wait_s",
+    "n": 20,
+    "mean": -1523.2651813629866,
+    "standard_deviation": 281.3280643868144,
+    "ci_low": -1654.9292552387678,
+    "ci_high": -1391.6011074872054
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.carol.p50_wait_s",
+    "n": 20,
+    "mean": -1386.15,
+    "standard_deviation": 417.5549475344847,
+    "ci_low": -1581.569485003058,
+    "ci_high": -1190.7305149969422
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.carol.p95_wait_s",
+    "n": 20,
+    "mean": -2892.95,
+    "standard_deviation": 420.89909717175686,
+    "ci_low": -3089.9345772232496,
+    "ci_high": -2695.96542277675
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.hog.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.hog.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.hog.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.hog.mean_wait_s",
+    "n": 20,
+    "mean": 4962.875979158684,
+    "standard_deviation": 396.20724694942015,
+    "ci_low": 4777.447410749874,
+    "ci_high": 5148.3045475674935
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.hog.p50_wait_s",
+    "n": 20,
+    "mean": 4938.6,
+    "standard_deviation": 442.53473250546585,
+    "ci_low": 4731.489750120751,
+    "ci_high": 5145.71024987925
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.hog.p95_wait_s",
+    "n": 20,
+    "mean": 9437.0,
+    "standard_deviation": 721.8369840753155,
+    "ci_low": 9099.17377493172,
+    "ci_high": 9774.82622506828
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 2,
     "metric": "quota_block_attempts",
     "n": 20,
     "mean": 41904.6,
@@ -3418,6 +5728,486 @@
     "standard_deviation": 405.9601322141972,
     "ci_low": 5727.956993241243,
     "ci_high": 6107.943006758756
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation",
+    "n": 20,
+    "mean": -0.2832018779534017,
+    "standard_deviation": 0.034453910433849114,
+    "ci_low": -0.2993266190756901,
+    "ci_high": -0.2670771368311133
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation_percent",
+    "n": 20,
+    "mean": -28.320187795340168,
+    "standard_deviation": 3.445391043384912,
+    "ci_low": -29.932661907569006,
+    "ci_high": -26.70771368311133
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.hard_rejected_jobs",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.heavy_to_normal_wait_ratio",
+    "n": 20,
+    "mean": 2.5774245900195156,
+    "standard_deviation": 0.8485409546636004,
+    "ci_low": 2.1802997628716607,
+    "ci_high": 2.9745494171673705
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.heavy_user_mean_wait_s",
+    "n": 20,
+    "mean": 1130.7249828597653,
+    "standard_deviation": 199.3286104814882,
+    "ci_low": 1037.4373936773845,
+    "ci_high": 1224.012572042146
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.heavy_user_p95_wait_s",
+    "n": 20,
+    "mean": 2158.8,
+    "standard_deviation": 350.64385890740147,
+    "ci_low": 1994.6955085270301,
+    "ci_high": 2322.90449147297
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.jain_gpu_seconds",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.jain_mean_wait",
+    "n": 20,
+    "mean": -0.2980655078013107,
+    "standard_deviation": 0.08389512967175809,
+    "ci_low": -0.3373291858669759,
+    "ci_high": -0.25880182973564547
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.jobs_never_started",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.makespan_s",
+    "n": 20,
+    "mean": 2256.0,
+    "standard_deviation": 366.26378184955286,
+    "ci_low": 2084.58524357827,
+    "ci_high": 2427.41475642173
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.mean_turnaround_s",
+    "n": 20,
+    "mean": 494.44541666666663,
+    "standard_deviation": 143.31975930791074,
+    "ci_low": 427.3704754641053,
+    "ci_high": 561.520357869228
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.mean_wait_s",
+    "n": 20,
+    "mean": 494.44541666666663,
+    "standard_deviation": 143.31975930791089,
+    "ci_low": 427.37047546410525,
+    "ci_high": 561.5203578692281
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.normal_users_mean_wait_s",
+    "n": 20,
+    "mean": -1101.5786132594826,
+    "standard_deviation": 250.48078817520226,
+    "ci_low": -1218.8058833885607,
+    "ci_high": -984.3513431304045
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.normal_users_p95_wait_s",
+    "n": 20,
+    "mean": -2040.1166666666668,
+    "standard_deviation": 366.45011587786496,
+    "ci_low": -2211.618629095813,
+    "ci_high": -1868.6147042375208
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.p50_wait_s",
+    "n": 20,
+    "mean": -30.55,
+    "standard_deviation": 133.63834739601072,
+    "ci_low": -93.09395302699976,
+    "ci_high": 31.99395302699976
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.p95_turnaround_s",
+    "n": 20,
+    "mean": 2012.25,
+    "standard_deviation": 368.3657900282787,
+    "ci_low": 1839.8514847743465,
+    "ci_high": 2184.6485152256537
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.p95_wait_s",
+    "n": 20,
+    "mean": 2017.55,
+    "standard_deviation": 364.1543159012037,
+    "ci_low": 1847.1224926857035,
+    "ci_high": 2187.9775073142964
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.quota_block_attempts",
+    "n": 20,
+    "mean": 33511.85,
+    "standard_deviation": 2016.3460770987651,
+    "ci_low": 32568.181832969036,
+    "ci_high": 34455.51816703096
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.quota_block_events",
+    "n": 20,
+    "mean": 184.5,
+    "standard_deviation": 18.922278710000743,
+    "ci_low": 175.64420273924,
+    "ci_high": 193.35579726076
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_jobs",
+    "n": 20,
+    "mean": 179.45,
+    "standard_deviation": 10.007760146900742,
+    "ci_low": 174.76627790428716,
+    "ci_high": 184.1337220957128
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_time_s",
+    "n": 20,
+    "mean": 540513.1,
+    "standard_deviation": 57734.16299949824,
+    "ci_low": 513492.9905100681,
+    "ci_high": 567533.2094899319
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.quota_unused_gpu_seconds",
+    "n": 20,
+    "mean": 17704.8,
+    "standard_deviation": 2916.347365780479,
+    "ci_low": 16339.923104932726,
+    "ci_high": 19069.676895067274
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.throughput_per_hour",
+    "n": 20,
+    "mean": -45.24417693071199,
+    "standard_deviation": 5.434966940646049,
+    "ci_low": -47.78779052413488,
+    "ci_high": -42.7005633372891
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.alice.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.alice.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.alice.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.alice.mean_wait_s",
+    "n": 20,
+    "mean": -1091.7548472560393,
+    "standard_deviation": 260.0133509336109,
+    "ci_low": -1213.4434428130808,
+    "ci_high": -970.0662516989977
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.alice.p50_wait_s",
+    "n": 20,
+    "mean": -1139.45,
+    "standard_deviation": 358.952639450417,
+    "ci_low": -1307.4430757762022,
+    "ci_high": -971.4569242237978
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.alice.p95_wait_s",
+    "n": 20,
+    "mean": -2042.9,
+    "standard_deviation": 409.8095706673116,
+    "ci_low": -2234.694578706354,
+    "ci_high": -1851.105421293646
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.bob.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.bob.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.bob.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.bob.mean_wait_s",
+    "n": 20,
+    "mean": -1138.540320893877,
+    "standard_deviation": 290.9685915659027,
+    "ci_low": -1274.7162485211693,
+    "ci_high": -1002.3643932665847
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.bob.p50_wait_s",
+    "n": 20,
+    "mean": -1055.55,
+    "standard_deviation": 380.5445509571224,
+    "ci_low": -1233.6482852864392,
+    "ci_high": -877.4517147135608
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.bob.p95_wait_s",
+    "n": 20,
+    "mean": -2065.8,
+    "standard_deviation": 387.0595765376097,
+    "ci_low": -2246.9473760737433,
+    "ci_high": -1884.652623926257
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.carol.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.carol.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.carol.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.carol.mean_wait_s",
+    "n": 20,
+    "mean": -1074.4406716285318,
+    "standard_deviation": 269.69953109025533,
+    "ci_low": -1200.6624869427217,
+    "ci_high": -948.2188563143421
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.carol.p50_wait_s",
+    "n": 20,
+    "mean": -1003.3,
+    "standard_deviation": 328.22474649320134,
+    "ci_low": -1156.9121444703117,
+    "ci_high": -849.6878555296884
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.carol.p95_wait_s",
+    "n": 20,
+    "mean": -2011.65,
+    "standard_deviation": 361.6708702965344,
+    "ci_low": -2180.9152323515327,
+    "ci_high": -1842.3847676484677
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.hog.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.hog.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.hog.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.hog.mean_wait_s",
+    "n": 20,
+    "mean": 1130.7249828597653,
+    "standard_deviation": 199.3286104814882,
+    "ci_low": 1037.4373936773845,
+    "ci_high": 1224.012572042146
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.hog.p50_wait_s",
+    "n": 20,
+    "mean": 1117.2,
+    "standard_deviation": 235.02935986808114,
+    "ci_low": 1007.2041378093704,
+    "ci_high": 1227.1958621906297
+  },
+  {
+    "scenario": "B-heavy",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.hog.p95_wait_s",
+    "n": 20,
+    "mean": 2158.8,
+    "standard_deviation": 350.64385890740147,
+    "ci_low": 1994.6955085270301,
+    "ci_high": 2322.90449147297
   },
   {
     "scenario": "B-heavy",
@@ -4382,6 +7172,486 @@
   {
     "scenario": "C-burst",
     "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation",
+    "n": 20,
+    "mean": -0.7876152885338389,
+    "standard_deviation": 0.004670269787183914,
+    "ci_low": -0.7898010169559921,
+    "ci_high": -0.7854295601116856
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation_percent",
+    "n": 20,
+    "mean": -78.7615288533839,
+    "standard_deviation": 0.46702697871839266,
+    "ci_low": -78.98010169559922,
+    "ci_high": -78.54295601116857
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.hard_rejected_jobs",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.heavy_to_normal_wait_ratio",
+    "n": 20,
+    "mean": 5.219308253520671,
+    "standard_deviation": 0.1798296548472638,
+    "ci_low": 5.1351463516056475,
+    "ci_high": 5.3034701554356944
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.heavy_user_mean_wait_s",
+    "n": 20,
+    "mean": 12636.5346875,
+    "standard_deviation": 229.62140966876086,
+    "ci_low": 12529.069794823954,
+    "ci_high": 12743.999580176045
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.heavy_user_p95_wait_s",
+    "n": 20,
+    "mean": 23899.85,
+    "standard_deviation": 416.9051734917792,
+    "ci_low": 23704.734615114885,
+    "ci_high": 24094.965384885112
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.jain_gpu_seconds",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.jain_mean_wait",
+    "n": 20,
+    "mean": -0.3711590662999609,
+    "standard_deviation": 0.010665298331438543,
+    "ci_low": -0.3761505222020888,
+    "ci_high": -0.3661676103978331
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.jobs_never_started",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.makespan_s",
+    "n": 20,
+    "mean": 23166.75,
+    "standard_deviation": 439.5386187451804,
+    "ci_low": 22961.041958408554,
+    "ci_high": 23372.458041591446
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.mean_turnaround_s",
+    "n": 20,
+    "mean": 7405.528000000001,
+    "standard_deviation": 122.60566930482534,
+    "ci_low": 7348.147439919281,
+    "ci_high": 7462.908560080721
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.mean_wait_s",
+    "n": 20,
+    "mean": 7405.528,
+    "standard_deviation": 122.60566930482511,
+    "ci_low": 7348.147439919281,
+    "ci_high": 7462.908560080719
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.normal_users_mean_wait_s",
+    "n": 20,
+    "mean": -1894.0394444444441,
+    "standard_deviation": 78.22979790161232,
+    "ci_low": -1930.6516960968181,
+    "ci_high": -1857.4271927920702
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.normal_users_p95_wait_s",
+    "n": 20,
+    "mean": -379.3666666666667,
+    "standard_deviation": 88.23923488505207,
+    "ci_low": -420.6634251893917,
+    "ci_high": -338.06990814394163
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.p50_wait_s",
+    "n": 20,
+    "mean": 3464.9,
+    "standard_deviation": 207.38164665278617,
+    "ci_low": 3367.843517189132,
+    "ci_high": 3561.9564828108682
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.p95_turnaround_s",
+    "n": 20,
+    "mean": 21375.95,
+    "standard_deviation": 400.29350744830117,
+    "ci_low": 21188.60902478822,
+    "ci_high": 21563.29097521178
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.p95_wait_s",
+    "n": 20,
+    "mean": 21363.85,
+    "standard_deviation": 393.782905057837,
+    "ci_low": 21179.55604548266,
+    "ci_high": 21548.143954517338
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.quota_block_attempts",
+    "n": 20,
+    "mean": 44602.3,
+    "standard_deviation": 467.1534290956125,
+    "ci_low": 44383.667977866586,
+    "ci_high": 44820.93202213342
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.quota_block_events",
+    "n": 20,
+    "mean": 246.0,
+    "standard_deviation": 0.0,
+    "ci_low": 246.0,
+    "ci_high": 246.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_jobs",
+    "n": 20,
+    "mean": 246.0,
+    "standard_deviation": 0.0,
+    "ci_low": 246.0,
+    "ci_high": 246.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_time_s",
+    "n": 20,
+    "mean": 2525685.7,
+    "standard_deviation": 39834.22004032529,
+    "ci_low": 2507042.92541011,
+    "ci_high": 2544328.4745898903
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.quota_unused_gpu_seconds",
+    "n": 20,
+    "mean": 184870.55,
+    "standard_deviation": 3437.3079196095487,
+    "ci_low": 183261.85886266996,
+    "ci_high": 186479.24113733
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.throughput_per_hour",
+    "n": 20,
+    "mean": -125.78324930024408,
+    "standard_deviation": 1.622710503242357,
+    "ci_low": -126.54269246509003,
+    "ci_high": -125.02380613539813
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.alice.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.alice.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.alice.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.alice.mean_wait_s",
+    "n": 20,
+    "mean": -1903.9200000000005,
+    "standard_deviation": 106.02265310187367,
+    "ci_low": -1953.5395587913974,
+    "ci_high": -1854.3004412086036
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.alice.p50_wait_s",
+    "n": 20,
+    "mean": -1979.45,
+    "standard_deviation": 114.78468401407275,
+    "ci_low": -2033.1702683592111,
+    "ci_high": -1925.729731640789
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.alice.p95_wait_s",
+    "n": 20,
+    "mean": -392.75,
+    "standard_deviation": 152.5553825233384,
+    "ci_low": -464.1472962437313,
+    "ci_high": -321.3527037562687
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.bob.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.bob.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.bob.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.bob.mean_wait_s",
+    "n": 20,
+    "mean": -1898.406666666667,
+    "standard_deviation": 112.9262366501985,
+    "ci_low": -1951.257164882097,
+    "ci_high": -1845.556168451237
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.bob.p50_wait_s",
+    "n": 20,
+    "mean": -1945.45,
+    "standard_deviation": 126.29642450245875,
+    "ci_low": -2004.5578668322084,
+    "ci_high": -1886.3421331677916
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.bob.p95_wait_s",
+    "n": 20,
+    "mean": -400.9,
+    "standard_deviation": 177.5155738164075,
+    "ci_low": -483.9788911017746,
+    "ci_high": -317.82110889822536
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.carol.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.carol.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.carol.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.carol.mean_wait_s",
+    "n": 20,
+    "mean": -1879.7916666666667,
+    "standard_deviation": 124.79690817273351,
+    "ci_low": -1938.1977463193941,
+    "ci_high": -1821.3855870139394
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.carol.p50_wait_s",
+    "n": 20,
+    "mean": -1944.25,
+    "standard_deviation": 154.4892689170556,
+    "ci_low": -2016.5523725345192,
+    "ci_high": -1871.9476274654808
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.carol.p95_wait_s",
+    "n": 20,
+    "mean": -344.45,
+    "standard_deviation": 195.42193891814276,
+    "ci_low": -435.9092316225125,
+    "ci_high": -252.99076837748748
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.hog.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.hog.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.hog.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.hog.mean_wait_s",
+    "n": 20,
+    "mean": 12636.5346875,
+    "standard_deviation": 229.62140966876086,
+    "ci_low": 12529.069794823954,
+    "ci_high": 12743.999580176045
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.hog.p50_wait_s",
+    "n": 20,
+    "mean": 12564.6,
+    "standard_deviation": 249.21126104487922,
+    "ci_low": 12447.966880028811,
+    "ci_high": 12681.23311997119
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.hog.p95_wait_s",
+    "n": 20,
+    "mean": 23899.85,
+    "standard_deviation": 416.9051734917792,
+    "ci_low": 23704.734615114885,
+    "ci_high": 24094.965384885112
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 1,
     "metric": "quota_block_attempts",
     "n": 20,
     "mean": 44602.3,
@@ -4862,6 +8132,486 @@
   {
     "scenario": "C-burst",
     "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation",
+    "n": 20,
+    "mean": -0.5936503702413243,
+    "standard_deviation": 0.006214988649922988,
+    "ci_low": -0.5965590410364835,
+    "ci_high": -0.5907416994461651
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation_percent",
+    "n": 20,
+    "mean": -59.365037024132434,
+    "standard_deviation": 0.6214988649922988,
+    "ci_low": -59.65590410364835,
+    "ci_high": -59.074169944616514
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.hard_rejected_jobs",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.heavy_to_normal_wait_ratio",
+    "n": 20,
+    "mean": 5.4818738092586665,
+    "standard_deviation": 0.19170910999664406,
+    "ci_low": 5.392152215089687,
+    "ci_high": 5.571595403427646
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.heavy_user_mean_wait_s",
+    "n": 20,
+    "mean": 5411.913750000001,
+    "standard_deviation": 99.2536073063461,
+    "ci_low": 5365.462165749763,
+    "ci_high": 5458.365334250238
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.heavy_user_p95_wait_s",
+    "n": 20,
+    "mean": 10201.8,
+    "standard_deviation": 188.9356894206124,
+    "ci_low": 10113.376391698186,
+    "ci_high": 10290.223608301812
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.jain_gpu_seconds",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.jain_mean_wait",
+    "n": 20,
+    "mean": -0.38380844054522634,
+    "standard_deviation": 0.010493257973266747,
+    "ci_low": -0.38871938000660267,
+    "ci_high": -0.37889750108385
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.jobs_never_started",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.makespan_s",
+    "n": 20,
+    "mean": 8755.1,
+    "standard_deviation": 201.55785378161931,
+    "ci_low": 8660.76910482824,
+    "ci_high": 8849.430895171761
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.mean_turnaround_s",
+    "n": 20,
+    "mean": 2296.8076000000005,
+    "standard_deviation": 43.893520076130635,
+    "ci_low": 2276.265036347248,
+    "ci_high": 2317.350163652753
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.mean_wait_s",
+    "n": 20,
+    "mean": 2296.8076000000005,
+    "standard_deviation": 43.89352007613067,
+    "ci_low": 2276.265036347248,
+    "ci_high": 2317.350163652753
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.normal_users_mean_wait_s",
+    "n": 20,
+    "mean": -3241.1588888888896,
+    "standard_deviation": 66.89093059968019,
+    "ci_low": -3272.4644482801723,
+    "ci_high": -3209.853329497607
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.normal_users_p95_wait_s",
+    "n": 20,
+    "mean": -2936.983333333333,
+    "standard_deviation": 76.6345832945227,
+    "ci_low": -2972.849010148485,
+    "ci_high": -2901.1176565181813
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.p50_wait_s",
+    "n": 20,
+    "mean": 338.35,
+    "standard_deviation": 107.60467364140689,
+    "ci_low": 287.9900413141095,
+    "ci_high": 388.70995868589057
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.p95_turnaround_s",
+    "n": 20,
+    "mean": 8047.35,
+    "standard_deviation": 172.20161836760144,
+    "ci_low": 7966.7580880210135,
+    "ci_high": 8127.941911978987
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.p95_wait_s",
+    "n": 20,
+    "mean": 8030.85,
+    "standard_deviation": 171.90611727886457,
+    "ci_low": 7950.396385198234,
+    "ci_high": 8111.303614801766
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.quota_block_attempts",
+    "n": 20,
+    "mean": 43529.45,
+    "standard_deviation": 510.4954739734413,
+    "ci_low": 43290.533509585184,
+    "ci_high": 43768.36649041481
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.quota_block_events",
+    "n": 20,
+    "mean": 242.0,
+    "standard_deviation": 0.0,
+    "ci_low": 242.0,
+    "ci_high": 242.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_jobs",
+    "n": 20,
+    "mean": 242.0,
+    "standard_deviation": 0.0,
+    "ci_low": 242.0,
+    "ci_high": 242.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_time_s",
+    "n": 20,
+    "mean": 1248505.6,
+    "standard_deviation": 19858.414407473407,
+    "ci_low": 1239211.6827816793,
+    "ci_high": 1257799.5172183209
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.quota_unused_gpu_seconds",
+    "n": 20,
+    "mean": 69666.7,
+    "standard_deviation": 1501.3631034566731,
+    "ci_low": 68964.04851374053,
+    "ci_high": 70369.35148625946
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.throughput_per_hour",
+    "n": 20,
+    "mean": -94.80575112782505,
+    "standard_deviation": 1.3991450027992907,
+    "ci_low": -95.46056362018345,
+    "ci_high": -94.15093863546664
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.alice.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.alice.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.alice.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.alice.mean_wait_s",
+    "n": 20,
+    "mean": -3240.643333333334,
+    "standard_deviation": 74.07657654739765,
+    "ci_low": -3275.3118398979377,
+    "ci_high": -3205.97482676873
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.alice.p50_wait_s",
+    "n": 20,
+    "mean": -3261.85,
+    "standard_deviation": 89.89893448229869,
+    "ci_low": -3303.923512917491,
+    "ci_high": -3219.776487082509
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.alice.p95_wait_s",
+    "n": 20,
+    "mean": -2937.3,
+    "standard_deviation": 85.33408031471302,
+    "ci_low": -2977.2371199569698,
+    "ci_high": -2897.3628800430306
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.bob.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.bob.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.bob.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.bob.mean_wait_s",
+    "n": 20,
+    "mean": -3243.7833333333333,
+    "standard_deviation": 77.47768401590135,
+    "ci_low": -3280.043588897343,
+    "ci_high": -3207.5230777693237
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.bob.p50_wait_s",
+    "n": 20,
+    "mean": -3246.7,
+    "standard_deviation": 74.07613437680537,
+    "ci_low": -3281.3682996247744,
+    "ci_high": -3212.0317003752252
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.bob.p95_wait_s",
+    "n": 20,
+    "mean": -2947.65,
+    "standard_deviation": 108.47375379859359,
+    "ci_low": -2998.4166960452408,
+    "ci_high": -2896.8833039547594
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.carol.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.carol.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.carol.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.carol.mean_wait_s",
+    "n": 20,
+    "mean": -3239.05,
+    "standard_deviation": 84.12501522813827,
+    "ci_low": -3278.421266581387,
+    "ci_high": -3199.6787334186133
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.carol.p50_wait_s",
+    "n": 20,
+    "mean": -3259.25,
+    "standard_deviation": 105.04378786211517,
+    "ci_low": -3308.4114410222974,
+    "ci_high": -3210.0885589777026
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.carol.p95_wait_s",
+    "n": 20,
+    "mean": -2926.0,
+    "standard_deviation": 135.5344197883638,
+    "ci_low": -2989.431332023776,
+    "ci_high": -2862.568667976224
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.hog.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.hog.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.hog.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.hog.mean_wait_s",
+    "n": 20,
+    "mean": 5411.913750000001,
+    "standard_deviation": 99.2536073063461,
+    "ci_low": 5365.462165749763,
+    "ci_high": 5458.365334250238
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.hog.p50_wait_s",
+    "n": 20,
+    "mean": 5379.0,
+    "standard_deviation": 116.86249229441908,
+    "ci_low": 5324.307298607776,
+    "ci_high": 5433.692701392224
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.hog.p95_wait_s",
+    "n": 20,
+    "mean": 10201.8,
+    "standard_deviation": 188.9356894206124,
+    "ci_low": 10113.376391698186,
+    "ci_high": 10290.223608301812
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 2,
     "metric": "quota_block_attempts",
     "n": 20,
     "mean": 43529.45,
@@ -5338,6 +9088,486 @@
     "standard_deviation": 114.05006979854346,
     "ci_low": 6486.073537725526,
     "ci_high": 6592.826462274474
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation",
+    "n": 20,
+    "mean": -0.21147393616015758,
+    "standard_deviation": 0.010611582896947094,
+    "ci_low": -0.21644025275401713,
+    "ci_high": -0.20650761956629804
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation_percent",
+    "n": 20,
+    "mean": -21.147393616015755,
+    "standard_deviation": 1.061158289694709,
+    "ci_low": -21.64402527540171,
+    "ci_high": -20.6507619566298
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.hard_rejected_jobs",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.heavy_to_normal_wait_ratio",
+    "n": 20,
+    "mean": 1.477209003769153,
+    "standard_deviation": 0.05718068693797693,
+    "ci_low": 1.4504479260726237,
+    "ci_high": 1.5039700814656822
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.heavy_user_mean_wait_s",
+    "n": 20,
+    "mean": 1799.5640625,
+    "standard_deviation": 34.40299511200747,
+    "ci_low": 1783.4631502079815,
+    "ci_high": 1815.6649747920187
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.heavy_user_p95_wait_s",
+    "n": 20,
+    "mean": 3369.45,
+    "standard_deviation": 82.36342762735362,
+    "ci_low": 3330.903172318848,
+    "ci_high": 3407.9968276811514
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.jain_gpu_seconds",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.jain_mean_wait",
+    "n": 20,
+    "mean": 0.004596536565563724,
+    "standard_deviation": 0.01051094586464827,
+    "ci_low": -0.0003226809886599591,
+    "ci_high": 0.009515754119787407
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.jobs_never_started",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.makespan_s",
+    "n": 20,
+    "mean": 1573.95,
+    "standard_deviation": 98.33962364656156,
+    "ci_low": 1527.926168353703,
+    "ci_high": 1619.9738316462972
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.mean_turnaround_s",
+    "n": 20,
+    "mean": 226.69959999999998,
+    "standard_deviation": 10.796870805932613,
+    "ci_low": 221.64656699201328,
+    "ci_high": 231.75263300798667
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.mean_wait_s",
+    "n": 20,
+    "mean": 226.6996000000001,
+    "standard_deviation": 10.796870805932592,
+    "ci_low": 221.64656699201342,
+    "ci_high": 231.75263300798676
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.normal_users_mean_wait_s",
+    "n": 20,
+    "mean": -2569.5038888888885,
+    "standard_deviation": 71.00906404863414,
+    "ci_low": -2602.736771911517,
+    "ci_high": -2536.27100586626
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.normal_users_p95_wait_s",
+    "n": 20,
+    "mean": -1663.4166666666667,
+    "standard_deviation": 74.16323666423015,
+    "ci_low": -1698.1257309482887,
+    "ci_high": -1628.7076023850448
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.p50_wait_s",
+    "n": 20,
+    "mean": -29.2,
+    "standard_deviation": 44.558181952895794,
+    "ci_low": -50.05363141144032,
+    "ci_high": -8.346368588559677
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.p95_turnaround_s",
+    "n": 20,
+    "mean": 1388.5,
+    "standard_deviation": 68.52851884242678,
+    "ci_low": 1356.4280345274717,
+    "ci_high": 1420.5719654725283
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.p95_wait_s",
+    "n": 20,
+    "mean": 1374.2,
+    "standard_deviation": 65.7832165445516,
+    "ci_low": 1343.4128607866173,
+    "ci_high": 1404.9871392133828
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.quota_block_attempts",
+    "n": 20,
+    "mean": 33099.5,
+    "standard_deviation": 399.3758946946572,
+    "ci_low": 32912.58847584085,
+    "ci_high": 33286.41152415915
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.quota_block_events",
+    "n": 20,
+    "mean": 156.0,
+    "standard_deviation": 0.0,
+    "ci_low": 156.0,
+    "ci_high": 156.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_jobs",
+    "n": 20,
+    "mean": 156.0,
+    "standard_deviation": 0.0,
+    "ci_low": 156.0,
+    "ci_high": 156.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_time_s",
+    "n": 20,
+    "mean": 561211.15,
+    "standard_deviation": 10261.196048450533,
+    "ci_low": 556408.817614421,
+    "ci_high": 566013.482385579
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.quota_unused_gpu_seconds",
+    "n": 20,
+    "mean": 12258.3,
+    "standard_deviation": 590.229580667334,
+    "ci_low": 11982.067227837588,
+    "ci_high": 12534.53277216241
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.throughput_per_hour",
+    "n": 20,
+    "mean": -33.768271868351135,
+    "standard_deviation": 1.6494160352048963,
+    "ci_low": -34.54021346324484,
+    "ci_high": -32.99633027345743
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.alice.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.alice.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.alice.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.alice.mean_wait_s",
+    "n": 20,
+    "mean": -2577.288333333333,
+    "standard_deviation": 71.8408127135616,
+    "ci_low": -2610.910482239917,
+    "ci_high": -2543.6661844267487
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.alice.p50_wait_s",
+    "n": 20,
+    "mean": -2630.9,
+    "standard_deviation": 82.55709348208987,
+    "ci_low": -2669.5374650495237,
+    "ci_high": -2592.2625349504765
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.alice.p95_wait_s",
+    "n": 20,
+    "mean": -1668.05,
+    "standard_deviation": 86.2062856421185,
+    "ci_low": -1708.395319924195,
+    "ci_high": -1627.7046800758048
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.bob.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.bob.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.bob.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.bob.mean_wait_s",
+    "n": 20,
+    "mean": -2570.175,
+    "standard_deviation": 69.11437920057384,
+    "ci_low": -2602.5211534091077,
+    "ci_high": -2537.8288465908927
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.bob.p50_wait_s",
+    "n": 20,
+    "mean": -2615.8,
+    "standard_deviation": 80.18570551177469,
+    "ci_low": -2653.327634071259,
+    "ci_high": -2578.2723659287412
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.bob.p95_wait_s",
+    "n": 20,
+    "mean": -1668.65,
+    "standard_deviation": 75.68513376934872,
+    "ci_low": -1704.071325866034,
+    "ci_high": -1633.2286741339663
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.carol.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.carol.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.carol.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.carol.mean_wait_s",
+    "n": 20,
+    "mean": -2561.048333333333,
+    "standard_deviation": 72.67104805317031,
+    "ci_low": -2595.059039873962,
+    "ci_high": -2527.0376267927045
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.carol.p50_wait_s",
+    "n": 20,
+    "mean": -2597.6,
+    "standard_deviation": 88.31069554345284,
+    "ci_low": -2638.930202755981,
+    "ci_high": -2556.2697972440187
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.carol.p95_wait_s",
+    "n": 20,
+    "mean": -1653.55,
+    "standard_deviation": 75.61709288806405,
+    "ci_low": -1688.9394821193407,
+    "ci_high": -1618.1605178806592
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.hog.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.hog.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.hog.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.hog.mean_wait_s",
+    "n": 20,
+    "mean": 1799.5640625,
+    "standard_deviation": 34.40299511200747,
+    "ci_low": 1783.4631502079815,
+    "ci_high": 1815.6649747920187
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.hog.p50_wait_s",
+    "n": 20,
+    "mean": 1800.35,
+    "standard_deviation": 52.40658355588542,
+    "ci_low": 1775.8232457854183,
+    "ci_high": 1824.8767542145815
+  },
+  {
+    "scenario": "C-burst",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.hog.p95_wait_s",
+    "n": 20,
+    "mean": 3369.45,
+    "standard_deviation": 82.36342762735362,
+    "ci_low": 3330.903172318848,
+    "ci_high": 3407.9968276811514
   },
   {
     "scenario": "C-burst",
@@ -6062,6 +10292,276 @@
   {
     "scenario": "D-single-user",
     "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation",
+    "n": 20,
+    "mean": -0.8557181964668572,
+    "standard_deviation": 0.00438135797382514,
+    "ci_low": -0.8577687115521521,
+    "ci_high": -0.8536676813815623
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation_percent",
+    "n": 20,
+    "mean": -85.57181964668573,
+    "standard_deviation": 0.4381357973825141,
+    "ci_low": -85.7768711552152,
+    "ci_high": -85.36676813815625
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.hard_rejected_jobs",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.heavy_user_mean_wait_s",
+    "n": 20,
+    "mean": 18930.60770833333,
+    "standard_deviation": 291.9980521828404,
+    "ci_low": 18793.949983843657,
+    "ci_high": 19067.265432823002
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.heavy_user_p95_wait_s",
+    "n": 20,
+    "mean": 35839.65,
+    "standard_deviation": 501.48445691398626,
+    "ci_low": 35604.95074691768,
+    "ci_high": 36074.34925308232
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.jain_gpu_seconds",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.jain_mean_wait",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.jobs_never_started",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.makespan_s",
+    "n": 20,
+    "mean": 37744.35,
+    "standard_deviation": 443.38058678390746,
+    "ci_low": 37536.843882682326,
+    "ci_high": 37951.85611731767
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.mean_turnaround_s",
+    "n": 20,
+    "mean": 18930.607708333333,
+    "standard_deviation": 291.9980521828402,
+    "ci_low": 18793.94998384366,
+    "ci_high": 19067.265432823006
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.mean_wait_s",
+    "n": 20,
+    "mean": 18930.60770833333,
+    "standard_deviation": 291.9980521828404,
+    "ci_low": 18793.949983843657,
+    "ci_high": 19067.265432823002
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.p50_wait_s",
+    "n": 20,
+    "mean": 18859.35,
+    "standard_deviation": 347.43167067708964,
+    "ci_low": 18696.748841617456,
+    "ci_high": 19021.95115838254
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.p95_turnaround_s",
+    "n": 20,
+    "mean": 35842.75,
+    "standard_deviation": 506.8360967288818,
+    "ci_low": 35605.546131171366,
+    "ci_high": 36079.953868828634
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.p95_wait_s",
+    "n": 20,
+    "mean": 35839.65,
+    "standard_deviation": 501.48445691398626,
+    "ci_low": 35604.95074691768,
+    "ci_high": 36074.34925308232
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.quota_block_attempts",
+    "n": 20,
+    "mean": 53195.9,
+    "standard_deviation": 584.892783697194,
+    "ci_low": 52922.16489699857,
+    "ci_high": 53469.635103001434
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.quota_block_events",
+    "n": 20,
+    "mean": 239.0,
+    "standard_deviation": 0.0,
+    "ci_low": 239.0,
+    "ci_high": 239.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_jobs",
+    "n": 20,
+    "mean": 239.0,
+    "standard_deviation": 0.0,
+    "ci_low": 239.0,
+    "ci_high": 239.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_time_s",
+    "n": 20,
+    "mean": 5029686.4,
+    "standard_deviation": 82189.49817688645,
+    "ci_low": 4991220.972871848,
+    "ci_high": 5068151.827128152
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.quota_unused_gpu_seconds",
+    "n": 20,
+    "mean": 301495.6,
+    "standard_deviation": 3603.8051877951098,
+    "ci_low": 299808.9866380733,
+    "ci_high": 303182.21336192667
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.throughput_per_hour",
+    "n": 20,
+    "mean": -136.74858926710573,
+    "standard_deviation": 1.7056519448461265,
+    "ci_low": -137.54684977539193,
+    "ci_high": -135.95032875881952
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.hog.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.hog.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.hog.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.hog.mean_wait_s",
+    "n": 20,
+    "mean": 18930.60770833333,
+    "standard_deviation": 291.9980521828404,
+    "ci_low": 18793.949983843657,
+    "ci_high": 19067.265432823002
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.hog.p50_wait_s",
+    "n": 20,
+    "mean": 18859.35,
+    "standard_deviation": 347.43167067708964,
+    "ci_low": 18696.748841617456,
+    "ci_high": 19021.95115838254
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
+    "metric": "paired_delta_vs_unlimited.user.hog.p95_wait_s",
+    "n": 20,
+    "mean": 35839.65,
+    "standard_deviation": 501.48445691398626,
+    "ci_low": 35604.95074691768,
+    "ci_high": 36074.34925308232
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 1,
     "metric": "quota_block_attempts",
     "n": 20,
     "mean": 53195.9,
@@ -6332,6 +10832,276 @@
   {
     "scenario": "D-single-user",
     "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation",
+    "n": 20,
+    "mean": -0.7312172013841282,
+    "standard_deviation": 0.004197440473010836,
+    "ci_low": -0.7331816414186916,
+    "ci_high": -0.7292527613495647
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation_percent",
+    "n": 20,
+    "mean": -73.12172013841281,
+    "standard_deviation": 0.41974404730108344,
+    "ci_low": -73.31816414186915,
+    "ci_high": -72.92527613495648
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.hard_rejected_jobs",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.heavy_user_mean_wait_s",
+    "n": 20,
+    "mean": 8105.332291666666,
+    "standard_deviation": 126.17818827808567,
+    "ci_low": 8046.279760454864,
+    "ci_high": 8164.384822878467
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.heavy_user_p95_wait_s",
+    "n": 20,
+    "mean": 15361.8,
+    "standard_deviation": 212.44580733126173,
+    "ci_low": 15262.373444273928,
+    "ci_high": 15461.22655572607
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.jain_gpu_seconds",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.jain_mean_wait",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.jobs_never_started",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.makespan_s",
+    "n": 20,
+    "mean": 16158.75,
+    "standard_deviation": 201.22830056273997,
+    "ci_low": 16064.573338709779,
+    "ci_high": 16252.926661290221
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.mean_turnaround_s",
+    "n": 20,
+    "mean": 8105.332291666666,
+    "standard_deviation": 126.17818827808544,
+    "ci_low": 8046.279760454864,
+    "ci_high": 8164.384822878467
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.mean_wait_s",
+    "n": 20,
+    "mean": 8105.332291666666,
+    "standard_deviation": 126.17818827808567,
+    "ci_low": 8046.279760454864,
+    "ci_high": 8164.384822878467
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.p50_wait_s",
+    "n": 20,
+    "mean": 8080.8,
+    "standard_deviation": 149.05053893862558,
+    "ci_low": 8011.0430021945585,
+    "ci_high": 8150.556997805442
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.p95_turnaround_s",
+    "n": 20,
+    "mean": 15355.2,
+    "standard_deviation": 218.58025143134378,
+    "ci_low": 15252.902469055227,
+    "ci_high": 15457.497530944775
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.p95_wait_s",
+    "n": 20,
+    "mean": 15361.8,
+    "standard_deviation": 212.44580733126173,
+    "ci_low": 15262.373444273928,
+    "ci_high": 15461.22655572607
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.quota_block_attempts",
+    "n": 20,
+    "mean": 51131.2,
+    "standard_deviation": 532.9951713023102,
+    "ci_low": 50881.75344811496,
+    "ci_high": 51380.64655188503
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.quota_block_events",
+    "n": 20,
+    "mean": 238.0,
+    "standard_deviation": 0.0,
+    "ci_low": 238.0,
+    "ci_high": 238.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_jobs",
+    "n": 20,
+    "mean": 238.0,
+    "standard_deviation": 0.0,
+    "ci_low": 238.0,
+    "ci_high": 238.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_time_s",
+    "n": 20,
+    "mean": 2431620.3,
+    "standard_deviation": 42726.355643055285,
+    "ci_low": 2411623.979838726,
+    "ci_high": 2451616.6201612735
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.quota_unused_gpu_seconds",
+    "n": 20,
+    "mean": 128878.5,
+    "standard_deviation": 1636.5121930174357,
+    "ci_low": 128112.59751974193,
+    "ci_high": 129644.40248025807
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.throughput_per_hour",
+    "n": 20,
+    "mean": -116.85236456205334,
+    "standard_deviation": 1.467062959514731,
+    "ci_low": -117.53896327129688,
+    "ci_high": -116.1657658528098
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.hog.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.hog.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.hog.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.hog.mean_wait_s",
+    "n": 20,
+    "mean": 8105.332291666666,
+    "standard_deviation": 126.17818827808567,
+    "ci_low": 8046.279760454864,
+    "ci_high": 8164.384822878467
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.hog.p50_wait_s",
+    "n": 20,
+    "mean": 8080.8,
+    "standard_deviation": 149.05053893862558,
+    "ci_low": 8011.0430021945585,
+    "ci_high": 8150.556997805442
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
+    "metric": "paired_delta_vs_unlimited.user.hog.p95_wait_s",
+    "n": 20,
+    "mean": 15361.8,
+    "standard_deviation": 212.44580733126173,
+    "ci_low": 15262.373444273928,
+    "ci_high": 15461.22655572607
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 2,
     "metric": "quota_block_attempts",
     "n": 20,
     "mean": 51131.2,
@@ -6598,6 +11368,276 @@
     "standard_deviation": 180.55104978633432,
     "ci_low": 8933.450478740962,
     "ci_high": 9102.44952125904
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation",
+    "n": 20,
+    "mean": -0.48419362812875094,
+    "standard_deviation": 0.00378101758700268,
+    "ci_low": -0.48596317849332554,
+    "ci_high": -0.48242407776417634
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.gpu_utilisation_percent",
+    "n": 20,
+    "mean": -48.41936281287509,
+    "standard_deviation": 0.3781017587002676,
+    "ci_low": -48.59631784933255,
+    "ci_high": -48.242407776417636
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.hard_rejected_jobs",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.heavy_user_mean_wait_s",
+    "n": 20,
+    "mean": 2696.514166666667,
+    "standard_deviation": 42.35716705011898,
+    "ci_low": 2676.690630099808,
+    "ci_high": 2716.3377032335256
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.heavy_user_p95_wait_s",
+    "n": 20,
+    "mean": 5117.55,
+    "standard_deviation": 86.58277147209758,
+    "ci_low": 5077.028481308577,
+    "ci_high": 5158.071518691423
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.jain_gpu_seconds",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.jain_mean_wait",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.jobs_never_started",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.makespan_s",
+    "n": 20,
+    "mean": 5376.65,
+    "standard_deviation": 71.29794785560838,
+    "ci_low": 5343.281916747754,
+    "ci_high": 5410.018083252246
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.mean_turnaround_s",
+    "n": 20,
+    "mean": 2696.514166666667,
+    "standard_deviation": 42.35716705011913,
+    "ci_low": 2676.6906300998075,
+    "ci_high": 2716.337703233526
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.mean_wait_s",
+    "n": 20,
+    "mean": 2696.514166666667,
+    "standard_deviation": 42.35716705011898,
+    "ci_low": 2676.690630099808,
+    "ci_high": 2716.3377032335256
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.p50_wait_s",
+    "n": 20,
+    "mean": 2682.65,
+    "standard_deviation": 59.326283338304975,
+    "ci_low": 2654.8847638183365,
+    "ci_high": 2710.4152361816637
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.p95_turnaround_s",
+    "n": 20,
+    "mean": 5109.1,
+    "standard_deviation": 86.34685256202695,
+    "ci_low": 5068.688893488294,
+    "ci_high": 5149.511106511707
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.p95_wait_s",
+    "n": 20,
+    "mean": 5117.55,
+    "standard_deviation": 86.58277147209758,
+    "ci_low": 5077.028481308577,
+    "ci_high": 5158.071518691423
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.quota_block_attempts",
+    "n": 20,
+    "mean": 47226.75,
+    "standard_deviation": 677.0015062565845,
+    "ci_low": 46909.90718331171,
+    "ci_high": 47543.59281668829
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.quota_block_events",
+    "n": 20,
+    "mean": 236.0,
+    "standard_deviation": 0.0,
+    "ci_low": 236.0,
+    "ci_high": 236.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_jobs",
+    "n": 20,
+    "mean": 236.0,
+    "standard_deviation": 0.0,
+    "ci_low": 236.0,
+    "ci_high": 236.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.quota_blocked_time_s",
+    "n": 20,
+    "mean": 1133503.95,
+    "standard_deviation": 23214.862202964538,
+    "ci_low": 1122639.1849124169,
+    "ci_high": 1144368.715087583
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.quota_unused_gpu_seconds",
+    "n": 20,
+    "mean": 42742.6,
+    "standard_deviation": 571.2453984612548,
+    "ci_low": 42475.25199649336,
+    "ci_high": 43009.94800350664
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.throughput_per_hour",
+    "n": 20,
+    "mean": -77.37650640517005,
+    "standard_deviation": 1.0401604348567024,
+    "ci_low": -77.86331087892968,
+    "ci_high": -76.88970193141041
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.hog.gpu_seconds_received",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.hog.gpu_seconds_share",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.hog.jobs_completed",
+    "n": 20,
+    "mean": 0.0,
+    "standard_deviation": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.0
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.hog.mean_wait_s",
+    "n": 20,
+    "mean": 2696.514166666667,
+    "standard_deviation": 42.35716705011898,
+    "ci_low": 2676.690630099808,
+    "ci_high": 2716.3377032335256
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.hog.p50_wait_s",
+    "n": 20,
+    "mean": 2682.65,
+    "standard_deviation": 59.326283338304975,
+    "ci_low": 2654.8847638183365,
+    "ci_high": 2710.4152361816637
+  },
+  {
+    "scenario": "D-single-user",
+    "quota_gpus": 4,
+    "metric": "paired_delta_vs_unlimited.user.hog.p95_wait_s",
+    "n": 20,
+    "mean": 5117.55,
+    "standard_deviation": 86.58277147209758,
+    "ci_low": 5077.028481308577,
+    "ci_high": 5158.071518691423
   },
   {
     "scenario": "D-single-user",

@@ -28,16 +28,12 @@ opportunistic dispatch and placement path.
 - 8 homogeneous GPUs (2 nodes × 4), FIFO, opportunistic dispatch,
   performance placement; only the quota changes within each comparison.
 - Quotas: unlimited, 1, 2, 4 GPUs/user; seeds 1001–1020.
-- Four deterministic scenarios: balanced arrivals, a 70%-arrival heavy user,
-  an early burst followed by later users, and one active user.
+- Four deterministic scenarios: balanced arrivals, a 70%-arrival heavy user, an early burst that can overlap with three light-user streams, and one active user.
 - All jobs request one GPU and run for 120–240 simulated seconds. Each
   scenario/seed job list is reused for all four quota values.
 - 320 runs total. All submitted jobs completed; there were no failures,
   never-started jobs, or hard rejects in the main matrix.
-- Per-seed raw records include cluster/policy/workload configuration,
-  `git_commit`, cluster metrics, per-user metrics, and per-job quota events.
-  Summaries report mean, sample SD, and two-sided 95% Student-t CI (20 seeds,
-  df=19).
+- Per-seed raw records include cluster/policy/workload configuration, `git_commit`, cluster metrics, per-user metrics, and per-job quota events. Summaries report mean, sample SD, and two-sided 95% Student-t CI for per-cell results and paired quota-minus-unlimited differences (20 seeds, df=19).
 
 ### Findings
 
@@ -51,36 +47,20 @@ opportunistic dispatch and placement path.
   0.351. Quota 4 gave 916 s vs 3,160 s (other users vs heavy), 69.75%
   utilization, 111.48 jobs/h, and wait Jain 0.693. Quotas reduce normal-user
   delay here, but the results do **not** show improved equality of mean waits.
-- **Burst C:** unlimited access gave the later users 4,456 s mean wait vs
-  1,708 s for the burst user. Quota 4 moved these to 1,886 s vs 3,508 s,
-  with 77.12% utilization and 123.16 jobs/h; wait Jain changed from 0.909 to
-  0.914. Quotas 1/2 overshot: heavy/later wait ratios were 5.60/5.87 and wait
-  Jain fell to 0.538/0.526.
+- **Overlapping-burst C:** unlimited access gave the light users 4,456 s mean wait vs 1,708 s for the hog user. Quota 4 moved these to 1,886 s vs 3,508 s; paired differences were −2,570 s [−2,603, −2,536] for light users and +1,800 s [1,783, 1,816] for the hog, with −21.15 utilization points [−21.64, −20.65] and −33.77 jobs/h [−34.54, −33.00]. Wait Jain changed from 0.909 to 0.914. Quotas 1/2 overshot: hog/light wait ratios were 5.60/5.87 and wait Jain fell to 0.538/0.526.
 - **Single-user D:** utilization fell from 98.07% without a quota to 12.50%,
   24.95%, and 49.65% for quotas 1/2/4. At quota 2, mean wait rose from
   2,026 s to 10,132 s and mean placeable idle capacity while quota-blocked
   reached 128,879 GPU-seconds per run.
 
-The first expectation that hard quotas would straightforwardly "improve
-fairness" was too broad. Under FIFO, scenario B's waits were already nearly
-equal; quotas transfer delay from the lighter users to the 70%-arrival user
-and reduce wait equality. Scenario C has a different baseline, so quota 4
-slightly improves the waiting-time Jain index while protecting later arrivals.
-The report now distinguishes user isolation from equal waiting-time treatment
-and states the utilization/throughput costs alongside both.
+The first expectation that hard quotas would straightforwardly "improve fairness" was too broad. Under FIFO, scenario B's waits were already nearly equal; quotas transfer delay from the lighter users to the 70%-arrival user and reduce wait equality. Scenario C has a different baseline, so quota 4 slightly improves the waiting-time Jain index while protecting the light-user streams. The report now distinguishes user isolation from equal waiting-time treatment and states the utilization/throughput costs alongside both.
 
-Scenario C uses subsecond exponential arrival intervals floored to the
-simulator's integer-second clock; tied timestamps are recorded in the workload
-metadata. Fair-share × quota interaction and mixed-size jobs remain future
-work. The optional interaction was omitted to keep the primary quota
-comparison isolated. Results are synthetic simulator measurements, not a
-real-cluster claim. Quota identity is client-supplied `submitted_by`, with no
-authentication or preemption.
+Scenario C uses subsecond exponential arrival intervals floored to the simulator's integer-second clock; tied timestamps are recorded in the workload metadata, and the hog stream can overlap with the light-user arrivals beginning at t=20 s. Fair-share × quota interaction and mixed-size jobs remain future work. The optional interaction was omitted to keep the primary quota comparison isolated. Results are synthetic simulator measurements, not a real-cluster claim. Quota identity is client-supplied `submitted_by`, with no authentication or preemption.
 
 ### Artifacts and verification
 
-- Raw runs: `outputs/benchmarks/quota/raw.csv` (320 rows) and `raw.json`.
-- Aggregates: `summary.csv` and `summary.json` (672 metric rows, n=20 each).
+- Raw runs are regenerated locally by `scripts/run_quota_experiments.sh` and ignored by Git; each contains one scenario/seed/quota record.
+- Aggregates: `summary.csv` and `summary.json` (1,176 metric rows, n=20 each), including paired quota-minus-unlimited differences and paired t-CIs.
 - Five SVG figures: heavy wait, normal/later wait, utilization, wait ratio,
   and throughput under `outputs/benchmarks/quota/figures/`.
 - The full 320-run script completed twice from the same clean code revision;
@@ -88,16 +68,13 @@ authentication or preemption.
   while prior outputs were present changed only the `git_commit` dirty marker;
   moving the generated directory aside restored the clean source state and
   confirmed exact repeatability. The recorded source revision is `61a188a`.
-- `./target/release/ferro-sim quota-aggregate --input
-  outputs/benchmarks/quota/raw.json --out /tmp/quota-summary-recomputed`
-  independently regenerated both summary files byte-for-byte (672 aggregate
-  rows).
+- `./target/release/ferro-sim quota-aggregate --input outputs/benchmarks/quota/raw.json --out /tmp/quota-summary-recomputed` independently regenerated both summary files byte-for-byte (1,176 aggregate rows).
 
 | Check | Result |
 |---|---|
 | `cargo fmt --all -- --check` | clean |
-| `PROTOC=/tmp/ferrogrid-protoc-wrapper cargo clippy --workspace --all-targets -- -D warnings` | clean |
-| `PROTOC=/tmp/ferrogrid-protoc-wrapper cargo test --workspace --quiet` | 301 passed, 0 failed |
+| `PROTOC=/tmp/ferro-protoc/bin/protoc cargo clippy --workspace --all-targets -- -D warnings` | clean |
+| `PROTOC=/tmp/ferro-protoc/bin/protoc cargo test --workspace --quiet` | 304 passed, 0 failed |
 | `uv run --all-extras pytest -q` | 14 passed, 5 skipped; one existing CUDA driver-version warning |
 | `bash -n scripts/run_quota_experiments.sh` | clean |
 | `python3 -m py_compile python/tools/plot_quota_results.py` | clean |
