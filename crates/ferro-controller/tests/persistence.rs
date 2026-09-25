@@ -345,6 +345,11 @@ async fn per_rank_statuses_survive_and_the_phase_is_unchanged() {
     let g = registry.inner.lock().await;
     assert_eq!(g.jobs["jrun"].phase(), before);
     assert_eq!(g.jobs["jrun"].plan, running.plan);
+    assert_eq!(
+        g.usage_snapshot(1_700_000_200).gpu_seconds("alice"),
+        400.0,
+        "four recorded GPUs accrue 100 seconds after the controller restarts"
+    );
     // Logs and the live queue assessment were never written down.
     assert!(g.jobs["jrun"].logs.is_empty());
     assert!(g.jobs["jrun"].node_verdicts.is_empty());

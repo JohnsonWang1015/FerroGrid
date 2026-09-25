@@ -1,6 +1,7 @@
 //! The `Controller` gRPC service: agent registration plus the CLI-facing API.
 
-use crate::registry::{now_s, Job, Registry};
+use crate::quota::QuotaDecision;
+use crate::registry::{now_s, Job, QuotaReservationError, Registry};
 use ferro_proto::controller_server::Controller;
 use ferro_proto::node_agent_client::NodeAgentClient;
 use ferro_proto::*;
@@ -9,7 +10,7 @@ use ferro_sched::{
     Dispatch, PlacementDecision, PlacementPolicy, PlacementRequest, SchedulerConfig,
     SchedulingContext, Shape,
 };
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -25,6 +26,47 @@ pub struct ControllerService {
     /// so the same controller can be run under a different strategy without a
     /// second code path.
     pub placement: Arc<dyn PlacementPolicy>,
+}
+
+impl ControllerService {
+    async fn queue_submission(
+        &self,
+        req: &SubmitJobRequest,
+        message: String,
+        node_verdicts: Vec<NodeVerdict>,
+        warnings: Vec<String>,
+    ) -> Response<SubmitJobResponse> {
+        let job_id = new_job_id();
+        let deadline = match req.queue_timeout_s {
+            0 => 0,
+            timeout => now_s() + timeout as i64,
+        };
+        self.registry
+            .insert_job(new_job(
+                &job_id,
+                req,
+                JobPlan::default(),
+                node_verdicts.clone(),
+                warnings.clone(),
+                message.clone(),
+                Some(deadline),
+            ))
+            .await;
+        if let Err(error) = self.registry.flush().await {
+            return not_durable(&job_id, error, None, node_verdicts, warnings);
+        }
+        let queue_position = self.registry.queue_position(&job_id).await;
+        tracing::info!(job = %job_id, "queued at #{queue_position}: {message}");
+        Response::new(SubmitJobResponse {
+            job_id,
+            accepted: true,
+            message,
+            plan: None,
+            queue_position,
+            node_verdicts,
+            warnings,
+        })
+    }
 }
 
 type LogStream = Pin<Box<dyn Stream<Item = Result<LogLine, Status>> + Send>>;
@@ -101,6 +143,62 @@ impl Controller for ControllerService {
             return Err(Status::invalid_argument("script must not be empty"));
         }
 
+        // This is a request-shape error, not a temporary capacity miss. Keep
+        // it outside the queue path so --wait cannot retry it forever.
+        if let Err(message) = validate_image_override_request(&req) {
+            return Ok(rejected(message, Vec::new()));
+        }
+
+        // This is a preflight for clear feedback and auto-placement sizing only.
+        // `reserve_exact_with_quota` repeats the check atomically before it
+        // grants GPUs, so simultaneous submissions cannot use this snapshot to
+        // exceed the quota.
+        let held = self.registry.user_gpus_held(&req.submitted_by).await;
+        let minimum_request = if req.auto_place {
+            1
+        } else {
+            req.nodes.saturating_mul(req.gpus_per_node)
+        };
+        let quota_decision = self
+            .registry
+            .quotas
+            .decide(&req.submitted_by, held, minimum_request);
+        match quota_decision {
+            QuotaDecision::Reject { .. } => {
+                return Ok(rejected(
+                    quota_decision
+                        .message(&req.submitted_by)
+                        .unwrap_or_default(),
+                    Vec::new(),
+                ));
+            }
+            QuotaDecision::Wait { .. } if !req.queue => {
+                return Ok(rejected(
+                    quota_decision
+                        .message(&req.submitted_by)
+                        .unwrap_or_default(),
+                    Vec::new(),
+                ));
+            }
+            QuotaDecision::Wait { .. } => {
+                return Ok(self
+                    .queue_submission(
+                        &req,
+                        quota_decision
+                            .message(&req.submitted_by)
+                            .unwrap_or_default(),
+                        Vec::new(),
+                        Vec::new(),
+                    )
+                    .await);
+            }
+            QuotaDecision::Unlimited | QuotaDecision::Admitted { .. } => {}
+        }
+
+        let auto_max_gpus = req
+            .auto_place
+            .then(|| self.registry.quotas.remaining(&req.submitted_by, held))
+            .flatten();
         let nodes = self.registry.node_states().await;
         let network = self.registry.network_snapshot().await;
         let (plan_result, node_verdicts) = plan_for(
@@ -110,21 +208,8 @@ impl Controller for ControllerService {
             &*self.placement,
             &self.sched,
             now_s(),
+            auto_max_gpus,
         );
-
-        // This is a request-shape error, not a temporary capacity miss. Keep
-        // it outside the queue path so --wait cannot retry it forever.
-        if let Err(message) = validate_image_override_request(&req) {
-            return Ok(Response::new(SubmitJobResponse {
-                job_id: String::new(),
-                accepted: false,
-                message,
-                plan: None,
-                queue_position: 0,
-                node_verdicts,
-                warnings: Vec::new(),
-            }));
-        }
 
         let placement;
         let plan = match plan_result {
@@ -132,55 +217,12 @@ impl Controller for ControllerService {
                 placement = Some(explain(&decision));
                 decision.plan
             }
-            // Nothing fits right now. With `--wait` that is a queue rather
-            // than a failure: on a shared cluster "full" is the normal state,
-            // and resubmitting by hand at 03:00 is not a scheduling policy.
-            Err(e) if req.queue && retryable_schedule_error(&e) => {
-                let job_id = new_job_id();
-                let deadline = match req.queue_timeout_s {
-                    0 => 0,
-                    t => now_s() + t as i64,
-                };
-                let message = e.to_string();
-                self.registry
-                    .insert_job(new_job(
-                        &job_id,
-                        &req,
-                        JobPlan::default(),
-                        node_verdicts.clone(),
-                        Vec::new(),
-                        message.clone(),
-                        Some(deadline),
-                    ))
-                    .await;
-                if let Err(e) = self.registry.flush().await {
-                    return Ok(not_durable(&job_id, e, None, node_verdicts, Vec::new()));
-                }
-                let queue_position = self.registry.queue_position(&job_id).await;
-                tracing::info!(job = %job_id, "queued at #{queue_position}: {message}");
-                return Ok(Response::new(SubmitJobResponse {
-                    job_id,
-                    accepted: true,
-                    message,
-                    plan: None,
-                    queue_position,
-                    node_verdicts,
-                    warnings: Vec::new(),
-                }));
+            Err(error) if req.queue && retryable_schedule_error(&error) => {
+                return Ok(self
+                    .queue_submission(&req, error.to_string(), node_verdicts, Vec::new())
+                    .await);
             }
-            // A typed response keeps the per-node ledger available to the CLI
-            // instead of collapsing it into a gRPC status string.
-            Err(e) => {
-                return Ok(Response::new(SubmitJobResponse {
-                    job_id: String::new(),
-                    accepted: false,
-                    message: e.to_string(),
-                    plan: None,
-                    queue_position: 0,
-                    node_verdicts,
-                    warnings: Vec::new(),
-                }))
-            }
+            Err(error) => return Ok(rejected(error.to_string(), node_verdicts)),
         };
 
         if let Err(message) = validate_image_overrides(&req, &plan) {
@@ -244,15 +286,49 @@ impl Controller for ControllerService {
                     warnings,
                 }))
             }
-            Err(message) => Ok(Response::new(SubmitJobResponse {
-                job_id,
-                accepted: false,
-                message,
-                plan: Some(plan),
-                queue_position: 0,
+            Err(StartJobError::Reservation(error)) if req.queue && error.is_retryable() => {
+                let message = error.to_string();
+                let deadline = match req.queue_timeout_s {
+                    0 => 0,
+                    timeout => now_s() + timeout as i64,
+                };
+                if !self
+                    .registry
+                    .enqueue_after_reservation_race(
+                        &job_id,
+                        req.clone(),
+                        deadline,
+                        node_verdicts.clone(),
+                        message.clone(),
+                    )
+                    .await
+                {
+                    return Ok(rejected(
+                        format!("could not queue job after reservation race: {message}"),
+                        node_verdicts,
+                    ));
+                }
+                if let Err(error) = self.registry.flush().await {
+                    return Ok(not_durable(&job_id, error, None, node_verdicts, Vec::new()));
+                }
+                let queue_position = self.registry.queue_position(&job_id).await;
+                Ok(Response::new(SubmitJobResponse {
+                    job_id,
+                    accepted: true,
+                    message,
+                    plan: None,
+                    queue_position,
+                    node_verdicts,
+                    warnings: Vec::new(),
+                }))
+            }
+            Err(error) => Ok(rejected_with_job(
+                &job_id,
+                error.to_string(),
+                Some(plan),
                 node_verdicts,
                 warnings,
-            })),
+            )),
         }
     }
 
@@ -263,10 +339,47 @@ impl Controller for ControllerService {
             return Err(Status::not_found(format!("no such job {id}")));
         };
         let mut summary = [job.to_summary()];
-        g.annotate_queue(&mut summary, now_s());
+        g.annotate_queue(&mut summary, now_s(), &self.registry.quotas);
         g.annotate_recovery(&mut summary);
         let [summary] = summary;
         Ok(Response::new(summary))
+    }
+
+    async fn get_usage(
+        &self,
+        _req: Request<GetUsageRequest>,
+    ) -> Result<Response<GetUsageResponse>, Status> {
+        let sampled_unix_s = now_s();
+        let g = self.registry.inner.lock().await;
+        // This is the exact snapshot fair-share ranks against. Usage remains
+        // derived from the persisted job records rather than a second ledger.
+        let snapshot = g.usage_snapshot(sampled_unix_s);
+        let mut users = BTreeMap::new();
+        for (user, usage) in snapshot.per_user {
+            users.insert(
+                user.clone(),
+                UserUsageReport {
+                    user: user.clone(),
+                    gpus_held: usage.gpus_held,
+                    running_jobs: usage.running_jobs,
+                    gpu_seconds: usage.gpu_seconds,
+                    gpu_quota: self.registry.quotas.quota_for(&user),
+                },
+            );
+        }
+        for (user, quota) in self.registry.quotas.users() {
+            users
+                .entry(user.to_string())
+                .or_insert_with(|| UserUsageReport {
+                    user: user.to_string(),
+                    gpu_quota: Some(quota),
+                    ..Default::default()
+                });
+        }
+        Ok(Response::new(GetUsageResponse {
+            users: users.into_values().collect(),
+            sampled_unix_s,
+        }))
     }
 
     async fn list_jobs(
@@ -282,7 +395,7 @@ impl Controller for ControllerService {
             .filter_map(|id| g.jobs.get(id))
             .map(|j| j.to_summary())
             .collect();
-        g.annotate_queue(&mut jobs, now_s());
+        g.annotate_queue(&mut jobs, now_s(), &self.registry.quotas);
         g.annotate_recovery(&mut jobs);
         if limit > 0 {
             jobs.truncate(limit as usize);
@@ -961,6 +1074,7 @@ fn plan_for(
     placement: &dyn PlacementPolicy,
     sched: &SchedulerConfig,
     now: i64,
+    auto_max_gpus: Option<u32>,
 ) -> (
     Result<PlacementDecision, scheduler::ScheduleError>,
     Vec<NodeVerdict>,
@@ -973,13 +1087,17 @@ fn plan_for(
         sched.min_free_vram_b,
     );
     let shape = if req.auto_place {
+        let request_cap = if req.gpus_per_node > 0 {
+            req.gpus_per_node
+        } else {
+            u32::MAX
+        };
         Shape::Auto {
-            // gpus_per_node doubles as a cap in auto mode when set.
-            max_gpus: if req.gpus_per_node > 0 {
-                req.gpus_per_node
-            } else {
-                u32::MAX
-            },
+            // Keep the existing user-supplied cap and also respect the quota
+            // headroom observed for this planning attempt.
+            max_gpus: auto_max_gpus
+                .map(|quota_cap| request_cap.min(quota_cap))
+                .unwrap_or(request_cap),
         }
     } else {
         Shape::Explicit {
@@ -1124,6 +1242,36 @@ fn new_job_id() -> String {
     format!("j{}", &uuid::Uuid::new_v4().simple().to_string()[..10])
 }
 
+fn rejected(message: String, node_verdicts: Vec<NodeVerdict>) -> Response<SubmitJobResponse> {
+    Response::new(SubmitJobResponse {
+        job_id: String::new(),
+        accepted: false,
+        message,
+        plan: None,
+        queue_position: 0,
+        node_verdicts,
+        warnings: Vec::new(),
+    })
+}
+
+fn rejected_with_job(
+    job_id: &str,
+    message: String,
+    plan: Option<JobPlan>,
+    node_verdicts: Vec<NodeVerdict>,
+    warnings: Vec<String>,
+) -> Response<SubmitJobResponse> {
+    Response::new(SubmitJobResponse {
+        job_id: job_id.to_string(),
+        accepted: false,
+        message,
+        plan,
+        queue_position: 0,
+        node_verdicts,
+        warnings,
+    })
+}
+
 /// `queue_deadline` set means the job is queued: no plan yet, and the request
 /// is kept so the dispatcher can place it later.
 fn new_job(
@@ -1183,15 +1331,25 @@ async fn start_job(
     req: &SubmitJobRequest,
     job_id: &str,
     plan: &JobPlan,
-) -> Result<(), String> {
+) -> Result<(), StartJobError> {
     // Take the cards first. All-or-nothing, and refused outright if another
     // submission claimed one while this plan was being built -- the snapshot
     // is then stale and the only honest answer is to plan again.
     registry
-        .reserve_exact(plan, job_id)
+        .reserve_exact_with_quota(plan, job_id)
         .await
-        .map_err(|e| e.to_string())?;
-    dispatch_ranks(registry, req, job_id, plan).await
+        .map_err(StartJobError::Reservation)?;
+    dispatch_ranks(registry, req, job_id, plan)
+        .await
+        .map_err(StartJobError::Launch)
+}
+
+#[derive(Debug, thiserror::Error)]
+enum StartJobError {
+    #[error(transparent)]
+    Reservation(#[from] QuotaReservationError),
+    #[error("{0}")]
+    Launch(String),
 }
 
 /// Launch every rank of an already-reserved plan.
@@ -1354,11 +1512,59 @@ pub async fn queue_pass(
             continue;
         }
 
+        let held = registry.user_gpus_held(&req.submitted_by).await;
+        let minimum_request = if req.auto_place {
+            1
+        } else {
+            req.nodes.saturating_mul(req.gpus_per_node)
+        };
+        let quota_decision = registry
+            .quotas
+            .decide(&req.submitted_by, held, minimum_request);
+        match quota_decision {
+            QuotaDecision::Wait { .. } => {
+                registry
+                    .update_queue_assessment(
+                        job_id,
+                        Vec::new(),
+                        quota_decision
+                            .message(&req.submitted_by)
+                            .unwrap_or_default(),
+                        Vec::new(),
+                    )
+                    .await;
+                continue;
+            }
+            QuotaDecision::Reject { .. } => {
+                let message = quota_decision
+                    .message(&req.submitted_by)
+                    .unwrap_or_default();
+                registry
+                    .update_queue_assessment(job_id, Vec::new(), message.clone(), Vec::new())
+                    .await;
+                registry.dequeue(job_id, JobPhase::Failed, &message).await;
+                continue;
+            }
+            QuotaDecision::Unlimited | QuotaDecision::Admitted { .. } => {}
+        }
+        let auto_max_gpus = req
+            .auto_place
+            .then(|| registry.quotas.remaining(&req.submitted_by, held))
+            .flatten();
+
         // Re-read the cluster for every job: the one placed a moment ago
         // took GPUs the next one must not be handed as well.
         let nodes = registry.node_states().await;
         let network = registry.network_snapshot().await;
-        let (plan_result, verdicts) = plan_for(&nodes, &network, req, &**placement, sched, now_s());
+        let (plan_result, verdicts) = plan_for(
+            &nodes,
+            &network,
+            req,
+            &**placement,
+            sched,
+            now_s(),
+            auto_max_gpus,
+        );
         let (plan, verdicts, explanation) = match plan_result {
             Ok(decision) => {
                 let plan = decision.plan.clone();
@@ -1392,11 +1598,15 @@ pub async fn queue_pass(
         // submission belongs back in line, not in the failed list: it did
         // nothing wrong, and it is still waiting for exactly what it asked
         // for. The next tick plans it again against fresh state.
-        if let Err(conflict) = registry.reserve_exact(&plan, job_id).await {
-            tracing::info!(job = %job_id, "still waiting: {conflict}");
+        if let Err(error) = registry.reserve_exact_with_quota(&plan, job_id).await {
+            let message = error.to_string();
+            tracing::info!(job = %job_id, "still waiting: {message}");
             registry
-                .update_queue_assessment(job_id, verdicts, conflict.to_string(), Vec::new())
+                .update_queue_assessment(job_id, verdicts, message.clone(), Vec::new())
                 .await;
+            if !error.is_retryable() {
+                registry.dequeue(job_id, JobPhase::Failed, &message).await;
+            }
             continue;
         }
 

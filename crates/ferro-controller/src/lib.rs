@@ -11,6 +11,7 @@
 
 pub mod metrics;
 pub mod plugins;
+pub mod quota;
 pub mod registry;
 pub mod service;
 pub mod store;

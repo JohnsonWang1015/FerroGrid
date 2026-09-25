@@ -567,6 +567,61 @@ pub fn queue(list: &[JobSummary], json: bool) -> String {
 /// what order, which is the only reason to look at this at all. No table
 /// either -- the columns are narrow and mostly fixed, and a box drawn around a
 /// log makes it harder to scan, not easier.
+/// Current per-user GPU usage. The optional quota is shown as `unlimited` in
+/// tables and as JSON null, with an explicit display value for scripts.
+pub fn usage(users: &[UserUsageReport], json: bool) -> String {
+    if users.is_empty() {
+        return "No GPU usage or configured user quotas.\n".into();
+    }
+    let mut sorted: Vec<&UserUsageReport> = users.iter().collect();
+    sorted.sort_by(|a, b| a.user.cmp(&b.user));
+
+    if json {
+        let rows: Vec<_> = sorted
+            .iter()
+            .map(|user| {
+                serde_json::json!({
+                    "user": user.user,
+                    "gpus_held": user.gpus_held,
+                    "running_jobs": user.running_jobs,
+                    "gpu_seconds": user.gpu_seconds,
+                    "gpu_quota": user.gpu_quota,
+                    "gpu_quota_display": user.gpu_quota
+                        .map(|quota| quota.to_string())
+                        .unwrap_or_else(|| "unlimited".into()),
+                })
+            })
+            .collect();
+        return dump(&rows);
+    }
+
+    let mut t = table(&[
+        "USER",
+        "GPUS HELD",
+        "RUNNING JOBS",
+        "GPU-SECONDS",
+        "GPU QUOTA",
+    ]);
+    for user in sorted {
+        t.add_row(vec![
+            Cell::new(if user.user.is_empty() {
+                "(unknown)"
+            } else {
+                &user.user
+            }),
+            Cell::new(user.gpus_held),
+            Cell::new(user.running_jobs),
+            Cell::new(format!("{:.1}", user.gpu_seconds)),
+            Cell::new(
+                user.gpu_quota
+                    .map(|quota| quota.to_string())
+                    .unwrap_or_else(|| "unlimited".into()),
+            ),
+        ]);
+    }
+    format!("{t}\n")
+}
+
 pub fn events(list: &[Event], json: bool) -> String {
     if json {
         let v: Vec<_> = list
@@ -1950,6 +2005,38 @@ pub fn transfer(results: &[PluginResult], json: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn usage_distinguishes_unlimited_from_a_zero_gpu_quota() {
+        let users = [
+            UserUsageReport {
+                user: "unlimited-user".into(),
+                gpus_held: 0,
+                running_jobs: 0,
+                gpu_seconds: 0.0,
+                gpu_quota: None,
+            },
+            UserUsageReport {
+                user: "zero-quota-user".into(),
+                gpus_held: 0,
+                running_jobs: 0,
+                gpu_seconds: 0.0,
+                gpu_quota: Some(0),
+            },
+        ];
+
+        let table = usage(&users, false);
+        assert!(table.contains("unlimited-user"));
+        assert!(table.contains("zero-quota-user"));
+        assert!(table.contains("unlimited"));
+        assert!(table.contains("GPU QUOTA"));
+
+        let json: serde_json::Value = serde_json::from_str(&usage(&users, true)).unwrap();
+        assert_eq!(json[0]["gpu_quota"], serde_json::Value::Null);
+        assert_eq!(json[0]["gpu_quota_display"], "unlimited");
+        assert_eq!(json[1]["gpu_quota"], 0);
+        assert_eq!(json[1]["gpu_quota_display"], "0");
+    }
 
     #[test]
     fn commands_lose_their_interpreter_path_first() {

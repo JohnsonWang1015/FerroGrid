@@ -341,8 +341,10 @@ measurements, events). Recovery reconciles both directions — DB-says-running /
 agent-says-missing **and** DB-says-pending / agent-says-running — and never
 assumes the DB is right.
 
-Phase 7 picks from backfilling, reservation, DRF, quota, multi-resource and
-topology-aware by remaining time. Phase 8 stretch goals (preemption,
+Per-user GPU quota admission and the `ferro usage` accounting API are now
+implemented; see the newest entry in [`progress.md`](progress.md). Remaining
+Phase 7 candidates are DRF, multi-resource allocation and topology-aware
+placement, prioritized by remaining time. Phase 8 stretch goals (preemption,
 checkpointing, power/thermal, auth/TLS/RBAC) only if everything above is stable.
 
 ---

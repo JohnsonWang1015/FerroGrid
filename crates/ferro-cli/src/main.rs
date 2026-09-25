@@ -126,6 +126,11 @@ enum Cmd {
         #[command(flatten)]
         watch: WatchArgs,
     },
+    /// Show per-user GPU holdings and accumulated GPU-seconds.
+    Usage {
+        #[command(flatten)]
+        watch: WatchArgs,
+    },
     /// Show one job in detail.
     Job {
         job_id: String,
@@ -488,6 +493,14 @@ async fn main() -> Result<()> {
                 let mut c = client.clone();
                 let r = c.list_jobs(ListJobsRequest { limit }).await?.into_inner();
                 Ok(render::jobs(&r.jobs, cli.json))
+            })
+            .await?;
+        }
+        Cmd::Usage { watch } => {
+            repeat(watch, cli.json, || async {
+                let mut c = client.clone();
+                let r = c.get_usage(GetUsageRequest {}).await?.into_inner();
+                Ok(render::usage(&r.users, cli.json))
             })
             .await?;
         }
@@ -933,4 +946,18 @@ async fn stream_logs(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn usage_supports_json_and_watch_flags() {
+        let json = Cli::try_parse_from(["ferro", "usage", "--json"]).unwrap();
+        assert!(json.json);
+
+        let watched = Cli::try_parse_from(["ferro", "usage", "--watch"]).unwrap();
+        assert!(matches!(watched.cmd, Cmd::Usage { watch } if watch.watch));
+    }
 }

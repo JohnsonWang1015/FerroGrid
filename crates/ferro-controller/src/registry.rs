@@ -6,6 +6,7 @@
 //! benchmarks and `ferro net` measurements exist nowhere else, so they are --
 //! see `store` for which fields and why.
 
+use crate::quota::{QuotaDecision, QuotaTable};
 use ferro_proto::{
     Gpu, GpuEntry, GpuOccupant, GpuProcess, JobPhase, JobPlacement, JobPlan, JobStatus, JobSummary,
     LogLine, NodeInfo, NodeState, NodeVerdict, PlacementExplanation, QueueScore, ScoreComponent,
@@ -396,6 +397,8 @@ pub struct Registry {
     /// The scheduler's VRAM floor, kept here too so "free" means the same
     /// thing in `ferro nodes` as it does at placement time.
     pub min_free_vram_b: u64,
+    /// Immutable admission limits supplied by controller configuration.
+    pub quotas: Arc<QuotaTable>,
     /// Where durable state goes. `None` is a controller running entirely in
     /// memory, which is what `--no-state` and every test that does not care
     /// about restarts get.
@@ -408,8 +411,15 @@ impl Registry {
         Self {
             inner: Mutex::new(RegistryInner::default()),
             min_free_vram_b,
+            quotas: Arc::new(QuotaTable::default()),
             store: None,
         }
+    }
+
+    /// Attach controller-configured user quotas to this registry.
+    pub fn with_quotas(mut self, quotas: Arc<QuotaTable>) -> Self {
+        self.quotas = quotas;
+        self
     }
 
     pub fn with_queue_policy(min_free_vram_b: u64, queue_policy: Arc<dyn QueuePolicy>) -> Self {
@@ -419,6 +429,7 @@ impl Registry {
                 ..Default::default()
             }),
             min_free_vram_b,
+            quotas: Arc::new(QuotaTable::default()),
             store: None,
         }
     }
@@ -470,6 +481,7 @@ impl Registry {
         Self {
             inner: Mutex::new(inner),
             min_free_vram_b,
+            quotas: Arc::new(QuotaTable::default()),
             store: Some(store),
         }
     }
@@ -709,7 +721,9 @@ impl Registry {
         let Some(job) = g.jobs.get(job_id) else {
             return;
         };
-        let rebuilt = adopt_plan(&g.nodes, job_id, &job.plan);
+        let expected_world_size = job.plan.world_size;
+        let mut rebuilt = adopt_plan(&g.nodes, job_id, &job.plan);
+        rebuilt.world_size = rebuilt.world_size.max(expected_world_size);
         if rebuilt.placements.len() <= job.plan.placements.len() {
             return;
         }
@@ -752,13 +766,35 @@ impl Registry {
             return;
         };
         if !job.queued {
+            let incomplete_plan = job.plan.world_size > plan_gpu_count(&job.plan);
             g.reconciling.remove(job_id);
+            if incomplete_plan {
+                // A prior adoption can leave a plan with its known ranks and
+                // a world size that still accounts for peers not back yet.
+                g.adopted.insert(job_id.to_string());
+            }
             g.recovery.claimed += 1;
             return;
         }
 
         let actor = job.submitted_by.clone();
-        let plan = adopt_plan(&g.nodes, job_id, &job.plan);
+        let expected_world_size = job
+            .queue_req
+            .as_ref()
+            .map(|req| {
+                if req.auto_place {
+                    // Auto placement has no fixed requested world size. Its
+                    // concrete shape is the ownership found by `adopt_plan`;
+                    // a user's quota is only a ceiling, not that shape.
+                    0
+                } else {
+                    req.nodes.max(1).saturating_mul(req.gpus_per_node.max(1))
+                }
+            })
+            .unwrap_or(0)
+            .max(job.plan.world_size);
+        let mut plan = adopt_plan(&g.nodes, job_id, &job.plan);
+        plan.world_size = plan.world_size.max(expected_world_size);
         if plan.placements.is_empty() {
             // Something named this job without holding a card for it, so there
             // is no plan to rebuild. Leave it queued and still reconciling: a
@@ -820,8 +856,23 @@ impl Registry {
             let stranded = std::mem::take(&mut g.reconciling);
             // Whatever an adopted job's plan says now is what it says: the
             // agents have had their window, and a node that has not reported
-            // by now is not going to complete anybody's plan.
-            g.adopted.clear();
+            // by now is not going to complete anybody's plan. For an adopted
+            // partial plan, stop charging the unconfirmed world-size gap: no
+            // later node in this recovery can add ranks to the plan.
+            let adopted = std::mem::take(&mut g.adopted);
+            let mut resized = Vec::new();
+            for job_id in adopted {
+                if let Some(job) = g.jobs.get_mut(&job_id) {
+                    let observed_gpus = plan_gpu_count(&job.plan);
+                    if job.plan.world_size != observed_gpus {
+                        job.plan.world_size = observed_gpus;
+                        resized.push(job_id);
+                    }
+                }
+            }
+            for job_id in resized {
+                self.write_job(&g, &job_id);
+            }
 
             // Read the whole verdict out first: the reason depends on the node
             // table and the statuses depend on the plan, and both live in the
@@ -1002,12 +1053,14 @@ impl Registry {
     /// dispatcher does cannot drift apart.
     pub async fn waiting_jobs(&self) -> Vec<(QueuedJob, SubmitJobRequest, i64)> {
         let g = self.inner.lock().await;
+        let now = now_s();
+        let usage = g.usage_snapshot(now);
         let mut by_id: HashMap<String, QueuedJob> = g
-            .waiting()
+            .waiting(&self.quotas, &usage)
             .into_iter()
             .map(|q| (q.job_id.clone(), q))
             .collect();
-        g.queue_order(now_s())
+        g.queue_order_with_usage(now, &self.quotas, &usage)
             .into_iter()
             .filter_map(|id| {
                 let job = g.jobs.get(&id)?;
@@ -1097,6 +1150,42 @@ impl Registry {
         }
     }
 
+    /// Put an already persisted, not-yet-launched submission into the queue
+    /// after its final reservation loses a capacity race.
+    pub async fn enqueue_after_reservation_race(
+        &self,
+        job_id: &str,
+        req: SubmitJobRequest,
+        deadline: i64,
+        node_verdicts: Vec<NodeVerdict>,
+        message: String,
+    ) -> bool {
+        let mut g = self.inner.lock().await;
+        let Some(job) = g.jobs.get_mut(job_id) else {
+            return false;
+        };
+        let actor = job.submitted_by.clone();
+        job.plan = JobPlan::default();
+        job.per_node.clear();
+        job.queued = true;
+        job.queue_req = Some(req);
+        job.queue_deadline = deadline;
+        job.node_verdicts = node_verdicts;
+        job.warnings.clear();
+        job.queue_message = message;
+        job.placement = None;
+        self.write_job(&g, job_id);
+        let position = g.queue_position(job_id, &self.quotas);
+        self.emit(
+            &mut g,
+            Event::new(EventKind::JobQueued)
+                .job(job_id)
+                .actor(&actor)
+                .detail(format!("position {position} after a reservation race")),
+        );
+        true
+    }
+
     /// Take a job out of the queue without ever launching it. The status is
     /// what makes it terminal -- a queued job has no ranks to report one.
     pub async fn dequeue(&self, job_id: &str, phase: JobPhase, message: &str) -> bool {
@@ -1136,7 +1225,7 @@ impl Registry {
     /// Where a job sits in the queue, 1-based. 0 when it is not queued.
     pub async fn queue_position(&self, job_id: &str) -> u32 {
         let g = self.inner.lock().await;
-        g.queue_position(job_id)
+        g.queue_position(job_id, &self.quotas)
     }
 
     /// Jobs past their wall-clock limit, as (job_id, agent addresses).
@@ -1184,7 +1273,7 @@ impl Registry {
             // The position is the promise the queue makes to this user, so it
             // belongs in the record of the promise being made -- by the time
             // anyone reads this back, the queue has moved on.
-            let position = g.queue_position(&job_id);
+            let position = g.queue_position(&job_id, &self.quotas);
             self.emit(
                 &mut g,
                 Event::new(EventKind::JobQueued)
@@ -1319,6 +1408,17 @@ impl Registry {
         }
     }
 
+    /// Number of GPUs held by active reservations attributed to `user`.
+    ///
+    /// This uses the same plan-derived count reported by `ferro usage`.
+    /// The job plan is the accounting source; live ownership confirms a normal
+    /// reservation, and recovery bookkeeping covers plans whose nodes have not
+    /// heartbeated back yet.
+    pub async fn user_gpus_held(&self, user: &str) -> u32 {
+        let g = self.inner.lock().await;
+        planned_gpus_held_by_user(&g, user, None)
+    }
+
     /// Take exactly the GPUs in `plan`, or take none of them.
     ///
     /// Placement runs outside this lock -- it is pure CPU work over a snapshot,
@@ -1336,6 +1436,62 @@ impl Registry {
     pub async fn reserve_exact(&self, plan: &JobPlan, job_id: &str) -> Result<(), ReserveConflict> {
         let mut g = self.inner.lock().await;
 
+        self.check_reservation(&g, plan, job_id)?;
+        self.apply_reservation(&mut g, plan, job_id);
+        Ok(())
+    }
+
+    /// Reserve GPUs and enforce the submitting user's quota in one registry
+    /// critical section. Placement stays outside the lock; neither a GPU
+    /// ownership change nor a quota decision can interleave with this check.
+    pub async fn reserve_exact_with_quota(
+        &self,
+        plan: &JobPlan,
+        job_id: &str,
+    ) -> Result<(), QuotaReservationError> {
+        let mut g = self.inner.lock().await;
+
+        // Validate physical availability before any mutation. The quota check
+        // below observes the same locked registry state as usage accounting
+        // and the final ownership writes.
+        self.check_reservation(&g, plan, job_id)?;
+
+        if !self.quotas.is_empty() {
+            let user = g
+                .jobs
+                .get(job_id)
+                .map(|job| job.submitted_by.clone())
+                .ok_or_else(|| QuotaReservationError::UnknownJob {
+                    job_id: job_id.to_string(),
+                })?;
+            let held = planned_gpus_held_by_user(&g, &user, Some(job_id));
+            let requested = plan_gpu_count(plan);
+            let decision = self.quotas.decide(&user, held, requested);
+            if matches!(
+                decision,
+                QuotaDecision::Wait { .. } | QuotaDecision::Reject { .. }
+            ) {
+                return Err(QuotaReservationError::Quota {
+                    user: user.clone(),
+                    message: decision.message(&user).unwrap_or_default(),
+                    decision,
+                });
+            }
+        }
+
+        if let Some(job) = g.jobs.get_mut(job_id) {
+            job.plan = plan.clone();
+        }
+        self.apply_reservation(&mut g, plan, job_id);
+        Ok(())
+    }
+
+    fn check_reservation(
+        &self,
+        g: &RegistryInner,
+        plan: &JobPlan,
+        job_id: &str,
+    ) -> Result<(), ReserveConflict> {
         // Check everything before touching anything.
         for p in &plan.placements {
             let node = g
@@ -1364,6 +1520,10 @@ impl Registry {
             }
         }
 
+        Ok(())
+    }
+
+    fn apply_reservation(&self, g: &mut RegistryInner, plan: &JobPlan, job_id: &str) {
         for p in &plan.placements {
             if let Some(node) = g.nodes.get_mut(&p.node_id) {
                 for gpu in node.info.gpus.iter_mut() {
@@ -1383,14 +1543,72 @@ impl Registry {
             .map(|j| j.submitted_by.clone())
             .unwrap_or_default();
         self.emit(
-            &mut g,
+            g,
             Event::new(EventKind::GpuAllocated)
                 .job(job_id)
                 .actor(&actor)
                 .detail(where_it_runs(plan)),
         );
-        Ok(())
     }
+}
+
+fn plan_gpu_count(plan: &JobPlan) -> u32 {
+    plan.placements
+        .iter()
+        .flat_map(|placement| placement.gpu_indices.iter())
+        .fold(0u32, |count, _| count.saturating_add(1))
+}
+
+fn planned_gpus_held_by_user(g: &RegistryInner, user: &str, exclude_job_id: Option<&str>) -> u32 {
+    g.jobs
+        .values()
+        .filter(|job| {
+            job.submitted_by == user
+                && !job.phase().is_terminal()
+                && Some(job.job_id.as_str()) != exclude_job_id
+        })
+        .fold(0u32, |count, job| {
+            count.saturating_add(held_gpu_count_for_job(g, job))
+        })
+}
+
+/// Count plan placements when ownership confirms them, or while their nodes
+/// have not returned since restart. Keep reported ownership outside the plan
+/// too: a peer can return after recovery settles while still running the job.
+fn held_gpu_count_for_job(g: &RegistryInner, job: &Job) -> u32 {
+    let planned = if g.reconciling.contains(&job.job_id) {
+        plan_gpu_count(&job.plan).max(job.plan.world_size)
+    } else {
+        let mut held = 0u32;
+        for placement in &job.plan.placements {
+            let Some(node) = g.nodes.get(&placement.node_id) else {
+                held = held.saturating_add(placement.gpu_indices.len() as u32);
+                continue;
+            };
+            for index in &placement.gpu_indices {
+                if node
+                    .info
+                    .gpus
+                    .iter()
+                    .any(|gpu| gpu.index == *index && gpu.allocated_job_id == job.job_id)
+                {
+                    held = held.saturating_add(1);
+                }
+            }
+        }
+        held.saturating_add(
+            job.plan
+                .world_size
+                .saturating_sub(plan_gpu_count(&job.plan)),
+        )
+    };
+    let observed = g
+        .nodes
+        .values()
+        .flat_map(|node| &node.info.gpus)
+        .filter(|gpu| gpu.allocated_job_id == job.job_id)
+        .fold(0u32, |count, _| count.saturating_add(1));
+    planned.max(observed)
 }
 
 /// Rebuild the plan a lost promote never wrote down, from the cards the agents
@@ -1589,6 +1807,35 @@ pub enum ReserveConflict {
     GpuGone { node_id: String, gpu_index: u32 },
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum QuotaReservationError {
+    #[error(transparent)]
+    Conflict(#[from] ReserveConflict),
+    #[error("{message}")]
+    Quota {
+        user: String,
+        message: String,
+        decision: QuotaDecision,
+    },
+    #[error("job `{job_id}` is not registered; cannot determine its quota owner")]
+    UnknownJob { job_id: String },
+}
+
+impl QuotaReservationError {
+    /// A queued job may retry physical reservation races and quota capacity
+    /// that can become available after another job releases its GPUs.
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            Self::Conflict(_) => true,
+            Self::Quota {
+                decision: QuotaDecision::Wait { .. },
+                ..
+            } => true,
+            Self::Quota { .. } | Self::UnknownJob { .. } => false,
+        }
+    }
+}
+
 impl RegistryInner {
     /// Ids of jobs this controller still considers alive. A process tagged
     /// with anything else -- another controller's job, or one this one has
@@ -1604,24 +1851,21 @@ impl RegistryInner {
 
     /// What each user has consumed, as of `now`.
     ///
-    /// Recomputed from the job records on demand. That is O(jobs) per call and
-    /// entirely affordable at this scale, and it buys the property that
-    /// matters: the numbers a scheduling decision used and the numbers
-    /// `ferro usage` reports cannot drift apart, because they are the same
-    /// numbers.
+    /// Recomputed from job records on demand. GPU holds include only plans
+    /// confirmed by live ownership or restart reconciliation; quota admission
+    /// and `ferro usage` share that same count.
     pub fn usage_snapshot(&self, now: i64) -> UsageSnapshot {
         let mut per_user: HashMap<String, UserUsage> = HashMap::new();
         for job in self.jobs.values() {
             let entry = per_user.entry(job.submitted_by.clone()).or_default();
             entry.gpu_seconds += job.gpu_seconds(now);
-            if !job.phase().is_terminal() && !job.queued {
-                entry.running_jobs += 1;
-                entry.gpus_held += job
-                    .plan
-                    .placements
-                    .iter()
-                    .map(|p| p.gpu_indices.len() as u32)
-                    .sum::<u32>();
+            if !job.phase().is_terminal() {
+                entry.gpus_held = entry
+                    .gpus_held
+                    .saturating_add(held_gpu_count_for_job(self, job));
+                if !job.queued {
+                    entry.running_jobs += 1;
+                }
             }
         }
         UsageSnapshot { per_user }
@@ -1629,7 +1873,7 @@ impl RegistryInner {
 
     /// Every waiting job, reduced to what the queue policy and the dispatch
     /// modes are allowed to look at.
-    pub fn waiting(&self) -> Vec<QueuedJob> {
+    fn waiting(&self, quotas: &QuotaTable, usage: &UsageSnapshot) -> Vec<QueuedJob> {
         self.job_order
             .iter()
             .enumerate()
@@ -1647,23 +1891,53 @@ impl RegistryInner {
                     // 0 means no limit in the request; `None` is how the
                     // scheduling core spells "the submitter did not say".
                     timeout_s: (job.timeout_s > 0).then_some(job.timeout_s),
-                    gpus: job.queue_req.as_ref().map(requested_gpus).unwrap_or(0),
+                    gpus: job
+                        .queue_req
+                        .as_ref()
+                        .map(|req| {
+                            let held = usage
+                                .per_user
+                                .get(&job.submitted_by)
+                                .map(|entry| entry.gpus_held)
+                                .unwrap_or(0);
+                            requested_gpus(req, quotas.remaining(&job.submitted_by, held))
+                        })
+                        .unwrap_or(0),
                 })
             })
             .collect()
     }
 
     /// Every waiting job, scored and ordered by the queue policy.
-    pub fn ranked_queue(&self, now: i64) -> Vec<QueueRanking> {
-        let waiting = self.waiting();
+    fn ranked_queue(&self, now: i64, quotas: &QuotaTable) -> Vec<QueueRanking> {
         let usage = self.usage_snapshot(now);
+        self.ranked_queue_with_usage(now, quotas, &usage)
+    }
+
+    fn ranked_queue_with_usage(
+        &self,
+        now: i64,
+        quotas: &QuotaTable,
+        usage: &UsageSnapshot,
+    ) -> Vec<QueueRanking> {
+        let waiting = self.waiting(quotas, usage);
         self.queue_policy
-            .rank(&waiting, &QueueContext::new(now, &usage))
+            .rank(&waiting, &QueueContext::new(now, usage))
     }
 
     /// Just the ids, in served order.
-    pub fn queue_order(&self, now: i64) -> Vec<String> {
-        self.ranked_queue(now)
+    fn queue_order(&self, now: i64, quotas: &QuotaTable) -> Vec<String> {
+        let usage = self.usage_snapshot(now);
+        self.queue_order_with_usage(now, quotas, &usage)
+    }
+
+    fn queue_order_with_usage(
+        &self,
+        now: i64,
+        quotas: &QuotaTable,
+        usage: &UsageSnapshot,
+    ) -> Vec<String> {
+        self.ranked_queue_with_usage(now, quotas, usage)
             .into_iter()
             .map(|r| r.job_id)
             .collect()
@@ -1675,9 +1949,9 @@ impl RegistryInner {
     /// them separately would let a heartbeat land in between and produce a
     /// position that the score next to it does not justify -- which is exactly
     /// the sort of inconsistency that makes users stop believing the queue.
-    pub fn annotate_queue(&self, summaries: &mut [JobSummary], now: i64) {
+    pub fn annotate_queue(&self, summaries: &mut [JobSummary], now: i64, quotas: &QuotaTable) {
         let policy = self.queue_policy.name();
-        for (index, ranking) in self.ranked_queue(now).into_iter().enumerate() {
+        for (index, ranking) in self.ranked_queue(now, quotas).into_iter().enumerate() {
             let Some(summary) = summaries.iter_mut().find(|s| s.job_id == ranking.job_id) else {
                 continue;
             };
@@ -1712,11 +1986,11 @@ impl RegistryInner {
     }
 
     /// Where a job sits in line, 1-based. 0 when it is not queued.
-    pub fn queue_position(&self, job_id: &str) -> u32 {
+    fn queue_position(&self, job_id: &str, quotas: &QuotaTable) -> u32 {
         if !self.jobs.get(job_id).map(|j| j.queued).unwrap_or(false) {
             return 0;
         }
-        self.queue_order(now_s())
+        self.queue_order(now_s(), quotas)
             .iter()
             .position(|id| id == job_id)
             .map(|i| i as u32 + 1)
@@ -1727,9 +2001,10 @@ impl RegistryInner {
 /// How many GPUs a request is asking for, for the fair-share weighting.
 /// Auto mode has not chosen a shape yet, so it counts as the one GPU it is
 /// guaranteed to take.
-fn requested_gpus(req: &SubmitJobRequest) -> u32 {
+fn requested_gpus(req: &SubmitJobRequest, quota_headroom: Option<u32>) -> u32 {
     if req.auto_place {
-        req.gpus_per_node.max(1)
+        let request = req.gpus_per_node.max(1);
+        quota_headroom.map_or(request, |remaining| request.min(remaining.max(1)))
     } else {
         req.nodes.max(1) * req.gpus_per_node.max(1)
     }
@@ -1896,7 +2171,7 @@ mod tests {
         assert!(!r.dequeue("second", JobPhase::Cancelled, "again").await);
         let g = r.inner.lock().await;
         assert_eq!(g.jobs["second"].phase(), JobPhase::Cancelled);
-        assert_eq!(g.queue_position("first"), 1);
+        assert_eq!(g.queue_position("first", &QuotaTable::default()), 1);
     }
 
     #[tokio::test]

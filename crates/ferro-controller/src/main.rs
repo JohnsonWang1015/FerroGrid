@@ -2,6 +2,7 @@
 
 use anyhow::Result;
 use clap::Parser;
+use ferro_controller::quota::{QuotaTable, UserQuotaSpec};
 use ferro_controller::registry::Registry;
 use ferro_controller::store::{Event, Store};
 use ferro_controller::{plugins, service};
@@ -34,6 +35,11 @@ struct Args {
     /// Guards against GPUs busy with workloads FerroGrid does not manage.
     #[arg(long, default_value_t = 8)]
     min_free_vram_gib: u64,
+
+    /// Concurrent GPU limit for a submitted_by identity. Repeatable, e.g.
+    /// --user-quota alice=2 --user-quota bob=4. Missing users are unlimited.
+    #[arg(long = "user-quota", value_name = "USER=N")]
+    user_quotas: Vec<UserQuotaSpec>,
 
     /// Where jobs, queue order, GPU benchmarks and `ferro net` measurements
     /// are kept across restarts. Defaults to
@@ -138,6 +144,7 @@ async fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
+    let quotas = Arc::new(QuotaTable::from_specs(args.user_quotas)?);
     let min_free_vram_b = args.min_free_vram_gib << 30;
     let tuning = ferro_sched::QueueTuning {
         aging: ferro_sched::queue::aging::AgingConfig {
@@ -156,7 +163,7 @@ async fn main() -> Result<()> {
     let mut restored_jobs = 0;
     let registry = Arc::new(if args.no_state {
         tracing::warn!("--no-state: jobs and measurements will not survive a restart");
-        Registry::with_queue_policy(min_free_vram_b, queue_policy)
+        Registry::with_queue_policy(min_free_vram_b, queue_policy).with_quotas(quotas.clone())
     } else {
         let path = args.state.clone().unwrap_or_else(default_state_path);
         let state = Store::load(&path)?;
@@ -172,7 +179,7 @@ async fn main() -> Result<()> {
             state.network.len(),
         );
         restored_jobs = state.jobs.len();
-        Registry::restore(min_free_vram_b, queue_policy, store, state)
+        Registry::restore(min_free_vram_b, queue_policy, store, state).with_quotas(quotas.clone())
     });
 
     registry
@@ -223,6 +230,7 @@ async fn main() -> Result<()> {
         queue_policy = %args.queue_policy,
         placement_policy = %args.placement_policy,
         dispatch = dispatch.label(),
+        user_quotas = quotas.users().count(),
         "ferro-controller listening"
     );
 
@@ -263,4 +271,39 @@ fn default_state_path() -> PathBuf {
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/state")))
         .unwrap_or_else(|| PathBuf::from("."))
         .join("ferrogrid/controller.db")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn user_quota_flag_is_repeatable() {
+        let args = Args::try_parse_from([
+            "ferro-controller",
+            "--user-quota",
+            "alice=2",
+            "--user-quota",
+            "bob=4",
+        ])
+        .unwrap();
+        let quotas = QuotaTable::from_specs(args.user_quotas).unwrap();
+        assert_eq!(quotas.quota_for("alice"), Some(2));
+        assert_eq!(quotas.quota_for("bob"), Some(4));
+    }
+
+    #[test]
+    fn malformed_and_duplicate_user_quota_flags_are_rejected() {
+        assert!(Args::try_parse_from(["ferro-controller", "--user-quota", "alice=-1"]).is_err());
+
+        let args = Args::try_parse_from([
+            "ferro-controller",
+            "--user-quota",
+            "alice=2",
+            "--user-quota",
+            "alice=4",
+        ])
+        .unwrap();
+        assert!(QuotaTable::from_specs(args.user_quotas).is_err());
+    }
 }
