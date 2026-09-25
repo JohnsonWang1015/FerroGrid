@@ -263,6 +263,33 @@ async fn reservation_admits_a_job_below_the_limit() {
 }
 
 #[tokio::test]
+async fn reserving_a_queued_job_does_not_persist_its_plan_before_promotion() {
+    let db = TempDb::new();
+    let state = Store::load(&db.path()).unwrap();
+    let store = Store::open(&db.path()).unwrap();
+    let registry = Registry::restore(VRAM_FLOOR, Arc::new(ferro_sched::queue::Fifo), store, state)
+        .with_quotas(Arc::new(quota("alice", 2)));
+    registry.upsert_node(node(2)).await;
+
+    let (mut queued, _) = planned_job("queued", "alice", &[]);
+    queued.plan = JobPlan::default();
+    queued.queued = true;
+    queued.queue_req = Some(request("alice", 2, true));
+    registry.insert_job(queued).await;
+    let (_, plan) = planned_job("queued", "alice", &[0, 1]);
+    registry
+        .reserve_exact_with_quota(&plan, "queued")
+        .await
+        .unwrap();
+    registry.flush().await.unwrap();
+
+    let state = Store::load(&db.path()).unwrap();
+    let persisted = &state.jobs[0].record;
+    assert!(persisted.queued);
+    assert!(persisted.plan.placements.is_empty());
+}
+
+#[tokio::test]
 async fn restored_running_job_counts_towards_quota_before_its_node_returns() {
     let db = TempDb::new();
     let (mut running, _) = planned_job("restored", "alice", &[0, 1]);
@@ -336,6 +363,150 @@ async fn restored_running_job_counts_towards_quota_before_its_node_returns() {
     let usage = registry.inner.lock().await.usage_snapshot(now_s());
     assert_eq!(usage.per_user["alice"].gpus_held, 2);
     let _ = stop.send(());
+}
+
+#[tokio::test]
+async fn restored_multinode_job_keeps_unreported_placements_in_quota_after_first_heartbeat() {
+    let db = TempDb::new();
+    let (mut running, _) = planned_job("restored-multi", "alice", &[0, 1]);
+    running.plan = JobPlan {
+        world_size: 4,
+        placements: vec![
+            JobPlacement {
+                node_id: "gpu-a".into(),
+                gpu_indices: vec![0, 1],
+                ..Default::default()
+            },
+            JobPlacement {
+                node_id: "gpu-b".into(),
+                gpu_indices: vec![0, 1],
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    };
+    let status = JobStatus {
+        job_id: "restored-multi".into(),
+        node_id: "gpu-a".into(),
+        phase: JobPhase::Running as i32,
+        started_unix_s: now_s() - 60,
+        ..Default::default()
+    };
+    running.per_node.insert("gpu-a".into(), status.clone());
+    {
+        let store = Store::open(&db.path()).unwrap();
+        store.write(Change::Job(Box::new(running.to_record(0))));
+        store.write(Change::Status {
+            job_id: "restored-multi".into(),
+            node_id: "gpu-a".into(),
+            status: Box::new(status),
+        });
+    }
+
+    let state = Store::load(&db.path()).unwrap();
+    let store = Store::open(&db.path()).unwrap();
+    let registry = Registry::restore(VRAM_FLOOR, Arc::new(ferro_sched::queue::Fifo), store, state)
+        .with_quotas(Arc::new(quota("alice", 4)));
+
+    assert_eq!(registry.user_gpus_held("alice").await, 4);
+
+    let mut returned = node(2);
+    for gpu in &mut returned.gpus {
+        gpu.allocated_job_id = "restored-multi".into();
+    }
+    registry.upsert_node(returned.clone()).await;
+    assert!(registry.heartbeat("gpu-a", returned.gpus, Vec::new()).await);
+
+    assert_eq!(
+        registry.user_gpus_held("alice").await,
+        4,
+        "gpu-b has not reported yet, so its planned GPUs remain held"
+    );
+    let usage = registry.inner.lock().await.usage_snapshot(now_s());
+    assert_eq!(usage.per_user["alice"].gpus_held, 4);
+
+    let mut candidate_node = node(4);
+    candidate_node.node_id = "gpu-c".into();
+    registry.upsert_node(candidate_node).await;
+    let (mut candidate, mut candidate_plan) = planned_job("attempt-multi", "alice", &[0, 1, 2, 3]);
+    candidate_plan.placements[0].node_id = "gpu-c".into();
+    candidate.plan = candidate_plan.clone();
+    registry.insert_job(candidate).await;
+    assert!(matches!(
+        registry
+            .reserve_exact_with_quota(&candidate_plan, "attempt-multi")
+            .await,
+        Err(QuotaReservationError::Quota {
+            decision: QuotaDecision::Wait {
+                held: 4,
+                requested: 4,
+                limit: 4
+            },
+            ..
+        })
+    ));
+}
+
+#[tokio::test]
+async fn adopted_multinode_job_keeps_requested_gpu_count_while_a_peer_has_not_returned() {
+    let db = TempDb::new();
+    let (mut queued, _) = planned_job("adopted-multi", "alice", &[]);
+    queued.plan = JobPlan::default();
+    queued.queued = true;
+    queued.queue_req = Some(SubmitJobRequest {
+        script: "train.py".into(),
+        nodes: 2,
+        gpus_per_node: 2,
+        submitted_by: "alice".into(),
+        queue: true,
+        ..Default::default()
+    });
+    {
+        let store = Store::open(&db.path()).unwrap();
+        store.write(Change::Job(Box::new(queued.to_record(0))));
+    }
+
+    let state = Store::load(&db.path()).unwrap();
+    let store = Store::open(&db.path()).unwrap();
+    let registry = Registry::restore(VRAM_FLOOR, Arc::new(ferro_sched::queue::Fifo), store, state)
+        .with_quotas(Arc::new(quota("alice", 4)));
+
+    let mut returned = node(2);
+    for gpu in &mut returned.gpus {
+        gpu.allocated_job_id = "adopted-multi".into();
+    }
+    registry.upsert_node(returned.clone()).await;
+    assert!(registry.heartbeat("gpu-a", returned.gpus, Vec::new()).await);
+
+    assert_eq!(
+        registry.user_gpus_held("alice").await,
+        4,
+        "the queued request declares the ranks on gpu-b before it returns"
+    );
+    let usage = registry.inner.lock().await.usage_snapshot(now_s());
+    assert_eq!(usage.per_user["alice"].gpus_held, 4);
+
+    let mut candidate_node = node(4);
+    candidate_node.node_id = "gpu-c".into();
+    registry.upsert_node(candidate_node).await;
+    let (mut candidate, mut candidate_plan) =
+        planned_job("attempt-adopted", "alice", &[0, 1, 2, 3]);
+    candidate_plan.placements[0].node_id = "gpu-c".into();
+    candidate.plan = candidate_plan.clone();
+    registry.insert_job(candidate).await;
+    assert!(matches!(
+        registry
+            .reserve_exact_with_quota(&candidate_plan, "attempt-adopted")
+            .await,
+        Err(QuotaReservationError::Quota {
+            decision: QuotaDecision::Wait {
+                held: 4,
+                requested: 4,
+                limit: 4
+            },
+            ..
+        })
+    ));
 }
 
 #[tokio::test]

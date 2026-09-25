@@ -721,7 +721,9 @@ impl Registry {
         let Some(job) = g.jobs.get(job_id) else {
             return;
         };
-        let rebuilt = adopt_plan(&g.nodes, job_id, &job.plan);
+        let expected_world_size = job.plan.world_size;
+        let mut rebuilt = adopt_plan(&g.nodes, job_id, &job.plan);
+        rebuilt.world_size = rebuilt.world_size.max(expected_world_size);
         if rebuilt.placements.len() <= job.plan.placements.len() {
             return;
         }
@@ -764,13 +766,32 @@ impl Registry {
             return;
         };
         if !job.queued {
+            let incomplete_plan = job.plan.world_size > plan_gpu_count(&job.plan);
             g.reconciling.remove(job_id);
+            if incomplete_plan {
+                // A prior adoption can leave a plan with its known ranks and
+                // a world size that still accounts for peers not back yet.
+                g.adopted.insert(job_id.to_string());
+            }
             g.recovery.claimed += 1;
             return;
         }
 
         let actor = job.submitted_by.clone();
-        let plan = adopt_plan(&g.nodes, job_id, &job.plan);
+        let expected_world_size = job
+            .queue_req
+            .as_ref()
+            .map(|req| {
+                if req.auto_place {
+                    self.quotas.quota_for(&job.submitted_by).unwrap_or(0)
+                } else {
+                    req.nodes.max(1).saturating_mul(req.gpus_per_node.max(1))
+                }
+            })
+            .unwrap_or(0)
+            .max(job.plan.world_size);
+        let mut plan = adopt_plan(&g.nodes, job_id, &job.plan);
+        plan.world_size = plan.world_size.max(expected_world_size);
         if plan.placements.is_empty() {
             // Something named this job without holding a card for it, so there
             // is no plan to rebuild. Leave it queued and still reconciling: a
@@ -1021,7 +1042,7 @@ impl Registry {
             .into_iter()
             .map(|q| (q.job_id.clone(), q))
             .collect();
-        g.queue_order(now, &self.quotas)
+        g.queue_order_with_usage(now, &self.quotas, &usage)
             .into_iter()
             .filter_map(|id| {
                 let job = g.jobs.get(&id)?;
@@ -1443,7 +1464,6 @@ impl Registry {
         if let Some(job) = g.jobs.get_mut(job_id) {
             job.plan = plan.clone();
         }
-        self.write_job(&g, job_id);
         self.apply_reservation(&mut g, plan, job_id);
         Ok(())
     }
@@ -1528,37 +1548,42 @@ fn planned_gpus_held_by_user(g: &RegistryInner, user: &str, exclude_job_id: Opti
             job.submitted_by == user
                 && !job.phase().is_terminal()
                 && Some(job.job_id.as_str()) != exclude_job_id
-                && job_has_reserved_plan(g, job)
         })
-        .flat_map(|job| job.plan.placements.iter())
-        .flat_map(|placement| placement.gpu_indices.iter())
-        .fold(0u32, |count, _| count.saturating_add(1))
+        .fold(0u32, |count, job| {
+            count.saturating_add(held_gpu_count_for_job(g, job))
+        })
 }
 
-/// A plan is a held reservation only after ownership confirms it or recovery
-/// marks it for reconciliation. This keeps concurrently planned submissions
-/// out of quota usage while preserving their counts across a controller restart.
-fn job_has_reserved_plan(g: &RegistryInner, job: &Job) -> bool {
+/// Count a plan placement when ownership confirms it, or while its node has
+/// not returned since restart. One returned node must not erase the still
+/// unknown placements on its peers.
+fn held_gpu_count_for_job(g: &RegistryInner, job: &Job) -> u32 {
     if g.reconciling.contains(&job.job_id) {
-        return true;
+        return plan_gpu_count(&job.plan).max(job.plan.world_size);
     }
 
-    let mut planned_gpus = 0usize;
+    let mut held = 0u32;
     for placement in &job.plan.placements {
         let Some(node) = g.nodes.get(&placement.node_id) else {
-            return false;
+            held = held.saturating_add(placement.gpu_indices.len() as u32);
+            continue;
         };
         for index in &placement.gpu_indices {
-            planned_gpus += 1;
-            let Some(gpu) = node.info.gpus.iter().find(|gpu| gpu.index == *index) else {
-                return false;
-            };
-            if gpu.allocated_job_id != job.job_id {
-                return false;
+            if node
+                .info
+                .gpus
+                .iter()
+                .any(|gpu| gpu.index == *index && gpu.allocated_job_id == job.job_id)
+            {
+                held = held.saturating_add(1);
             }
         }
     }
-    planned_gpus > 0
+    held.saturating_add(
+        job.plan
+            .world_size
+            .saturating_sub(plan_gpu_count(&job.plan)),
+    )
 }
 
 /// Rebuild the plan a lost promote never wrote down, from the cards the agents
@@ -1809,12 +1834,14 @@ impl RegistryInner {
         for job in self.jobs.values() {
             let entry = per_user.entry(job.submitted_by.clone()).or_default();
             entry.gpu_seconds += job.gpu_seconds(now);
-            if !job.phase().is_terminal() && !job.queued {
-                entry.running_jobs += 1;
+            if !job.phase().is_terminal() {
+                entry.gpus_held = entry
+                    .gpus_held
+                    .saturating_add(held_gpu_count_for_job(self, job));
+                if !job.queued {
+                    entry.running_jobs += 1;
+                }
             }
-        }
-        for (user, entry) in &mut per_user {
-            entry.gpus_held = planned_gpus_held_by_user(self, user, None);
         }
         UsageSnapshot { per_user }
     }
@@ -1859,14 +1886,33 @@ impl RegistryInner {
     /// Every waiting job, scored and ordered by the queue policy.
     fn ranked_queue(&self, now: i64, quotas: &QuotaTable) -> Vec<QueueRanking> {
         let usage = self.usage_snapshot(now);
-        let waiting = self.waiting(quotas, &usage);
+        self.ranked_queue_with_usage(now, quotas, &usage)
+    }
+
+    fn ranked_queue_with_usage(
+        &self,
+        now: i64,
+        quotas: &QuotaTable,
+        usage: &UsageSnapshot,
+    ) -> Vec<QueueRanking> {
+        let waiting = self.waiting(quotas, usage);
         self.queue_policy
-            .rank(&waiting, &QueueContext::new(now, &usage))
+            .rank(&waiting, &QueueContext::new(now, usage))
     }
 
     /// Just the ids, in served order.
     fn queue_order(&self, now: i64, quotas: &QuotaTable) -> Vec<String> {
-        self.ranked_queue(now, quotas)
+        let usage = self.usage_snapshot(now);
+        self.queue_order_with_usage(now, quotas, &usage)
+    }
+
+    fn queue_order_with_usage(
+        &self,
+        now: i64,
+        quotas: &QuotaTable,
+        usage: &UsageSnapshot,
+    ) -> Vec<String> {
+        self.ranked_queue_with_usage(now, quotas, usage)
             .into_iter()
             .map(|r| r.job_id)
             .collect()
