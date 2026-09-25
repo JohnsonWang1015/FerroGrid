@@ -1572,36 +1572,43 @@ fn planned_gpus_held_by_user(g: &RegistryInner, user: &str, exclude_job_id: Opti
         })
 }
 
-/// Count a plan placement when ownership confirms it, or while its node has
-/// not returned since restart. One returned node must not erase the still
-/// unknown placements on its peers.
+/// Count plan placements when ownership confirms them, or while their nodes
+/// have not returned since restart. Keep reported ownership outside the plan
+/// too: a peer can return after recovery settles while still running the job.
 fn held_gpu_count_for_job(g: &RegistryInner, job: &Job) -> u32 {
-    if g.reconciling.contains(&job.job_id) {
-        return plan_gpu_count(&job.plan).max(job.plan.world_size);
-    }
-
-    let mut held = 0u32;
-    for placement in &job.plan.placements {
-        let Some(node) = g.nodes.get(&placement.node_id) else {
-            held = held.saturating_add(placement.gpu_indices.len() as u32);
-            continue;
-        };
-        for index in &placement.gpu_indices {
-            if node
-                .info
-                .gpus
-                .iter()
-                .any(|gpu| gpu.index == *index && gpu.allocated_job_id == job.job_id)
-            {
-                held = held.saturating_add(1);
+    let planned = if g.reconciling.contains(&job.job_id) {
+        plan_gpu_count(&job.plan).max(job.plan.world_size)
+    } else {
+        let mut held = 0u32;
+        for placement in &job.plan.placements {
+            let Some(node) = g.nodes.get(&placement.node_id) else {
+                held = held.saturating_add(placement.gpu_indices.len() as u32);
+                continue;
+            };
+            for index in &placement.gpu_indices {
+                if node
+                    .info
+                    .gpus
+                    .iter()
+                    .any(|gpu| gpu.index == *index && gpu.allocated_job_id == job.job_id)
+                {
+                    held = held.saturating_add(1);
+                }
             }
         }
-    }
-    held.saturating_add(
-        job.plan
-            .world_size
-            .saturating_sub(plan_gpu_count(&job.plan)),
-    )
+        held.saturating_add(
+            job.plan
+                .world_size
+                .saturating_sub(plan_gpu_count(&job.plan)),
+        )
+    };
+    let observed = g
+        .nodes
+        .values()
+        .flat_map(|node| &node.info.gpus)
+        .filter(|gpu| gpu.allocated_job_id == job.job_id)
+        .fold(0u32, |count, _| count.saturating_add(1));
+    planned.max(observed)
 }
 
 /// Rebuild the plan a lost promote never wrote down, from the cards the agents

@@ -600,6 +600,86 @@ async fn adopted_multinode_quota_gap_closes_when_peer_returns_free_and_recovery_
 }
 
 #[tokio::test]
+async fn late_peer_ownership_after_recovery_window_still_counts_toward_quota() {
+    let db = TempDb::new();
+    let (mut queued, _) = planned_job("adopted-late-peer", "alice", &[]);
+    queued.plan = JobPlan::default();
+    queued.queued = true;
+    queued.queue_req = Some(SubmitJobRequest {
+        script: "train.py".into(),
+        nodes: 2,
+        gpus_per_node: 2,
+        submitted_by: "alice".into(),
+        queue: true,
+        ..Default::default()
+    });
+    {
+        let store = Store::open(&db.path()).unwrap();
+        store.write(Change::Job(Box::new(queued.to_record(0))));
+    }
+
+    let state = Store::load(&db.path()).unwrap();
+    let store = Store::open(&db.path()).unwrap();
+    let registry = Registry::restore(VRAM_FLOOR, Arc::new(ferro_sched::queue::Fifo), store, state)
+        .with_quotas(Arc::new(quota("alice", 4)));
+
+    let mut first_peer = node(2);
+    for gpu in &mut first_peer.gpus {
+        gpu.allocated_job_id = "adopted-late-peer".into();
+    }
+    registry.upsert_node(first_peer.clone()).await;
+    assert!(
+        registry
+            .heartbeat("gpu-a", first_peer.gpus, Vec::new())
+            .await
+    );
+
+    registry.close_recovery_window(30).await;
+    assert_eq!(registry.user_gpus_held("alice").await, 2);
+    {
+        let g = registry.inner.lock().await;
+        assert_eq!(g.jobs["adopted-late-peer"].plan.world_size, 2);
+    }
+
+    let mut late_peer = node(2);
+    late_peer.node_id = "gpu-b".into();
+    for gpu in &mut late_peer.gpus {
+        gpu.allocated_job_id = "adopted-late-peer".into();
+    }
+    registry.upsert_node(late_peer.clone()).await;
+    assert!(
+        registry
+            .heartbeat("gpu-b", late_peer.gpus, Vec::new())
+            .await
+    );
+
+    assert_eq!(registry.user_gpus_held("alice").await, 4);
+    let usage = registry.inner.lock().await.usage_snapshot(now_s());
+    assert_eq!(usage.per_user["alice"].gpus_held, 4);
+
+    let mut candidate_node = node(2);
+    candidate_node.node_id = "gpu-c".into();
+    registry.upsert_node(candidate_node).await;
+    let (mut candidate, mut candidate_plan) = planned_job("attempt-late-peer", "alice", &[0, 1]);
+    candidate_plan.placements[0].node_id = "gpu-c".into();
+    candidate.plan = candidate_plan.clone();
+    registry.insert_job(candidate).await;
+    assert!(matches!(
+        registry
+            .reserve_exact_with_quota(&candidate_plan, "attempt-late-peer")
+            .await,
+        Err(QuotaReservationError::Quota {
+            decision: QuotaDecision::Wait {
+                held: 4,
+                requested: 2,
+                limit: 4
+            },
+            ..
+        })
+    ));
+}
+
+#[tokio::test]
 async fn reservation_rejects_a_request_larger_than_the_hard_limit() {
     let registry = Registry::new(VRAM_FLOOR).with_quotas(Arc::new(quota("alice", 2)));
     registry.upsert_node(node(4)).await;
