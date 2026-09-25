@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="650" viewBox="0 0 1120 650">
+<rect width="100%" height="100%" fill="white"/>
+<style>text{font-family:Arial,sans-serif;fill:#222}.grid{stroke:#ddd;stroke-width:1}.axis{stroke:#333;stroke-width:1.5}</style>
+<text x="560.0" y="38" text-anchor="middle" font-size="24" font-weight="bold">Quota and completed-job throughput</text>
+<line class="grid" x1="100" y1="538.00" x2="790" y2="538.00"/>
+<text x="88" y="543.00" text-anchor="end" font-size="14">0</text>
+<line class="grid" x1="100" y1="447.60" x2="790" y2="447.60"/>
+<text x="88" y="452.60" text-anchor="end" font-size="14">35</text>
+<line class="grid" x1="100" y1="357.20" x2="790" y2="357.20"/>
+<text x="88" y="362.20" text-anchor="end" font-size="14">71</text>
+<line class="grid" x1="100" y1="266.80" x2="790" y2="266.80"/>
+<text x="88" y="271.80" text-anchor="end" font-size="14">106</text>
+<line class="grid" x1="100" y1="176.40" x2="790" y2="176.40"/>
+<text x="88" y="181.40" text-anchor="end" font-size="14">141</text>
+<line class="grid" x1="100" y1="86.00" x2="790" y2="86.00"/>
+<text x="88" y="91.00" text-anchor="end" font-size="14">177</text>
+<line class="axis" x1="100" y1="86" x2="100" y2="538"/>
+<line class="axis" x1="100" y1="538" x2="790" y2="538"/>
+<text x="445.0" y="622" text-anchor="middle" font-size="17">Per-user hard quota (GPUs; unlimited baseline)</text>
+<text x="26" y="312.0" text-anchor="middle" font-size="17" transform="rotate(-90 26 312.0)">Completed jobs per hour</text>
+<text x="100.00" y="566" text-anchor="middle" font-size="14">Unlimited</text>
+<text x="330.00" y="566" text-anchor="middle" font-size="14">1</text>
+<text x="560.00" y="566" text-anchor="middle" font-size="14">2</text>
+<text x="790.00" y="566" text-anchor="middle" font-size="14">4</text>
+<path d="M 100.00 137.35 L 330.00 359.40 L 560.00 184.23 L 790.00 137.31" fill="none" stroke="#b33b3b" stroke-width="3"/>
+<line x1="100.00" y1="139.65" x2="100.00" y2="135.05" stroke="#b33b3b" stroke-width="2"/>
+<line x1="94.00" y1="139.65" x2="106.00" y2="139.65" stroke="#b33b3b" stroke-width="2"/>
+<line x1="94.00" y1="135.05" x2="106.00" y2="135.05" stroke="#b33b3b" stroke-width="2"/>
+<circle cx="100.00" cy="137.35" r="5" fill="#b33b3b"/>
+<line x1="330.00" y1="364.36" x2="330.00" y2="354.44" stroke="#b33b3b" stroke-width="2"/>
+<line x1="324.00" y1="364.36" x2="336.00" y2="364.36" stroke="#b33b3b" stroke-width="2"/>
+<line x1="324.00" y1="354.44" x2="336.00" y2="354.44" stroke="#b33b3b" stroke-width="2"/>
+<circle cx="330.00" cy="359.40" r="5" fill="#b33b3b"/>
+<line x1="560.00" y1="194.08" x2="560.00" y2="174.37" stroke="#b33b3b" stroke-width="2"/>
+<line x1="554.00" y1="194.08" x2="566.00" y2="194.08" stroke="#b33b3b" stroke-width="2"/>
+<line x1="554.00" y1="174.37" x2="566.00" y2="174.37" stroke="#b33b3b" stroke-width="2"/>
+<circle cx="560.00" cy="184.23" r="5" fill="#b33b3b"/>
+<line x1="790.00" y1="139.46" x2="790.00" y2="135.16" stroke="#b33b3b" stroke-width="2"/>
+<line x1="784.00" y1="139.46" x2="796.00" y2="139.46" stroke="#b33b3b" stroke-width="2"/>
+<line x1="784.00" y1="135.16" x2="796.00" y2="135.16" stroke="#b33b3b" stroke-width="2"/>
+<circle cx="790.00" cy="137.31" r="5" fill="#b33b3b"/>
+<path d="M 100.00 137.35 L 330.00 465.92 L 560.00 394.36 L 790.00 253.01" fill="none" stroke="#2463a6" stroke-width="3"/>
+<line x1="100.00" y1="139.65" x2="100.00" y2="135.05" stroke="#2463a6" stroke-width="2"/>
+<line x1="94.00" y1="139.65" x2="106.00" y2="139.65" stroke="#2463a6" stroke-width="2"/>
+<line x1="94.00" y1="135.05" x2="106.00" y2="135.05" stroke="#2463a6" stroke-width="2"/>
+<circle cx="100.00" cy="137.35" r="5" fill="#2463a6"/>
+<line x1="330.00" y1="467.73" x2="330.00" y2="464.11" stroke="#2463a6" stroke-width="2"/>
+<line x1="324.00" y1="467.73" x2="336.00" y2="467.73" stroke="#2463a6" stroke-width="2"/>
+<line x1="324.00" y1="464.11" x2="336.00" y2="464.11" stroke="#2463a6" stroke-width="2"/>
+<circle cx="330.00" cy="465.92" r="5" fill="#2463a6"/>
+<line x1="560.00" y1="397.99" x2="560.00" y2="390.72" stroke="#2463a6" stroke-width="2"/>
+<line x1="554.00" y1="397.99" x2="566.00" y2="397.99" stroke="#2463a6" stroke-width="2"/>
+<line x1="554.00" y1="390.72" x2="566.00" y2="390.72" stroke="#2463a6" stroke-width="2"/>
+<circle cx="560.00" cy="394.36" r="5" fill="#2463a6"/>
+<line x1="790.00" y1="260.04" x2="790.00" y2="245.98" stroke="#2463a6" stroke-width="2"/>
+<line x1="784.00" y1="260.04" x2="796.00" y2="260.04" stroke="#2463a6" stroke-width="2"/>
+<line x1="784.00" y1="245.98" x2="796.00" y2="245.98" stroke="#2463a6" stroke-width="2"/>
+<circle cx="790.00" cy="253.01" r="5" fill="#2463a6"/>
+<path d="M 100.00 136.82 L 330.00 458.37 L 560.00 379.18 L 790.00 223.15" fill="none" stroke="#548235" stroke-width="3"/>
+<line x1="100.00" y1="139.21" x2="100.00" y2="134.43" stroke="#548235" stroke-width="2"/>
+<line x1="94.00" y1="139.21" x2="106.00" y2="139.21" stroke="#548235" stroke-width="2"/>
+<line x1="94.00" y1="134.43" x2="106.00" y2="134.43" stroke="#548235" stroke-width="2"/>
+<circle cx="100.00" cy="136.82" r="5" fill="#548235"/>
+<line x1="330.00" y1="459.01" x2="330.00" y2="457.74" stroke="#548235" stroke-width="2"/>
+<line x1="324.00" y1="459.01" x2="336.00" y2="459.01" stroke="#548235" stroke-width="2"/>
+<line x1="324.00" y1="457.74" x2="336.00" y2="457.74" stroke="#548235" stroke-width="2"/>
+<circle cx="330.00" cy="458.37" r="5" fill="#548235"/>
+<line x1="560.00" y1="380.47" x2="560.00" y2="377.90" stroke="#548235" stroke-width="2"/>
+<line x1="554.00" y1="380.47" x2="566.00" y2="380.47" stroke="#548235" stroke-width="2"/>
+<line x1="554.00" y1="377.90" x2="566.00" y2="377.90" stroke="#548235" stroke-width="2"/>
+<circle cx="560.00" cy="379.18" r="5" fill="#548235"/>
+<line x1="790.00" y1="225.91" x2="790.00" y2="220.38" stroke="#548235" stroke-width="2"/>
+<line x1="784.00" y1="225.91" x2="796.00" y2="225.91" stroke="#548235" stroke-width="2"/>
+<line x1="784.00" y1="220.38" x2="796.00" y2="220.38" stroke="#548235" stroke-width="2"/>
+<circle cx="790.00" cy="223.15" r="5" fill="#548235"/>
+<path d="M 100.00 137.35 L 330.00 486.93 L 560.00 436.07 L 790.00 335.16" fill="none" stroke="#8856a7" stroke-width="3"/>
+<line x1="100.00" y1="139.65" x2="100.00" y2="135.05" stroke="#8856a7" stroke-width="2"/>
+<line x1="94.00" y1="139.65" x2="106.00" y2="139.65" stroke="#8856a7" stroke-width="2"/>
+<line x1="94.00" y1="135.05" x2="106.00" y2="135.05" stroke="#8856a7" stroke-width="2"/>
+<circle cx="100.00" cy="137.35" r="5" fill="#8856a7"/>
+<line x1="330.00" y1="487.21" x2="330.00" y2="486.66" stroke="#8856a7" stroke-width="2"/>
+<line x1="324.00" y1="487.21" x2="336.00" y2="487.21" stroke="#8856a7" stroke-width="2"/>
+<line x1="324.00" y1="486.66" x2="336.00" y2="486.66" stroke="#8856a7" stroke-width="2"/>
+<circle cx="330.00" cy="486.93" r="5" fill="#8856a7"/>
+<line x1="560.00" y1="436.65" x2="560.00" y2="435.49" stroke="#8856a7" stroke-width="2"/>
+<line x1="554.00" y1="436.65" x2="566.00" y2="436.65" stroke="#8856a7" stroke-width="2"/>
+<line x1="554.00" y1="435.49" x2="566.00" y2="435.49" stroke="#8856a7" stroke-width="2"/>
+<circle cx="560.00" cy="436.07" r="5" fill="#8856a7"/>
+<line x1="790.00" y1="336.31" x2="790.00" y2="334.00" stroke="#8856a7" stroke-width="2"/>
+<line x1="784.00" y1="336.31" x2="796.00" y2="336.31" stroke="#8856a7" stroke-width="2"/>
+<line x1="784.00" y1="334.00" x2="796.00" y2="334.00" stroke="#8856a7" stroke-width="2"/>
+<circle cx="790.00" cy="335.16" r="5" fill="#8856a7"/>
+<line x1="826" y1="98" x2="856" y2="98" stroke="#b33b3b" stroke-width="3"/>
+<text x="866" y="103" font-size="14">A balanced</text>
+<line x1="826" y1="132" x2="856" y2="132" stroke="#2463a6" stroke-width="3"/>
+<text x="866" y="137" font-size="14">B heavy user</text>
+<line x1="826" y1="166" x2="856" y2="166" stroke="#548235" stroke-width="3"/>
+<text x="866" y="171" font-size="14">C burst</text>
+<line x1="826" y1="200" x2="856" y2="200" stroke="#8856a7" stroke-width="3"/>
+<text x="866" y="205" font-size="14">D single user</text>
+<text x="100" y="620" font-size="12" fill="#555">Points are across-seed means; bars show two-sided 95% Student-t confidence intervals.</text>
+</svg>

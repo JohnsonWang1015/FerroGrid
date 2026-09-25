@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/ferro-proto",
     "crates/ferro-gpu",
+    "crates/ferro-admission",
     "crates/ferro-sched",
     "crates/ferro-sim",
     "crates/ferro-agent",
@@ -18,6 +19,7 @@ license = "Apache-2.0"
 [workspace.dependencies]
 ferro-proto = { path = "crates/ferro-proto" }
 ferro-gpu = { path = "crates/ferro-gpu" }
+ferro-admission = { path = "crates/ferro-admission" }
 ferro-sched = { path = "crates/ferro-sched" }
 ferro-sim = { path = "crates/ferro-sim" }
 

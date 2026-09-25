@@ -906,8 +906,20 @@ git commit. The findings are written up in
 [`docs/os_term_project/experiments.md`](docs/os_term_project/experiments.md) --
 including two that changed the code: performance-aware placement pairs the two
 fastest nodes across the slowest measured link, and `run_queue` already
-backfills, which is worth 4.9x on mean waiting time and costs an unbounded tail
-for large jobs.
+backfills, which yielded 4.9x lower aggregate mean wait than strict FIFO in one
+workload; a job-class split showed the large-job delay came from saturation,
+not from being overtaken.
+
+Per-user quota effects have a separate paired-seed study so quota is the only
+scheduling variable being changed:
+
+```bash
+./scripts/run_quota_experiments.sh   # 20 seeds; no GPU needed
+```
+
+It writes per-seed raw data, seed aggregates and five SVG figures under
+`outputs/benchmarks/quota/`. The workload-specific findings and limitations are
+in [`docs/os_term_project/quota_evaluation.md`](docs/os_term_project/quota_evaluation.md).
 
 ---
 

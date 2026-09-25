@@ -33,6 +33,32 @@ enum Cmd {
     List,
     /// Print one run's scheduler trace, for drawing a Gantt chart.
     Trace(TraceArgs),
+    /// Evaluate per-user GPU quota trade-offs across paired synthetic workloads.
+    Quota(QuotaArgs),
+    /// Recompute quota summary files from raw.json without rerunning simulations.
+    QuotaAggregate(QuotaAggregateArgs),
+}
+
+#[derive(clap::Args, Debug)]
+struct QuotaArgs {
+    /// Directory for raw per-seed runs and aggregate summaries.
+    #[arg(long, default_value = "outputs/benchmarks/quota")]
+    out: PathBuf,
+
+    /// Number of paired seeds per scenario and quota level (default: 20).
+    #[arg(long, default_value_t = 20)]
+    seeds: usize,
+}
+
+#[derive(clap::Args, Debug)]
+struct QuotaAggregateArgs {
+    /// A raw.json file produced by `ferro-sim quota`.
+    #[arg(long)]
+    input: PathBuf,
+
+    /// Where summary.csv and summary.json should be written.
+    #[arg(long, default_value = "outputs/benchmarks/quota")]
+    out: PathBuf,
 }
 
 #[derive(clap::Args, Debug)]
@@ -137,7 +163,24 @@ fn main() -> Result<()> {
         Cmd::List => list(),
         Cmd::Run(args) => run(args),
         Cmd::Trace(args) => trace(args),
+        Cmd::Quota(args) => quota(args),
+        Cmd::QuotaAggregate(args) => quota_aggregate(args),
     }
+}
+
+fn quota(args: QuotaArgs) -> Result<()> {
+    ferro_sim::quota_evaluation::run_sweep(&args.out, args.seeds)?;
+    Ok(())
+}
+
+fn quota_aggregate(args: QuotaAggregateArgs) -> Result<()> {
+    let rows = ferro_sim::quota_evaluation::summarise_file(&args.input, &args.out)?;
+    println!(
+        "{} aggregate rows written to {}",
+        rows.len(),
+        args.out.display()
+    );
+    Ok(())
 }
 
 fn list() -> Result<()> {

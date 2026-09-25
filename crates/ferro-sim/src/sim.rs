@@ -25,12 +25,13 @@
 //! are.
 
 use crate::workload::{ClusterSpec, SimJob, WorkloadSpec};
+use ferro_admission::{QuotaDecision, QuotaTable};
 use ferro_proto::{JobPlan, NodeState};
 use ferro_sched::dispatch::{self, RunningJob};
 use ferro_sched::queue::{QueueContext, QueuePolicy, QueuedJob, UsageSnapshot, UserUsage};
 use ferro_sched::{NetworkSnapshot, PlacementPolicy, PlacementRequest, SchedulerConfig, Shape};
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 pub use ferro_sched::dispatch::Dispatch;
 
@@ -170,6 +171,106 @@ pub struct SimOutcome {
     pub total_gpus: usize,
 }
 
+/// Quota observations for one job. Block time is the sum of intervals in
+/// which its request exceeded its user's concurrent limit.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, serde::Deserialize)]
+pub struct QuotaJobMetrics {
+    pub block_events: usize,
+    pub block_attempts: usize,
+    pub blocked_time_s: i64,
+    pub hard_rejected: bool,
+}
+
+/// Deterministic admission measurements. Scheduler wall-clock overhead is
+/// intentionally excluded so equal seeds can be compared byte-for-byte.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct QuotaRunMetrics {
+    pub blocked_jobs: usize,
+    pub block_events: usize,
+    pub block_attempts: usize,
+    pub blocked_time_s: i64,
+    pub hard_rejected_jobs: usize,
+    /// Free GPU-seconds observed while at least one queued job was quota-blocked.
+    pub quota_unused_gpu_seconds: f64,
+    pub per_job: BTreeMap<String, QuotaJobMetrics>,
+}
+
+#[derive(Debug, Clone)]
+pub struct QuotaRunOutcome {
+    pub simulation: SimOutcome,
+    pub quota: QuotaRunMetrics,
+}
+
+#[derive(Default)]
+struct QuotaTracker {
+    metrics: QuotaRunMetrics,
+    waiting_since: HashMap<String, i64>,
+    ever_blocked: HashSet<String>,
+}
+
+impl QuotaTracker {
+    fn observe_wait(&mut self, job_id: &str, now: i64) {
+        let metrics = self.metrics.per_job.entry(job_id.to_string()).or_default();
+        metrics.block_attempts += 1;
+        if !self.waiting_since.contains_key(job_id) {
+            metrics.block_events += 1;
+            self.ever_blocked.insert(job_id.to_string());
+            self.waiting_since.insert(job_id.to_string(), now);
+        }
+    }
+
+    fn finish_wait(&mut self, job_id: &str, now: i64) {
+        if let Some(started) = self.waiting_since.remove(job_id) {
+            self.metrics
+                .per_job
+                .entry(job_id.to_string())
+                .or_default()
+                .blocked_time_s += (now - started).max(0);
+        }
+    }
+
+    fn reject(&mut self, job_id: &str, now: i64) {
+        self.finish_wait(job_id, now);
+        self.metrics
+            .per_job
+            .entry(job_id.to_string())
+            .or_default()
+            .hard_rejected = true;
+    }
+
+    fn finish_all(&mut self, now: i64) {
+        let open: Vec<String> = self.waiting_since.keys().cloned().collect();
+        for job_id in open {
+            self.finish_wait(&job_id, now);
+        }
+        self.metrics.blocked_jobs = self.ever_blocked.len();
+        self.metrics.block_events = self.metrics.per_job.values().map(|m| m.block_events).sum();
+        self.metrics.block_attempts = self
+            .metrics
+            .per_job
+            .values()
+            .map(|m| m.block_attempts)
+            .sum();
+        self.metrics.blocked_time_s = self
+            .metrics
+            .per_job
+            .values()
+            .map(|m| m.blocked_time_s)
+            .sum();
+        self.metrics.hard_rejected_jobs = self
+            .metrics
+            .per_job
+            .values()
+            .filter(|m| m.hard_rejected)
+            .count();
+    }
+}
+
+struct ScheduleResult {
+    started: Vec<(SimJob, JobPlan)>,
+    quota_blocked: Vec<String>,
+}
+
 struct Running {
     job: SimJob,
     plan: JobPlan,
@@ -268,13 +369,91 @@ pub fn run(
     dispatch: Dispatch,
     execution: &ExecutionModel,
 ) -> SimOutcome {
+    run_internal(
+        workload,
+        workload.generate(),
+        cluster,
+        queue_policy,
+        placement,
+        config,
+        dispatch,
+        execution,
+        None,
+    )
+    .0
+}
+
+/// Run a generated workload with the shared pure quota admission rules.
+#[allow(clippy::too_many_arguments)]
+pub fn run_with_quota(
+    workload: &WorkloadSpec,
+    cluster: &ClusterSpec,
+    queue_policy: &dyn QueuePolicy,
+    placement: &dyn PlacementPolicy,
+    config: &SchedulerConfig,
+    dispatch: Dispatch,
+    execution: &ExecutionModel,
+    quotas: &QuotaTable,
+) -> QuotaRunOutcome {
+    run_with_jobs_quota(
+        workload,
+        workload.generate(),
+        cluster,
+        queue_policy,
+        placement,
+        config,
+        dispatch,
+        execution,
+        quotas,
+    )
+}
+
+/// Run explicit jobs with quotas. This supports deterministic event schedules
+/// such as the early-dominance burst without changing the common generator.
+#[allow(clippy::too_many_arguments)]
+pub fn run_with_jobs_quota(
+    workload: &WorkloadSpec,
+    jobs: Vec<SimJob>,
+    cluster: &ClusterSpec,
+    queue_policy: &dyn QueuePolicy,
+    placement: &dyn PlacementPolicy,
+    config: &SchedulerConfig,
+    dispatch: Dispatch,
+    execution: &ExecutionModel,
+    quotas: &QuotaTable,
+) -> QuotaRunOutcome {
+    let (simulation, quota) = run_internal(
+        workload,
+        jobs,
+        cluster,
+        queue_policy,
+        placement,
+        config,
+        dispatch,
+        execution,
+        Some(quotas),
+    );
+    QuotaRunOutcome { simulation, quota }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_internal(
+    workload: &WorkloadSpec,
+    mut arriving: Vec<SimJob>,
+    cluster: &ClusterSpec,
+    queue_policy: &dyn QueuePolicy,
+    placement: &dyn PlacementPolicy,
+    config: &SchedulerConfig,
+    dispatch: Dispatch,
+    execution: &ExecutionModel,
+    quotas: Option<&QuotaTable>,
+) -> (SimOutcome, QuotaRunMetrics) {
     let mut nodes = cluster.to_nodes();
     let mut network = NetworkSnapshot::default();
     for link in &cluster.links {
         network.record(&link.from, &link.to, link.mbps, 0);
     }
 
-    let mut arriving: Vec<SimJob> = workload.generate();
     arriving.reverse(); // pop from the back, cheapest way to take them in order
 
     let mut waiting: Vec<(u64, SimJob)> = Vec::new(); // (submission sequence, job)
@@ -290,6 +469,7 @@ pub fn run(
     let mut passes: u64 = 0;
     let mut frag_area: f64 = 0.0;
     let mut node_failed = false;
+    let mut quota_tracker = QuotaTracker::default();
 
     // Start the clock at the first arrival rather than at zero, so an idle
     // lead-in does not deflate the utilisation figure.
@@ -409,8 +589,9 @@ pub fn run(
         }
 
         // --- one scheduling pass.
+        let mut quota_blocked_now = Vec::new();
         if !waiting.is_empty() {
-            let started = schedule_pass(
+            let result = schedule_pass(
                 &mut waiting,
                 &running,
                 &mut nodes,
@@ -422,9 +603,12 @@ pub fn run(
                 &usage,
                 now,
                 &mut scheduler_ns,
+                quotas,
+                &mut quota_tracker,
             );
             passes += 1;
-            for (job, plan) in started {
+            quota_blocked_now = result.quota_blocked;
+            for (job, plan) in result.started {
                 // What the placement decision actually costs this job.
                 let effective = execution.duration(
                     job.duration_s,
@@ -485,21 +669,30 @@ pub fn run(
         // Fragmentation is a time-weighted average, so it is accumulated over
         // the interval the cluster spent in this state.
         frag_area += stranded(&nodes, config.min_free_vram_b) as f64 * (next - now) as f64;
+        if !quota_blocked_now.is_empty() {
+            quota_tracker.metrics.quota_unused_gpu_seconds +=
+                dispatch::free_gpus(&nodes, config.min_free_vram_b) as f64 * (next - now) as f64;
+        }
         now = next;
     }
+
+    quota_tracker.finish_all(now);
 
     let span = span_of(&records).max(1);
     let mut jobs: Vec<JobRecord> = order.iter().filter_map(|id| records.remove(id)).collect();
     jobs.sort_by(|a, b| a.arrival_s.cmp(&b.arrival_s).then_with(|| a.id.cmp(&b.id)));
 
-    SimOutcome {
-        jobs,
-        trace,
-        scheduler_ns,
-        scheduling_passes: passes,
-        fragmentation: frag_area / span as f64,
-        total_gpus: cluster.total_gpus(),
-    }
+    (
+        SimOutcome {
+            jobs,
+            trace,
+            scheduler_ns,
+            scheduling_passes: passes,
+            fragmentation: frag_area / span as f64,
+            total_gpus: cluster.total_gpus(),
+        },
+        quota_tracker.metrics,
+    )
 }
 
 fn span_of(records: &HashMap<String, JobRecord>) -> i64 {
@@ -551,7 +744,9 @@ fn schedule_pass(
     usage: &HashMap<String, UserUsage>,
     now: i64,
     scheduler_ns: &mut u128,
-) -> Vec<(SimJob, JobPlan)> {
+    quotas: Option<&QuotaTable>,
+    quota_tracker: &mut QuotaTracker,
+) -> ScheduleResult {
     let snapshot = UsageSnapshot {
         per_user: usage.clone(),
     };
@@ -582,10 +777,33 @@ fn schedule_pass(
     let started_at = std::time::Instant::now();
     let ranked = queue_policy.rank(&queued, &QueueContext::new(now, &snapshot));
     // In ranked order, which is what `admissible` is defined over.
-    let in_order: Vec<QueuedJob> = ranked
+    let mut in_order: Vec<QueuedJob> = ranked
         .iter()
         .filter_map(|r| queued.iter().find(|q| q.job_id == r.job_id).cloned())
         .collect();
+
+    // A request larger than its configured hard limit can never run. Remove
+    // it before dispatch so strict mode does not wait behind an impossible job.
+    if let Some(table) = quotas {
+        let rejected: HashSet<String> = in_order
+            .iter()
+            .filter(|job| {
+                matches!(
+                    table.decide(&job.submitted_by, 0, job.gpus),
+                    QuotaDecision::Reject { .. }
+                )
+            })
+            .map(|job| job.job_id.clone())
+            .collect();
+        for job_id in &rejected {
+            quota_tracker.reject(job_id, now);
+        }
+        if !rejected.is_empty() {
+            waiting.retain(|(_, job)| !rejected.contains(&job.id));
+            in_order.retain(|job| !rejected.contains(&job.job_id));
+        }
+    }
+
     let admissions = dispatch::admissible(
         &in_order,
         &live,
@@ -596,11 +814,32 @@ fn schedule_pass(
     *scheduler_ns += started_at.elapsed().as_nanos();
 
     let mut started = Vec::new();
+    let mut held_by_user: HashMap<String, u32> = HashMap::new();
+    for running_job in running {
+        *held_by_user
+            .entry(running_job.job.user.clone())
+            .or_default() += running_job.job.gpus();
+    }
     for admission in admissions.iter().filter(|a| a.allowed) {
         let Some(index) = waiting.iter().position(|(_, j)| j.id == admission.job_id) else {
             continue;
         };
         let job = &waiting[index].1;
+        match quotas.map(|table| {
+            table.decide(
+                &job.user,
+                held_by_user.get(&job.user).copied().unwrap_or(0),
+                job.gpus(),
+            )
+        }) {
+            Some(QuotaDecision::Wait { .. }) => continue,
+            Some(QuotaDecision::Reject { .. }) => {
+                quota_tracker.reject(&job.id, now);
+                waiting.remove(index);
+                continue;
+            }
+            Some(QuotaDecision::Unlimited | QuotaDecision::Admitted { .. }) | None => {}
+        }
         let req = PlacementRequest {
             shape: Shape::Explicit {
                 nodes: job.nodes.max(1),
@@ -620,10 +859,39 @@ fn schedule_pass(
         if let Ok(decision) = placed {
             let (_, job) = waiting.remove(index);
             set_allocation(nodes, &decision.plan, &job.id);
+            *held_by_user.entry(job.user.clone()).or_default() += job.gpus();
+            quota_tracker.finish_wait(&job.id, now);
             started.push((job, decision.plan));
         }
     }
-    started
+
+    let mut quota_blocked = Vec::new();
+    if let Some(table) = quotas {
+        for (_, job) in waiting.iter() {
+            match table.decide(
+                &job.user,
+                held_by_user.get(&job.user).copied().unwrap_or(0),
+                job.gpus(),
+            ) {
+                QuotaDecision::Wait { .. } => {
+                    quota_tracker.observe_wait(&job.id, now);
+                    quota_blocked.push(job.id.clone());
+                }
+                QuotaDecision::Reject { .. } => {
+                    // All hard rejects were removed above. This is defensive
+                    // against a future admission rule introducing a new path.
+                    quota_tracker.reject(&job.id, now);
+                }
+                QuotaDecision::Unlimited | QuotaDecision::Admitted { .. } => {
+                    quota_tracker.finish_wait(&job.id, now);
+                }
+            }
+        }
+    }
+    ScheduleResult {
+        started,
+        quota_blocked,
+    }
 }
 
 #[cfg(test)]
@@ -1043,5 +1311,258 @@ mod tests {
         );
         assert!(out.scheduling_passes > 0);
         assert!(out.scheduler_ns > 0, "the policies must have been timed");
+    }
+}
+
+#[cfg(test)]
+mod quota_tests {
+    use super::*;
+    use ferro_admission::QuotaTable;
+    use ferro_sched::placement::FirstFit;
+    use ferro_sched::queue::Fifo;
+    use ferro_sched::PlacementWeights;
+
+    fn config() -> SchedulerConfig {
+        SchedulerConfig {
+            master_port: 29500,
+            min_free_vram_b: 1 << 30,
+            network_max_age_s: 0,
+            placement_weights: PlacementWeights::default(),
+        }
+    }
+
+    fn workload() -> WorkloadSpec {
+        WorkloadSpec {
+            name: "quota-test".into(),
+            seed: 41,
+            jobs: 4,
+            mean_interarrival_s: 1.0,
+            users: vec![crate::workload::UserSpec {
+                name: "alice".into(),
+                weight: 1.0,
+                priority: 50,
+            }],
+            classes: vec![crate::workload::JobClass {
+                name: "one-gpu".into(),
+                weight: 1.0,
+                nodes: 1,
+                gpus_per_node: 1,
+                min_duration_s: 10,
+                max_duration_s: 10,
+            }],
+            estimate_fraction: 1.0,
+            estimate_error: 0.0,
+            fail_node: None,
+        }
+    }
+
+    fn job(id: &str, user: &str, arrival_s: i64, gpus: u32, duration_s: i64) -> SimJob {
+        SimJob {
+            id: id.into(),
+            user: user.into(),
+            arrival_s,
+            duration_s,
+            estimated_duration_s: Some(duration_s as u32),
+            priority: 50,
+            nodes: 1,
+            gpus_per_node: gpus,
+            class: "one-gpu".into(),
+        }
+    }
+
+    fn quota(user: &str, gpus: u32) -> (String, u32) {
+        (user.into(), gpus)
+    }
+
+    fn start_time(out: &QuotaRunOutcome, id: &str) -> Option<i64> {
+        out.simulation
+            .jobs
+            .iter()
+            .find(|record| record.id == id)
+            .and_then(|record| record.start_s)
+    }
+
+    #[test]
+    fn quota_blocking_is_temporary_and_records_its_time() {
+        let out = run_with_jobs_quota(
+            &workload(),
+            vec![
+                job("a1", "alice", 0, 1, 10),
+                job("a2", "alice", 0, 1, 10),
+                job("b1", "bob", 1, 1, 10),
+            ],
+            &ClusterSpec::homogeneous(1, 2),
+            &Fifo,
+            &FirstFit,
+            &config(),
+            Dispatch::Opportunistic,
+            &ExecutionModel::flat(),
+            &QuotaTable::from_specs([quota("alice", 1)]).unwrap(),
+        );
+
+        assert_eq!(start_time(&out, "a1"), Some(0));
+        assert_eq!(start_time(&out, "a2"), Some(10));
+        let blocked = &out.quota.per_job["a2"];
+        assert!(blocked.block_attempts >= 1);
+        assert_eq!(blocked.blocked_time_s, 10);
+        assert!(!blocked.hard_rejected);
+        assert_eq!(out.quota.hard_rejected_jobs, 0);
+    }
+
+    #[test]
+    fn a_request_larger_than_its_hard_quota_is_explicitly_rejected() {
+        let out = run_with_jobs_quota(
+            &workload(),
+            vec![job("wide", "alice", 0, 2, 10)],
+            &ClusterSpec::homogeneous(1, 2),
+            &Fifo,
+            &FirstFit,
+            &config(),
+            Dispatch::Opportunistic,
+            &ExecutionModel::flat(),
+            &QuotaTable::from_specs([quota("alice", 1)]).unwrap(),
+        );
+
+        assert_eq!(start_time(&out, "wide"), None);
+        assert!(out.quota.per_job["wide"].hard_rejected);
+        assert_eq!(out.quota.hard_rejected_jobs, 1);
+    }
+
+    #[test]
+    fn users_have_independent_limits_and_never_exceed_physical_capacity() {
+        let out = run_with_jobs_quota(
+            &workload(),
+            vec![
+                job("a1", "alice", 0, 1, 10),
+                job("a2", "alice", 0, 1, 10),
+                job("b1", "bob", 0, 1, 10),
+                job("b2", "bob", 0, 1, 10),
+                job("b3", "bob", 0, 1, 10),
+            ],
+            &ClusterSpec::homogeneous(1, 3),
+            &Fifo,
+            &FirstFit,
+            &config(),
+            Dispatch::Opportunistic,
+            &ExecutionModel::flat(),
+            &QuotaTable::from_specs([quota("alice", 1), quota("bob", 2)]).unwrap(),
+        );
+
+        assert_eq!(start_time(&out, "a1"), Some(0));
+        assert_eq!(start_time(&out, "b1"), Some(0));
+        assert_eq!(start_time(&out, "b2"), Some(0));
+        assert_eq!(start_time(&out, "b3"), Some(10));
+        let events: Vec<_> = out
+            .simulation
+            .jobs
+            .iter()
+            .filter_map(|record| Some((record.start_s?, record.end_s?, record.gpus)))
+            .collect();
+        for (at, _, _) in &events {
+            let held: u32 = events
+                .iter()
+                .filter(|(start, end, _)| start <= at && at < end)
+                .map(|(_, _, gpus)| *gpus)
+                .sum();
+            assert!(held <= 3, "physical capacity exceeded at t={at}: {held}");
+        }
+        for (name, limit) in [("alice", 1), ("bob", 2)] {
+            let user_events: Vec<_> = out
+                .simulation
+                .jobs
+                .iter()
+                .filter(|record| record.user == name)
+                .filter_map(|record| Some((record.start_s?, record.end_s?)))
+                .collect();
+            for (at, _) in &user_events {
+                let held = user_events
+                    .iter()
+                    .filter(|(start, end)| start <= at && at < end)
+                    .count();
+                assert!(
+                    held <= limit,
+                    "{name} held {held} GPUs at t={at}, limit={limit}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_empty_quota_table_preserves_the_unlimited_run_schedule() {
+        let spec = workload();
+        let cluster = ClusterSpec::homogeneous(1, 2);
+        let direct = run(
+            &spec,
+            &cluster,
+            &Fifo,
+            &FirstFit,
+            &config(),
+            Dispatch::Opportunistic,
+            &ExecutionModel::flat(),
+        );
+        let unlimited = run_with_quota(
+            &spec,
+            &cluster,
+            &Fifo,
+            &FirstFit,
+            &config(),
+            Dispatch::Opportunistic,
+            &ExecutionModel::flat(),
+            &QuotaTable::default(),
+        );
+        let signature = |jobs: &[JobRecord]| {
+            jobs.iter()
+                .map(|j| (j.id.clone(), j.start_s, j.end_s, j.wait_s))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            signature(&direct.jobs),
+            signature(&unlimited.simulation.jobs)
+        );
+        assert_eq!(unlimited.quota.hard_rejected_jobs, 0);
+        assert_eq!(unlimited.quota.blocked_jobs, 0);
+    }
+
+    #[test]
+    fn same_seed_and_configuration_reproduce_metrics_and_job_times() {
+        let spec = workload();
+        let cluster = ClusterSpec::homogeneous(1, 2);
+        let quota = QuotaTable::from_specs([quota("alice", 1)]).unwrap();
+        let run_once = || {
+            run_with_quota(
+                &spec,
+                &cluster,
+                &Fifo,
+                &FirstFit,
+                &config(),
+                Dispatch::Opportunistic,
+                &ExecutionModel::flat(),
+                &quota,
+            )
+        };
+        let first = run_once();
+        let second = run_once();
+        let signature = |run: &QuotaRunOutcome| {
+            run.simulation
+                .jobs
+                .iter()
+                .map(|j| (j.id.clone(), j.start_s, j.end_s, j.wait_s, j.turnaround_s))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(signature(&first), signature(&second));
+        assert_eq!(first.quota, second.quota);
+        let first_metrics = crate::metrics::summarise(&first.simulation);
+        let second_metrics = crate::metrics::summarise(&second.simulation);
+        assert_eq!(first_metrics.avg_wait_s, second_metrics.avg_wait_s);
+        assert_eq!(first_metrics.p95_wait_s, second_metrics.p95_wait_s);
+        assert_eq!(first_metrics.makespan_s, second_metrics.makespan_s);
+        assert_eq!(
+            first_metrics.gpu_utilisation,
+            second_metrics.gpu_utilisation
+        );
+        assert_eq!(
+            first_metrics.throughput_per_hour,
+            second_metrics.throughput_per_hour
+        );
     }
 }

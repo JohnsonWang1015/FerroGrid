@@ -15,6 +15,7 @@ path = "src/main.rs"
 [dependencies]
 ferro-proto.workspace = true
 ferro-sched.workspace = true
+ferro-admission.workspace = true
 tonic.workspace = true
 tonic-prost.workspace = true
 prost.workspace = true
