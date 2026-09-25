@@ -1077,9 +1077,8 @@ Phase 1 is deliberately small. Known gaps, in rough priority order:
 
 - The controller restores its jobs, queue order, GPU benchmarks and `ferro net` measurements from `~/.local/state/ferrogrid/controller.db` (`--state`, `--no-state`), but it does not yet reconcile them against what the agents report: a job that was running when the controller died comes back running until a heartbeat says otherwise. Node registrations self-heal, as before.
 - Without `--wait`, a job that cannot be placed is still rejected rather than held. Both queue policy (`fifo`, `priority`, `aging`, `fair-share`, `sjf`) and placement policy (`performance`, `first-fit`, `best-fit`, `vram`, `topology`) are selectable at controller startup, but not while it runs.
-- No authentication or TLS on the gRPC endpoints; run it on a trusted network. `submitted_by` is client supplied, so per-user quotas are not a security boundary.
+- No authentication or TLS on the gRPC endpoints; run it on a trusted network. `submitted_by` is client supplied, so per-user quotas are not a security boundary. There is no preemption.
 - Fair share and `ferro usage` use job-derived GPU-seconds. Usage history is limited to the durable job records retained by the controller.
-- Preemption is not implemented.
 - Elastic/fault-tolerant training is not wired up; a rank failure fails the job.
 - `--gpus-per-node` is uniform across nodes, as torchrun expects.
 
