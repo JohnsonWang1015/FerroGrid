@@ -29,7 +29,7 @@ rule or scheduler.
 | Dispatch | Opportunistic |
 | Placement | Performance |
 | Quotas | Unlimited, 1, 2, and 4 concurrent GPUs per user |
-| Seeds | 1001–1020 (20 paired seeds per scenario and quota) |
+| Seeds | 20 paired seeds per scenario and quota; the same seed set is reused for every quota |
 | Jobs | 1 GPU each; duration uniform from 120 through 240 seconds |
 | Execution | Simulator default model; no node failures |
 | Runs | 4 scenarios × 4 quota settings × 20 seeds = 320 |
@@ -88,7 +88,7 @@ queue. Scenario C starts one user's burst early, but the burst can overlap with 
 
 Each table cell below is **mean ± sample standard deviation [95% confidence interval]** across the 20 seed-level runs. These per-cell intervals use a two-sided Student-t critical value with 19 degrees of freedom (2.093), computed as `mean ± t × SD / sqrt(20)`. The checked-in `summary.csv` and `summary.json` retain full precision and include all metrics; values here are rounded for reading.
 
-The table below reports **paired differences (quota minus unlimited)** for headline outcomes. For each scenario and seed, we subtract the unlimited result from the quota result before calculating the mean and two-sided 95% Student-t CI (n=20, df=19). All cells use the exact seed set 1001–1020. Wait differences use overall mean wait for A/D and heavy-user plus normal-user mean waits for B/C; utilization is shown as percentage-point change.
+The table below reports **paired differences (quota minus unlimited)** for headline outcomes. For each scenario and seed, we subtract the unlimited result from the quota result before calculating the mean and two-sided 95% Student-t CI (n=20, df=19). Every quota cell uses the same 20 seeds as its scenario's unlimited baseline. Wait differences use overall mean wait for A/D and heavy-user plus normal-user mean waits for B/C; utilization is shown as percentage-point change.
 
 | Scenario | Quota | Paired wait difference, s (95% CI) | Utilization difference, pp (95% CI) | Throughput difference, jobs/h (95% CI) |
 |---|---:|---|---:|---:|
@@ -116,9 +116,7 @@ The table below reports **paired differences (quota minus unlimited)** for headl
 | 2 | 2,069 ± 60 [2,041, 2,097] | 4,231 ± 304 [4,089, 4,374] | 86.61 ± 5.33 [84.12, 89.11] | 138.39 ± 8.24 [134.53, 142.24] |
 | 4 | 2,027 ± 59 [1,999, 2,054] | 3,903 ± 109 [3,852, 3,954] | 98.08 ± 0.50 [97.85, 98.32] | 156.74 ± 1.80 [155.90, 157.58] |
 
-The 4-GPU limit is effectively indistinguishable from unlimited access for
-this balanced control. Limits of 1 and 2 increase the mean wait and reduce
-capacity use even though the users have equal arrival weights.
+For this balanced control, no difference was detected between quota 4 and unlimited access. The paired 95% CIs bound the changes to +0.2 s mean wait [−0.1, +0.5], +0.01 percentage points of utilization [−0.15, +0.17], and +0.02 jobs/h throughput [−0.24, +0.27]. Limits of 1 and 2 increase the mean wait and reduce capacity use even though the users have equal arrival weights.
 
 ### Scenario B — One user receives 70% of arrivals
 

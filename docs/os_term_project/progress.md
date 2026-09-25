@@ -27,7 +27,7 @@ opportunistic dispatch and placement path.
 
 - 8 homogeneous GPUs (2 nodes × 4), FIFO, opportunistic dispatch,
   performance placement; only the quota changes within each comparison.
-- Quotas: unlimited, 1, 2, 4 GPUs/user; seeds 1001–1020.
+- Quotas: unlimited, 1, 2, 4 GPUs/user; 20 paired seeds per scenario, reused for every quota.
 - Four deterministic scenarios: balanced arrivals, a 70%-arrival heavy user, an early burst that can overlap with three light-user streams, and one active user.
 - All jobs request one GPU and run for 120–240 simulated seconds. Each
   scenario/seed job list is reused for all four quota values.
@@ -37,9 +37,7 @@ opportunistic dispatch and placement path.
 
 ### Findings
 
-- **Balanced A:** quota 4 matched the unlimited baseline (98.08% vs 98.07%
-  utilization; 2,027 vs 2,026 s mean wait). Quota 1 lowered utilization to
-  43.72% and raised mean wait to 4,804 s.
+- **Balanced A:** no difference was detected between quota 4 and unlimited access. The paired 95% CIs bound changes to +0.2 s mean wait [−0.1, +0.5], +0.01 percentage points of utilization [−0.15, +0.17], and +0.02 jobs/h throughput [−0.24, +0.27]. Quota 1 lowered utilization to 43.72% and raised mean wait to 4,804 s.
 - **Heavy-user B:** with no quota, the heavy user's mean wait was 2,030 s and
   the other users' average was 2,018 s (ratio 1.014; wait Jain 0.991). Quota
   2 lowered other users' mean wait to 442 s but raised the heavy user's to
