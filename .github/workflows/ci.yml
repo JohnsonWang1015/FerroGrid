@@ -59,6 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      # setup-uv publishes full versions only; there is no floating v10 tag.
+      - uses: astral-sh/setup-uv@v10.2.0
       # No extras: torch and MAX are gigabytes, and their tests skip without them.
       - run: uv run --frozen pytest -q
