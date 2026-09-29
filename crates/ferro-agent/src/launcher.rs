@@ -689,19 +689,24 @@ mod tests {
     }
 
     async fn wait_for_worker(launcher: u32) -> Vec<ProcId> {
+        let mut spawned = false;
         for _ in 0..100 {
             let found = procs::descendants(launcher);
-            if !found.is_empty() {
-                // If the fixture ever stops detaching the worker the tests
-                // below would pass against a plain process-group kill, which
-                // is the bug they exist to catch.
-                assert!(
-                    found.iter().any(|w| read_pgid(w.pid) != Some(launcher)),
-                    "fixture is not reproducing torchrun's detached session"
-                );
+            // The worker is forked before it calls setsid(), so it can be seen
+            // still inside the launcher's group -- on a fresh CI runner, where
+            // exec'ing setsid off a cold disk cache outlasts a poll, it
+            // usually is. Only a worker that has left tests anything.
+            if found.iter().any(|w| read_pgid(w.pid) != Some(launcher)) {
                 return found;
             }
+            spawned |= !found.is_empty();
             tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        // If the fixture ever stops detaching the worker the tests below would
+        // pass against a plain process-group kill, which is the bug they exist
+        // to catch.
+        if spawned {
+            panic!("fixture is not reproducing torchrun's detached session");
         }
         panic!("test launcher never spawned its worker");
     }
