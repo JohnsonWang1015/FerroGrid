@@ -1,0 +1,64 @@
+name: CI
+
+# Also the deploy gate: the controller host's auto-update timer
+# (scripts/auto_update.sh) rolls out a commit of main only once every check
+# here has passed on it.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # Never cancel a run on main: a cancelled check is a failed gate, and that
+  # commit would never deploy.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: fmt, clippy, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq protobuf-compiler
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+
+  portable:
+    # The same container scripts/build.sh portable uses. Its protoc and glibc
+    # are older than any developer machine's, which is the point.
+    name: portable build (glibc 2.31)
+    runs-on: ubuntu-latest
+    container: rust:1-bullseye
+    steps:
+      - uses: actions/checkout@v7
+      - run: apt-get update -qq && apt-get install -y -qq protobuf-compiler
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release
+      - name: agent runs on Ubuntu 20.04
+        run: |
+          need=$(objdump -T target/release/ferro-agent | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)
+          echo "ferro-agent needs $need"
+          [ "$(printf '%s\n' "$need" GLIBC_2.31 | sort -V | tail -1)" = GLIBC_2.31 ]
+
+  python:
+    name: python tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      # No extras: torch and MAX are gigabytes, and their tests skip without them.
+      - run: uv run --frozen pytest -q

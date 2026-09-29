@@ -7,7 +7,8 @@ Rust control plane + stock PyTorch FSDP2/NCCL for multi-server GPU training. See
 - `uv run --all-extras ferro-setup` does everything from scratch (venv, torch, Mojo/MAX, cargo build, PATH links). Idempotent.
 - `cargo build --workspace` / `cargo test --workspace` for local work.
 - `uv run --all-extras pytest -q` for the Python/Mojo side.
-- `./scripts/build.sh portable` before deploying: builds in a glibc-2.31 container so the binaries run on the older Ubuntu releases in the lab.
+- `./scripts/build.sh portable` before deploying: builds in a glibc-2.31 container so the binaries run on the older Ubuntu releases in the lab. Its protoc is 3.12, which needs `--experimental_allow_proto3_optional` (set in `ferro-proto/build.rs`) for proto3 `optional`.
+- CI (`.github/workflows/ci.yml`) is also the deploy gate: the controller host's `ferro-autoupdate` timer (`scripts/auto_update.sh`) rolls out a commit of main only once every check on it passed. Keep main green, and never let a run on main be cancelled -- a cancelled check blocks that commit forever.
 - The agent must stay **dynamically linked** — NVML is `dlopen`ed, so a static musl build silently reports zero GPUs.
 
 ## Hard-won details worth not rediscovering
@@ -37,6 +38,8 @@ Rust control plane + stock PyTorch FSDP2/NCCL for multi-server GPU training. See
 - `ssh_config` is **first-obtained-value-wins**, so the migrated block is *prepended*: land it after somebody's `Host *` and its per-host `IdentityFile` is silently ignored. The block also names the key explicitly only where the original block did not, so a host with its own key keeps it.
 - The migration bundle contains a private key. It is removed from the target as soon as the install finishes; the local copy lives in a `mktemp -d` cleaned by the exit trap.
 - Reaching the controller and reaching the nodes are separate questions on the target. A machine on the VPN only can talk to the controller (give it `--controller <this machine's VPN address>`; the LAN address the script otherwise guesses is unreachable there) and still have no route to the node network at all, which breaks `ferro sync` and nothing else. `--proxy-jump [user@]host` puts a `ProxyJump` in every migrated block that does not already route itself; the script probes the first node's SSH port from the target before shipping and suggests the flag when there is no route.
+
+- `auto_update.sh` can fast-forward itself mid-run, so its whole body is one function called from the last line (`main "$@"; exit`). It converges on the sha256 of `/proc/<pid>/exe` (controller locally, agents over SSH) against the manifest it wrote after its own build -- never against whatever is in `target/`, which a hand build changes. An agent restart makes it forget its jobs, so agents wait for their node to be idle *and* the queue to be empty; `systemctl restart` resets `NRestarts`, which is how a crash-looping new agent is told from a healthy one.
 
 - A failed rank must tear down its peers: survivors sit in a collective forever holding GPUs. The controller does this in `report_job_status`.
 - `torch.distributed.pipelining` hangs cross-node here even though every NCCL primitive works (`p2p_probe.py` proves it). Pass both `input_args` and `output_args` to `PipelineStage` regardless -- `input_args` alone uses a deprecated shape-inference path that corrupts metadata over sockets.

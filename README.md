@@ -225,6 +225,27 @@ Useful flags: `--dry-run` (build the bundle, print exactly what would be sent, s
 
 The private key is the one thing worth pausing over, so the script asks before copying it (`--yes` to skip the prompt) and deletes the staging bundle from the new machine once the install is done.
 
+### 7. Keeping it up to date
+
+Every push and pull request runs CI on GitHub (`.github/workflows/ci.yml`): `cargo fmt`, `clippy -D warnings`, the Rust tests, the portable build in the same glibc-2.31 container `build.sh portable` uses, and the Python tests. On the controller host, one command makes a green `main` deploy itself:
+
+```bash
+./scripts/install_autoupdate.sh            # a pass every 2 minutes; --every 10min to change it
+journalctl --user -u ferro-autoupdate -f   # what each pass decided
+```
+
+Each pass (`scripts/auto_update.sh`, also runnable by hand, with `--dry-run` to change nothing) fetches `origin/main`; once **every** check on the new tip has passed it fast-forwards the checkout, builds the native binaries and the portable agent, then rolls out:
+
+| | Updated when | Waits while |
+|---|---|---|
+| `ferro` | the build finishes -- `~/.local/bin/ferro` links into `target/release` | -- |
+| controller | it is running a binary other than the one built | a job is pending, launching or running |
+| each agent | its node runs a binary other than the one built | that node holds a job, or any job is queued or starting |
+
+An agent that is not running the new binary and heartbeating 18 s after the swap is put back on the one it replaced (kept as `~/.local/bin/ferro-agent.bak`), and that build is not tried on that node again. Whatever is waiting is picked up by a later pass: it compares what is *running* with what was built instead of remembering what it did, so a node that was busy or offline simply catches up.
+
+It leaves the checkout alone when it is on another branch, has uncommitted changes to tracked files, or has commits `origin` does not, and it only rolls out binaries it built itself -- a `cargo build --release` by hand never reaches the running services. It polls rather than running a GitHub Actions runner here: nothing has to reach this machine from outside, and no workflow a fork's pull request brings along runs on the box that holds SSH keys to every node. It needs `gh` logged in (to read CI results), Docker, and key-based SSH to the nodes. `--uninstall` removes it.
+
 ---
 
 ## Using the CLI
