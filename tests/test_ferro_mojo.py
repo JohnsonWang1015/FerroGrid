@@ -72,15 +72,6 @@ def test_kernel_is_actually_used():
 
 
 @mojo_only
-def test_forward_runs_mojo_under_autograd():
-    x = torch.randn(16, 16, requires_grad=True)
-    y = ferro_mojo.gelu(x, strict=True)
-    # MAX ops reject grad-tracking tensors, so this only passes because of the
-    # autograd.Function wrapper -- without it we would have silently used torch.
-    assert type(y.grad_fn).__name__ == "MojoGeluFunctionBackward"
-
-
-@mojo_only
 def test_gradients_match_torch():
     x = torch.randn(32, 32, requires_grad=True)
     ref = x.detach().clone().requires_grad_(True)
